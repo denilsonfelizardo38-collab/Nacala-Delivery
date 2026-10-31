@@ -1,270 +1,461 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
+import '../../core/api_config.dart';
+import '../../core/formatters.dart';
+import '../../models/models.dart';
 import '../../state/app_scope.dart';
-import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/feedback.dart';
+import '../../widgets/address_dialog.dart';
+import '../../widgets/common.dart';
+import '../../widgets/password_dialog.dart';
 
-class AccountScreen extends StatelessWidget {
+class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
 
-  Future<void> _editAddress(BuildContext context, AppState state) async {
-    final controller = TextEditingController(text: state.address);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Morada de entrega'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Bairro, rua, casa e referência',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (result != null && result.trim().length >= 5) {
-      state.setAddress(result);
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  Future<void> _refresh() async {
+    try {
+      await AppScope.of(context).refreshMe();
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
     }
   }
 
-  void _showInfo(
-    BuildContext context, {
-    required String title,
-    required String message,
-  }) {
-    showDialog<void>(
+  Future<void> _editProfile() async {
+    final state = AppScope.of(context);
+    final user = state.user;
+    if (user == null) return;
+    final input = await showDialog<(String, String)>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Fechar'),
-          ),
-        ],
-      ),
+      builder: (_) => _ProfileDialog(name: user.name, phone: user.phone),
     );
+    if (input == null) return;
+    try {
+      await state.updateProfile(name: input.$1, phone: digitsOnly(input.$2));
+      if (mounted) showAppSnack(context, 'Perfil atualizado.');
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final input = await showPasswordDialog(context);
+    if (input == null) return;
+    try {
+      await AppScope.of(context)
+          .changePassword(currentPassword: input.$1, newPassword: input.$2);
+      if (mounted) showAppSnack(context, 'Palavra-passe alterada.');
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
+  Future<void> _addAddress() async {
+    final input = await showAddressDialog(context);
+    if (input == null) return;
+    try {
+      await AppScope.of(context).addAddress(
+        label: input.label,
+        line: input.line,
+        reference: input.reference,
+        isDefault: input.isDefault,
+        latitude: input.latitude,
+        longitude: input.longitude,
+      );
+      if (mounted) showAppSnack(context, 'Morada adicionada.');
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
+  Future<void> _editAddress(Address address) async {
+    final input = await showAddressDialog(context, initial: address);
+    if (input == null) return;
+    try {
+      await AppScope.of(context).updateAddress(
+        address.id,
+        label: input.label,
+        line: input.line,
+        reference: input.reference,
+        isDefault: input.isDefault,
+        latitude: input.latitude,
+        longitude: input.longitude,
+      );
+      if (mounted) showAppSnack(context, 'Morada atualizada.');
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
+  Future<void> _deleteAddress(Address address) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Remover morada',
+      message: 'A morada "${address.label}" será removida da sua conta.',
+      confirmLabel: 'Remover',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    try {
+      await AppScope.of(context).deleteAddress(address.id);
+      if (mounted) showAppSnack(context, 'Morada removida.');
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
+  Future<void> _logout() async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Terminar sessão',
+      message: 'Pretende sair da sua conta neste dispositivo?',
+      confirmLabel: 'Sair',
+      destructive: true,
+    );
+    if (confirmed) await AppScope.of(context).logout();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-      children: [
-        Text('A sua conta', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 18),
-        Material(
-          color: context.cardColor,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () => _showInfo(
-              context,
-              title: 'Entrar na conta',
-              message:
-                  'A autenticação por número de telemóvel chega na próxima '
-                  'versão. Por agora pode explorar a app como convidado.',
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(17),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 25,
-                    backgroundColor: context.isDarkMode
-                        ? context.accentColor.withValues(alpha: 0.2)
-                        : AppColors.paleBlue,
-                    child: Icon(
-                      Icons.person_rounded,
-                      color: context.accentColor,
-                    ),
-                  ),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Bem-vindo a Nacala',
-                          style: TextStyle(
-                            color: context.inkColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Entre para gerir a sua conta',
-                          style: TextStyle(
-                            color: context.mutedColor,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: context.mutedColor),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 13),
-        _AccountOption(
-          icon: Icons.location_on_outlined,
-          title: 'Morada de entrega',
-          subtitle: state.address,
-          onTap: () => _editAddress(context, state),
-        ),
-        const SizedBox(height: 9),
-        _AccountOption(
-          icon: Icons.help_outline_rounded,
-          title: 'Ajuda e suporte',
-          onTap: () => _showInfo(
-            context,
-            title: 'Ajuda e suporte',
-            message:
-                'Fale connosco em apoio@nacalaentrega.co.mz ou pelo número '
-                '+258 84 000 0000, todos os dias das 07h às 21h.',
-          ),
-        ),
-        const SizedBox(height: 9),
-        _AccountOption(
-          icon: Icons.info_outline_rounded,
-          title: 'Sobre a Nacala Entrega',
-          onTap: () => _showInfo(
-            context,
-            title: 'Nacala Entrega',
-            message:
-                'Versão 1.0.0\n\nEntregas locais em Nacala-Porto, Nampula. '
-                'Ligamos clientes, restaurantes, mercados, farmácias e lojas '
-                'de bairro.',
-          ),
-        ),
-        const SizedBox(height: 22),
-        Text('DEMONSTRAÇÃO', style: Theme.of(context).textTheme.labelSmall),
-        const SizedBox(height: 8),
-        Material(
-          color: context.cardColor,
-          borderRadius: BorderRadius.circular(15),
-          child: SwitchListTile.adaptive(
-            value: state.demoMode,
-            onChanged: state.setDemoMode,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            title: Text(
-              'Modo demonstração',
-              style: TextStyle(
-                color: context.inkColor,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            subtitle: Text(
-              'Mostra os painéis de parceiro e administração.',
-              style: TextStyle(color: context.mutedColor, fontSize: 11),
-            ),
-          ),
-        ),
-        if (state.demoMode && state.orders.isNotEmpty) ...[
-          const SizedBox(height: 9),
-          _AccountOption(
-            icon: Icons.delete_sweep_outlined,
-            title: 'Limpar histórico de pedidos',
-            onTap: () {
-              state.clearOrders();
-              showMessage(context, 'Histórico de pedidos limpo.');
-            },
-          ),
-        ],
-        const SizedBox(height: 22),
-        Center(
-          child: Text(
-            'Nacala Entrega · v1.0.0',
-            style: TextStyle(color: context.mutedColor, fontSize: 11),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AccountOption extends StatelessWidget {
-  const _AccountOption({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-    this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: context.cardColor,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-          child: Row(
+    final user = state.user;
+    if (user == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('A sua conta')),
+      body: SafeArea(
+        top: false,
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
             children: [
-              Icon(icon, color: context.accentColor, size: 21),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              AppCard(
+                child: Row(
                   children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: context.inkColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                    UserAvatar(name: user.name, size: 56),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user.name,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            user.email,
+                            style: TextStyle(
+                              color: context.mutedColor,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primarySoft,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  user.roleLabel,
+                                  style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                user.phone,
+                                style: TextStyle(
+                                  color: context.mutedColor,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _editProfile,
+                      icon: const Icon(Icons.edit_outlined, size: 17),
+                      label: const Text('Editar perfil'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _changePassword,
+                      icon: const Icon(Icons.lock_outline_rounded, size: 17),
+                      label: const Text('Palavra-passe'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SectionTitle(
+                title: 'Moradas',
+                subtitle: 'Usadas no checkout para entregas',
+                actionLabel: 'Adicionar',
+                onAction: _addAddress,
+              ),
+              const SizedBox(height: 10),
+              if (state.addresses.isEmpty)
+                AppCard(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.location_off_outlined,
+                        color: context.mutedColor,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Ainda não guardou nenhuma morada.',
+                          style: TextStyle(
+                            color: context.mutedColor,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                for (final address in state.addresses)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: AppCard(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              address.label.toLowerCase().contains('trabalho')
+                                  ? Icons.work_outline_rounded
+                                  : Icons.home_outlined,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      address.label,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall,
+                                    ),
+                                    if (address.isDefault) ...[
+                                      const SizedBox(width: 6),
+                                      const Text(
+                                        '· predefinida',
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  address.fullLine,
+                                  style: TextStyle(
+                                    color: context.mutedColor,
+                                    fontSize: 11,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuButton<String>(
+                            tooltip: 'Opções da morada',
+                            onSelected: (value) {
+                              if (value == 'edit') _editAddress(address);
+                              if (value == 'delete') _deleteAddress(address);
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Editar'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Remover'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              const SizedBox(height: 24),
+              const SectionTitle(title: 'Aplicação'),
+              const SizedBox(height: 10),
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.dns_outlined, size: 20),
+                      title: const Text(
+                        'Servidor da API',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      subtitle: Text(
+                        state.apiBaseUrl,
                         style: TextStyle(
                           color: context.mutedColor,
                           fontSize: 11,
                         ),
                       ),
-                    ],
+                    ),
+                    Divider(height: 1, color: context.lineColor),
+                    const ListTile(
+                      leading: Icon(Icons.info_outline_rounded, size: 20),
+                      title: Text(
+                        'Versão da aplicação',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      subtitle: Text(
+                        appVersion,
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: context.mutedColor),
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: _logout,
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Terminar sessão'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: context.dangerColor,
+                  side: BorderSide(color: context.dangerColor),
+                ),
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProfileDialog extends StatefulWidget {
+  const _ProfileDialog({required this.name, required this.phone});
+
+  final String name;
+  final String phone;
+
+  @override
+  State<_ProfileDialog> createState() => _ProfileDialogState();
+}
+
+class _ProfileDialogState extends State<_ProfileDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _name;
+  late final TextEditingController _phone;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.name);
+    _phone = TextEditingController(text: widget.phone);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar perfil'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _name,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Nome'),
+              validator: (value) => (value == null || value.trim().length < 2)
+                  ? 'Indique o seu nome.'
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Telemóvel'),
+              validator: (value) =>
+                  RegExp(r'^8[2-7][0-9]{7}$').hasMatch(digitsOnly(value ?? ''))
+                  ? null
+                  : 'Número inválido (9 dígitos).',
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!(_formKey.currentState?.validate() ?? false)) return;
+            Navigator.of(context).pop((_name.text.trim(), _phone.text.trim()));
+          },
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+          child: const Text('Guardar'),
+        ),
+      ],
     );
   }
 }

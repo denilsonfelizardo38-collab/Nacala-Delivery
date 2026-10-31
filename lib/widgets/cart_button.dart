@@ -1,27 +1,23 @@
 import 'package:flutter/material.dart';
 
+import '../screens/customer/cart_screen.dart';
 import '../state/app_scope.dart';
-import '../theme/app_theme.dart';
 
+/// Ícone de carrinho com contador, usado nos ecrãs do cliente.
 class CartButton extends StatelessWidget {
-  const CartButton({super.key, required this.onTap});
-
-  final VoidCallback onTap;
+  const CartButton({super.key});
 
   @override
   Widget build(BuildContext context) {
     final count = AppScope.of(context).cartItemCount;
     return IconButton(
-      onPressed: onTap,
       tooltip: 'Carrinho',
-      style: IconButton.styleFrom(
-        backgroundColor: context.cardColor,
-        foregroundColor: context.inkColor,
-        minimumSize: const Size(44, 44),
-      ),
-      icon: Badge(
+      onPressed: () =>
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const CartScreen())),
+      icon: Badge.count(
+        count: count,
         isLabelVisible: count > 0,
-        label: Text('$count'),
         child: const Icon(Icons.shopping_bag_outlined),
       ),
     );

@@ -1,145 +1,113 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nacala_derivery/app.dart';
-import 'package:nacala_derivery/screens/customer/account_screen.dart';
+import 'package:nacala_derivery/models/models.dart';
+import 'package:nacala_derivery/screens/splash_screen.dart';
 import 'package:nacala_derivery/state/app_state.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Ecrã lógico alto (420x1200) para que as listas caibam sem scroll nos testes.
-Future<void> _pumpApp(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(420, 1200);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  await tester.pumpWidget(NacalaDeliveryApp(state: AppState()));
-  await tester.pumpAndSettle();
-}
+import 'fake_api.dart';
+
+const _customer = UserAccount(
+  id: 'u1',
+  role: 'customer',
+  name: 'Cliente Teste',
+  email: 'cliente@teste.mz',
+  phone: '841234567',
+);
 
 void main() {
-  testWidgets('cliente vê a página inicial e filtra por categoria', (
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  Future<AppState> newState(FakeApi api) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    return AppState(prefs, api: api);
+  }
+
+  testWidgets('o ecrã de arranque mostra a identidade da marca', (
     tester,
   ) async {
-    await _pumpApp(tester);
-
-    expect(find.text('Olá, vizinho 👋'), findsOneWidget);
-    expect(find.text('Cantinho da Baía'), findsOneWidget);
-
-    await tester.tap(find.text('Farmácias'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Farmácia Nacala'), findsOneWidget);
-    expect(find.text('Cantinho da Baía'), findsNothing);
+    await tester.pumpWidget(const MaterialApp(home: SplashScreen()));
+    expect(find.text('Nacala Entrega'), findsOneWidget);
+    expect(find.text('Entregas locais em Nacala-Porto'), findsOneWidget);
   });
 
-  testWidgets('pesquisa filtra locais e pode ser limpa', (tester) async {
-    await _pumpApp(tester);
+  testWidgets('sem sessão a aplicação apresenta o login', (tester) async {
+    final state = await newState(FakeApi());
+    await tester.pumpWidget(NacalaDeliveryApp(state: state));
+    await tester.pump();
+    expect(find.text('Entregas locais em Nacala-Porto'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField).first, 'farmácia');
-    await tester.pumpAndSettle();
-    expect(find.text('Farmácia Nacala'), findsOneWidget);
-    expect(find.text('Mercado Central'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(milliseconds: 400));
 
-    await tester.tap(find.byTooltip('Limpar pesquisa'));
-    await tester.pumpAndSettle();
-    expect(find.text('Mercado Central'), findsOneWidget);
+    expect(find.text('Entrar na sua conta'), findsOneWidget);
+    expect(find.text('Criar conta'), findsOneWidget);
   });
 
-  testWidgets('fluxo completo: loja, carrinho, checkout e pedido', (
+  testWidgets('cliente autenticado entra no shell com navegação inferior', (
     tester,
   ) async {
-    await _pumpApp(tester);
+    final api = FakeApi(user: _customer)
+      ..loginResult = const AuthResult(token: 'token-123', user: _customer);
+    final state = await newState(api);
+    await state.login('cliente@teste.mz', 'segredo');
 
-    await tester.tap(find.text('Cantinho da Baía'));
-    await tester.pumpAndSettle();
-    expect(find.text('Menu'), findsOneWidget);
+    await tester.pumpWidget(NacalaDeliveryApp(state: state));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(milliseconds: 400));
 
-    await tester.tap(find.byTooltip('Adicionar Frango grelhado'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Ver carrinho · 1 itens'), findsOneWidget);
-
-    await tester.tap(find.textContaining('Ver carrinho'));
-    await tester.pumpAndSettle();
-    expect(find.text('Carrinho'), findsOneWidget);
-    expect(find.text('530 MT'), findsWidgets);
-
-    await tester.tap(find.text('Continuar'));
-    await tester.pumpAndSettle();
-    expect(find.text('Finalizar pedido'), findsOneWidget);
-
-    await tester.enterText(find.byType(TextField).at(1), '841234567');
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.textContaining('Confirmar pedido'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('NC-1049'), findsWidgets);
-    expect(find.text('Pedido recebido'), findsWidgets);
-
-    await tester.tap(find.textContaining('NC-1049').first);
-    await tester.pumpAndSettle();
-    expect(find.text('Estado da entrega'), findsOneWidget);
-    expect(find.text('Resumo do pedido'), findsOneWidget);
-
-    await tester.pump(const Duration(seconds: 6));
+    expect(find.text('Olá, Cliente'), findsOneWidget);
+    expect(find.text('Início'), findsOneWidget);
+    expect(find.text('Categorias'), findsOneWidget);
+    expect(find.text('Pedidos'), findsOneWidget);
+    expect(find.text('Conta'), findsOneWidget);
+    expect(find.text('Entrar na sua conta'), findsNothing);
   });
 
-  testWidgets('checkout exige número quando o pagamento é por telemóvel', (
+  testWidgets('admin tem menu de conta com palavra-passe e logout', (
     tester,
   ) async {
-    await _pumpApp(tester);
-
-    await tester.tap(find.text('Cantinho da Baía'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Adicionar Matapa com arroz'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Ver carrinho'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continuar'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.textContaining('Confirmar pedido'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Indique um número de telemóvel com 9 dígitos.'),
-      findsOneWidget,
+    const admin = UserAccount(
+      id: 'a1',
+      role: 'admin',
+      name: 'Admin Teste',
+      email: 'admin@teste.mz',
+      phone: '841234567',
     );
+    final api = FakeApi(user: admin)
+      ..loginResult = const AuthResult(token: 'token-admin', user: admin)
+      ..adminSummaryResult = const AdminSummary(
+        customers: 3,
+        partners: 4,
+        couriers: 1,
+        activePartners: 4,
+        pendingPartners: 0,
+        totalOrders: 5,
+        ordersInProgress: 0,
+        salesTotalCents: 100000,
+        salesTodayCents: 50000,
+        ordersToday: 2,
+        recentOrders: [],
+        pendingEstablishments: [],
+      );
+    final state = await newState(api);
+    await state.login('admin@teste.mz', 'segredo');
 
-    await tester.pump(const Duration(seconds: 6));
-  });
-
-  testWidgets('modo demonstração revela os painéis de parceiro e admin', (
-    tester,
-  ) async {
-    await _pumpApp(tester);
-
-    await tester.tap(find.text('Conta'));
-    await tester.pumpAndSettle();
-    expect(find.text('A sua conta'), findsOneWidget);
-
-    final accountList = find
-        .descendant(
-          of: find.byType(AccountScreen),
-          matching: find.byType(Scrollable),
-        )
-        .first;
-    await tester.scrollUntilVisible(
-      find.byType(SwitchListTile),
-      200,
-      scrollable: accountList,
-    );
-    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpWidget(NacalaDeliveryApp(state: state));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    expect(find.text('Parceiro'), findsOneWidget);
-    await tester.tap(find.text('Parceiro'));
-    await tester.pumpAndSettle();
-    expect(find.text('PAINEL DO PARCEIRO'), findsOneWidget);
+    expect(find.text('Painel de administração'), findsOneWidget);
 
-    await tester.tap(find.text('Admin'));
+    await tester.tap(find.byTooltip('Conta'));
     await tester.pumpAndSettle();
-    expect(find.text('ADMINISTRAÇÃO'), findsOneWidget);
 
-    await tester.tap(find.text('Cliente'));
-    await tester.pumpAndSettle();
-    expect(find.text('A sua conta'), findsOneWidget);
+    expect(find.text('Alterar palavra-passe'), findsOneWidget);
+    expect(find.text('Terminar sessão'), findsOneWidget);
   });
 }

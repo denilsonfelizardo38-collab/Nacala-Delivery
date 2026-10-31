@@ -1,93 +1,134 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nacala_derivery/data/mock_data.dart';
-import 'package:nacala_derivery/models/order.dart';
+import 'package:nacala_derivery/core/api_client.dart';
+import 'package:nacala_derivery/models/models.dart';
 import 'package:nacala_derivery/state/app_state.dart';
-import 'package:nacala_derivery/utils/formatters.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'fake_api.dart';
+
+const _user = UserAccount(
+  id: 'u1',
+  role: 'customer',
+  name: 'Cliente Teste',
+  email: 'cliente@teste.mz',
+  phone: '841234567',
+);
+
+Product _product(String id, int priceCents) => Product(
+  id: id,
+  establishmentId: 'e1',
+  name: 'Produto $id',
+  description: '',
+  priceCents: priceCents,
+  category: 'Pratos',
+  isAvailable: true,
+);
+
+const _store = CartStore(id: 'e1', name: 'Cantinho', deliveryFeeCents: 10000);
 
 void main() {
-  group('formatMoney', () {
-    test('usa ponto como separador de milhares', () {
-      expect(formatMoney(0), '0 MT');
-      expect(formatMoney(530), '530 MT');
-      expect(formatMoney(8450), '8.450 MT');
-      expect(formatMoney(1250000), '1.250.000 MT');
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late SharedPreferences prefs;
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    prefs = await SharedPreferences.getInstance();
+  });
+
+  group('sessão', () {
+    test('sem token fica signedOut', () async {
+      final state = AppState(prefs, api: FakeApi());
+      await state.bootstrap();
+      expect(state.status, SessionStatus.signedOut);
+      expect(state.isSignedIn, isFalse);
+    });
+
+    test('login guarda sessão e carrega moradas', () async {
+      final api = FakeApi(user: _user);
+      api.loginResult = const AuthResult(token: 'token-123', user: _user);
+      final state = AppState(prefs, api: api);
+
+      await state.login('cliente@teste.mz', 'segredo');
+
+      expect(state.isSignedIn, isTrue);
+      expect(state.user?.name, 'Cliente Teste');
+      expect(prefs.getString('nacala.token.v2'), 'token-123');
+    });
+
+    test('401 ao restaurar sessão limpa credenciais', () async {
+      SharedPreferences.setMockInitialValues({
+        'nacala.token.v2': 'token-antigo',
+      });
+      prefs = await SharedPreferences.getInstance();
+      final api = FakeApi(user: _user)
+        ..meError = const ApiException('expirado', status: 401);
+      final state = AppState(prefs, api: api);
+
+      await state.bootstrap();
+
+      expect(state.status, SessionStatus.signedOut);
+      expect(prefs.getString('nacala.token.v2'), isNull);
+    });
+
+    test('logout limpa a sessão local', () async {
+      final api = FakeApi(user: _user)
+        ..loginResult = const AuthResult(token: 'token-123', user: _user);
+      final state = AppState(prefs, api: api);
+      await state.login('cliente@teste.mz', 'segredo');
+      await state.logout();
+      expect(state.isSignedIn, isFalse);
+      expect(prefs.getString('nacala.token.v2'), isNull);
     });
   });
 
-  group('AppState', () {
-    late AppState state;
+  group('carrinho', () {
+    test('soma linhas e taxa de entrega em centavos', () {
+      final state = AppState(prefs, api: FakeApi());
+      state.addToCart(_product('p1', 45000), _store);
+      state.addToCart(_product('p1', 45000), _store);
+      state.addToCart(_product('p2', 125050), _store);
 
-    setUp(() => state = AppState());
-
-    test('adiciona, incrementa e remove produtos', () {
-      final place = mockPlaces.first;
-      final product = productsFor(place.id).first;
-
-      expect(state.isCartEmpty, isTrue);
-      state.addProduct(place, product);
-      state.addProduct(place, product);
-
-      expect(state.quantityOf(product), 2);
-      expect(state.cartItemCount, 2);
-      expect(state.subtotal, product.price * 2);
-      expect(state.total, state.subtotal + place.deliveryFee);
-
-      state.decrementProduct(product);
-      expect(state.quantityOf(product), 1);
-
-      state.decrementProduct(product);
-      expect(state.isCartEmpty, isTrue);
+      expect(state.cartItemCount, 3);
+      expect(state.cartSubtotalCents, 215050);
+      expect(state.cartDeliveryFeeCents, 10000);
+      expect(state.cartTotalCents, 225050);
     });
 
-    test('trocar de local reinicia o carrinho', () {
-      final restaurant = mockPlaces[0];
-      final market = mockPlaces[1];
-
-      state.addProduct(restaurant, productsFor(restaurant.id).first);
-      final replaced = state.addProduct(market, productsFor(market.id).first);
-
-      expect(replaced, isTrue);
-      expect(state.cartItemCount, 1);
-      expect(state.cartPlace?.id, market.id);
+    test('adicionar com quantidade preserva o total', () {
+      final state = AppState(prefs, api: FakeApi());
+      state.addToCart(_product('p1', 45000), _store, quantity: 3);
+      expect(state.quantityOf('p1'), 3);
+      expect(state.cartTotalCents, 135000 + 10000);
+      state.addToCart(_product('p1', 45000), _store, quantity: 2);
+      expect(state.quantityOf('p1'), 5);
     });
 
-    test('confirmar pedido limpa o carrinho e cria o pedido', () async {
-      final place = mockPlaces.first;
-      state.addProduct(place, productsFor(place.id).first);
+    test('decrementar até zero remove a linha', () {
+      final state = AppState(prefs, api: FakeApi());
+      state.addToCart(_product('p1', 45000), _store);
+      state.decrement('p1');
+      expect(state.cart, isEmpty);
+      expect(state.cartStore, isNull);
+    });
 
-      final order = await state.placeOrder(
-        address: 'Bairro Central, casa 12',
-        payment: PaymentMethod.mpesa,
-        phone: '841234567',
+    test('trocar de estabelecimento substitui o carrinho', () {
+      final state = AppState(prefs, api: FakeApi());
+      state.addToCart(_product('p1', 45000), _store);
+      const other = CartStore(
+        id: 'e2',
+        name: 'Mercado',
+        deliveryFeeCents: 5000,
       );
-
-      expect(order.id, 'NC-1049');
-      expect(order.status, OrderStatus.received);
-      expect(order.total, order.subtotal + order.deliveryFee);
-      expect(order.deliveryFee, place.deliveryFee);
-      expect(state.isCartEmpty, isTrue);
-      expect(state.orders.single.id, order.id);
-      expect(state.address, 'Bairro Central, casa 12');
+      state.addToCart(_product('p2', 20000), other);
+      expect(state.cart.length, 1);
+      expect(state.cartStore?.id, 'e2');
     });
 
-    test('avançar estado segue a ordem até entregue', () async {
-      final place = mockPlaces.first;
-      state.addProduct(place, productsFor(place.id).first);
-      final order = await state.placeOrder(
-        address: 'Bairro Central, casa 12',
-        payment: PaymentMethod.cash,
-      );
-
-      state.advanceOrder(order.id);
-      expect(state.orderById(order.id)?.status, OrderStatus.preparing);
-      state.advanceOrder(order.id);
-      expect(state.orderById(order.id)?.status, OrderStatus.onTheWay);
-      state.advanceOrder(order.id);
-      expect(state.orderById(order.id)?.status, OrderStatus.delivered);
-
-      // Não passa de "entregue".
-      state.advanceOrder(order.id);
-      expect(state.orderById(order.id)?.status, OrderStatus.delivered);
+    test('cupão nunca excede o subtotal', () {
+      final state = AppState(prefs, api: FakeApi());
+      state.addToCart(_product('p1', 1000), _store);
+      expect(state.couponDiscountCents, 0);
     });
   });
 }

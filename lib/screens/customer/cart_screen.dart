@@ -1,164 +1,232 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
+import '../../core/formatters.dart';
+import '../../models/models.dart';
 import '../../state/app_scope.dart';
+import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/formatters.dart';
-import '../../widgets/empty_state.dart';
-import '../../widgets/quantity_stepper.dart';
+import '../../widgets/common.dart';
 import 'checkout_screen.dart';
+import 'store_screen.dart';
 
-class CartScreen extends StatelessWidget {
+class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
+
+  @override
+  State<CartScreen> createState() => _CartScreenState();
+}
+
+class _CartScreenState extends State<CartScreen> {
+  final _couponController = TextEditingController();
+  bool _couponLoading = false;
+  String? _couponError;
+
+  @override
+  void dispose() {
+    _couponController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _applyCoupon() async {
+    final code = _couponController.text.trim();
+    if (code.isEmpty) {
+      setState(() => _couponError = 'Indique o código do cupão.');
+      return;
+    }
+    setState(() {
+      _couponLoading = true;
+      _couponError = null;
+    });
+    try {
+      final discount = await AppScope.of(context).applyCoupon(code);
+      if (!mounted) return;
+      showAppSnack(
+        context,
+        'Cupão aplicado: ${formatMoney(discount)} de desconto.',
+      );
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _couponError = error.message);
+    } finally {
+      if (mounted) setState(() => _couponLoading = false);
+    }
+  }
+
+  Future<void> _clearCart() async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Esvaziar carrinho',
+      message: 'Todos os itens serão removidos do carrinho.',
+      confirmLabel: 'Esvaziar',
+      destructive: true,
+    );
+    if (confirmed) AppScope.of(context).clearCart();
+  }
+
+  Future<void> _editNote(String productId, String? current) async {
+    final state = AppScope.of(context);
+    final note = await showTextPrompt(
+      context,
+      title: 'Nota do item',
+      label: 'Observação para o parceiro',
+      initialValue: current,
+      hint: 'Ex.: sem pimenta, bem passado...',
+      maxLines: 3,
+      confirmLabel: 'Guardar nota',
+    );
+    if (note == null) return;
+    state.setLineNote(productId, note);
+  }
+
+  void _continue() {
+    final state = AppScope.of(context);
+    if (state.isCartEmpty) return;
+    if (!state.isSignedIn) {
+      Navigator.of(context).pushNamed('/login');
+      return;
+    }
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const CheckoutScreen()));
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    final place = state.cartPlace;
-
+    final empty = state.isCartEmpty;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Carrinho'),
         actions: [
-          if (!state.isCartEmpty)
-            TextButton(
-              onPressed: () {
-                state.clearCart();
-                Navigator.of(context).pop();
-              },
-              child: const Text('Limpar'),
+          if (!empty)
+            IconButton(
+              tooltip: 'Esvaziar carrinho',
+              onPressed: _clearCart,
+              icon: const Icon(Icons.delete_outline_rounded),
             ),
+          const SizedBox(width: 4),
         ],
       ),
-      body: state.isCartEmpty
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(30),
-                child: EmptyState(
-                  icon: Icons.shopping_bag_outlined,
-                  title: 'O carrinho está vazio',
-                  subtitle:
-                      'Escolha um restaurante, mercado ou loja para começar.',
-                  action: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Explorar locais'),
+      body: SafeArea(
+        top: false,
+        child: empty
+            ? Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: EmptyState(
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'O carrinho está vazio',
+                    message:
+                        'Explore os parceiros de Nacala-Porto e adicione os '
+                        'produtos que precisa.',
+                    actionLabel: 'Ver estabelecimentos',
+                    onAction: () => Navigator.of(context).pop(),
                   ),
                 ),
-              ),
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              children: [
-                if (place != null)
-                  Row(
-                    children: [
-                      Icon(place.icon, size: 18, color: context.accentColor),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          place.name,
-                          style: TextStyle(
-                            color: context.inkColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                children: [
+                  _StoreCard(
+                    name: state.cartStore?.name ?? '',
+                    onTap: () {
+                      final id = state.cartStore?.id;
+                      if (id == null) return;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StoreScreen(establishmentId: id),
                         ),
-                      ),
-                      Text(
-                        '${state.cartItemCount} itens',
-                        style: TextStyle(
-                          color: context.mutedColor,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                const SizedBox(height: 12),
-                for (final line in state.cart)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Container(
-                      padding: const EdgeInsets.all(13),
-                      decoration: BoxDecoration(
-                        color: context.cardColor,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  line.product.name,
-                                  style: TextStyle(
-                                    color: context.inkColor,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  formatMoney(line.product.price),
-                                  style: TextStyle(
-                                    color: context.mutedColor,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  formatMoney(line.total),
-                                  style: TextStyle(
-                                    color: context.accentColor,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          QuantityStepper(
-                            quantity: line.quantity,
-                            onAdd: () => state.addProduct(place!, line.product),
-                            onRemove: () =>
-                                state.decrementProduct(line.product),
-                          ),
-                        ],
+                  const SizedBox(height: 16),
+                  SectionTitle(
+                    title: 'Itens',
+                    subtitle: '${state.cartItemCount} unidade(s) no carrinho',
+                  ),
+                  const SizedBox(height: 10),
+                  for (final line in state.cart)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _CartLineCard(
+                        line: line,
+                        onIncrement: () => state.increment(line.product.id),
+                        onDecrement: () => state.decrement(line.product.id),
+                        onRemove: () => state.removeLine(line.product.id),
+                        onEditNote: () => _editNote(line.product.id, line.note),
                       ),
                     ),
+                  const SizedBox(height: 8),
+                  _CouponCard(
+                    controller: _couponController,
+                    loading: _couponLoading,
+                    error: _couponError,
+                    appliedCode: state.couponCode,
+                    discountCents: state.couponDiscountCents,
+                    onApply: _applyCoupon,
+                    onRemove: () {
+                      state.removeCoupon();
+                      _couponController.clear();
+                      setState(() => _couponError = null);
+                    },
                   ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: context.cardColor,
-                    borderRadius: BorderRadius.circular(16),
+                  const SizedBox(height: 16),
+                  AppCard(
+                    child: Column(
+                      children: [
+                        PriceLine(
+                          label: 'Subtotal',
+                          cents: state.cartSubtotalCents,
+                        ),
+                        PriceLine(
+                          label: 'Taxa de entrega',
+                          cents: state.cartDeliveryFeeCents,
+                        ),
+                        if (state.couponDiscountCents > 0)
+                          PriceLine(
+                            label: 'Desconto (${state.couponCode})',
+                            cents: -state.couponDiscountCents,
+                            color: context.successColor,
+                          ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(),
+                        ),
+                        PriceLine(
+                          label: 'Total estimado',
+                          cents: state.cartTotalCents,
+                          strong: true,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 15,
+                              color: context.mutedColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'O total final é calculado pelo servidor ao '
+                                'confirmar o pedido.',
+                                style: TextStyle(
+                                  color: context.mutedColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    children: [
-                      _SummaryRow(
-                        label: 'Subtotal',
-                        value: formatMoney(state.subtotal),
-                      ),
-                      const SizedBox(height: 8),
-                      _SummaryRow(
-                        label: 'Taxa de entrega',
-                        value: formatMoney(state.deliveryFee),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Divider(color: context.lineColor, height: 1),
-                      ),
-                      _SummaryRow(
-                        label: 'Total',
-                        value: formatMoney(state.total),
-                        emphasized: true,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-      bottomNavigationBar: state.isCartEmpty
+                ],
+              ),
+      ),
+      bottomNavigationBar: empty
           ? null
           : Material(
               color: context.cardColor,
@@ -166,20 +234,40 @@ class CartScreen extends StatelessWidget {
               child: SafeArea(
                 top: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const CheckoutScreen(),
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Total',
+                              style: TextStyle(
+                                color: context.mutedColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              formatMoney(state.cartTotalCents),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Text('Continuar'),
-                        const Spacer(),
-                        Text(formatMoney(state.total)),
-                      ],
-                    ),
+                      FilledButton(
+                        onPressed: _continue,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(180, 48),
+                        ),
+                        child: const Text('Continuar'),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -188,40 +276,293 @@ class CartScreen extends StatelessWidget {
   }
 }
 
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    this.emphasized = false,
-  });
+class _StoreCard extends StatelessWidget {
+  const _StoreCard({required this.name, required this.onTap});
 
-  final String label;
-  final String value;
-  final bool emphasized;
+  final String name;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: emphasized ? context.inkColor : context.mutedColor,
-              fontSize: emphasized ? 14 : 12,
-              fontWeight: emphasized ? FontWeight.w800 : FontWeight.w500,
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.storefront_rounded,
+              color: AppColors.primary,
+              size: 22,
             ),
           ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            color: context.inkColor,
-            fontSize: emphasized ? 15 : 12,
-            fontWeight: emphasized ? FontWeight.w800 : FontWeight.w600,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Encomendar em',
+                  style: TextStyle(
+                    color: context.mutedColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          Icon(Icons.chevron_right_rounded, color: context.mutedColor),
+        ],
+      ),
+    );
+  }
+}
+
+class _CartLineCard extends StatelessWidget {
+  const _CartLineCard({
+    required this.line,
+    required this.onIncrement,
+    required this.onDecrement,
+    required this.onRemove,
+    required this.onEditNote,
+  });
+
+  final CartLine line;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
+  final VoidCallback onRemove;
+  final VoidCallback onEditNote;
+
+  @override
+  Widget build(BuildContext context) {
+    final note = line.note;
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      line.product.name,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${formatMoney(line.product.priceCents)} / unidade',
+                      style: TextStyle(
+                        color: context.mutedColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remover item',
+                onPressed: onRemove,
+                icon: const Icon(Icons.close_rounded, size: 18),
+              ),
+            ],
+          ),
+          if (note != null && note.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: context.isDarkMode
+                    ? AppColors.darkElevated
+                    : AppColors.bg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.edit_note_rounded,
+                    size: 15,
+                    color: context.mutedColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      note,
+                      style: TextStyle(color: context.mutedColor, fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: onEditNote,
+                icon: const Icon(Icons.edit_note_rounded, size: 16),
+                label: Text(note == null ? 'Adicionar nota' : 'Editar nota'),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
+              const Spacer(),
+              QuantityStepper(
+                quantity: line.quantity,
+                onIncrement: onIncrement,
+                onDecrement: onDecrement,
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 92,
+                child: Text(
+                  formatMoney(line.totalCents),
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: context.mutedColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CouponCard extends StatelessWidget {
+  const _CouponCard({
+    required this.controller,
+    required this.loading,
+    required this.error,
+    required this.appliedCode,
+    required this.discountCents,
+    required this.onApply,
+    required this.onRemove,
+  });
+
+  final TextEditingController controller;
+  final bool loading;
+  final String? error;
+  final String? appliedCode;
+  final int discountCents;
+  final VoidCallback onApply;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Cupão', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 10),
+          if (appliedCode != null)
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.successSoft,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.local_offer_rounded,
+                        size: 16,
+                        color: AppColors.success,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        appliedCode!,
+                        style: const TextStyle(
+                          color: AppColors.greenInk,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '−${formatMoney(discountCents)}',
+                        style: const TextStyle(
+                          color: AppColors.greenInk,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                TextButton(onPressed: onRemove, child: const Text('Remover')),
+              ],
+            )
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                      hintText: 'Código do cupão',
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => onApply(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonal(
+                  onPressed: loading ? null : onApply,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(96, 50),
+                  ),
+                  child: loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Aplicar'),
+                ),
+              ],
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                error!,
+                style: const TextStyle(color: AppColors.danger, fontSize: 12),
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }
