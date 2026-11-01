@@ -20,6 +20,7 @@ class StoreScreen extends StatefulWidget {
 
 class _StoreScreenState extends State<StoreScreen> {
   bool _initialized = false;
+  int _selectedTab = 0;
   Future<EstablishmentDetail>? _future;
 
   @override
@@ -63,7 +64,14 @@ class _StoreScreenState extends State<StoreScreen> {
         !state.isCartEmpty && state.cartBelongsTo(widget.establishmentId);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Estabelecimento'),
+        title: FutureBuilder<EstablishmentDetail>(
+          future: _future,
+          builder: (context, snapshot) => Text(
+            snapshot.data?.establishment.name ?? 'Estabelecimento',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
         actions: const [CartButton(), SizedBox(width: 4)],
       ),
       body: AsyncSection<EstablishmentDetail>(
@@ -97,7 +105,13 @@ class _StoreScreenState extends State<StoreScreen> {
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
         children: [
           _StoreHeader(establishment: establishment),
-          if (!establishment.isOpen) ...[
+          const SizedBox(height: 14),
+          _StoreTabStrip(
+            selectedIndex: _selectedTab,
+            onSelected: (index) => setState(() => _selectedTab = index),
+          ),
+          const SizedBox(height: 16),
+          if (_selectedTab == 0 && !establishment.isOpen) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -128,63 +142,137 @@ class _StoreScreenState extends State<StoreScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 22),
-          if (detail.products.isEmpty)
-            const EmptyState(
-              icon: Icons.restaurant_menu_rounded,
-              title: 'Menu em preparação',
-              message: 'Este parceiro ainda não publicou produtos.',
-            )
-          else
-            for (final entry in groups.entries) ...[
-              SectionTitle(title: entry.key),
-              const SizedBox(height: 10),
-              for (final product in entry.value)
+          if (_selectedTab == 0) ...[
+            if (detail.products.isEmpty)
+              const EmptyState(
+                icon: Icons.restaurant_menu_rounded,
+                title: 'Menu em preparação',
+                message: 'Este parceiro ainda não publicou produtos.',
+              )
+            else
+              for (final entry in groups.entries) ...[
+                SectionTitle(title: entry.key),
+                const SizedBox(height: 10),
+                for (final product in entry.value)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _ProductCard(
+                      product: product,
+                      enabled: establishment.isOpen && product.isAvailable,
+                      onAdd: () => _add(product, establishment),
+                    ),
+                  ),
+                const SizedBox(height: 14),
+              ],
+          ],
+          if (_selectedTab == 1) ...[
+            SectionTitle(
+              title: 'Avaliações',
+              subtitle: detail.reviews.isEmpty
+                  ? 'Ainda sem avaliações reais'
+                  : '${detail.reviews.length} avaliação(ões) de clientes',
+            ),
+            const SizedBox(height: 10),
+            if (detail.reviews.isEmpty)
+              const EmptyState(
+                icon: Icons.rate_review_outlined,
+                title: 'Sem avaliações',
+                message:
+                    'As avaliações aparecem aqui depois de pedidos entregues.',
+              )
+            else
+              for (final review in detail.reviews)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _ProductCard(
-                    product: product,
-                    enabled: establishment.isOpen && product.isAvailable,
-                    onAdd: () => _add(product, establishment),
-                  ),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _ReviewCard(review: review),
                 ),
-              const SizedBox(height: 14),
-            ],
-          const SizedBox(height: 6),
-          SectionTitle(
-            title: 'Avaliações',
-            subtitle: detail.reviews.isEmpty
-                ? 'Ainda sem avaliações reais'
-                : '${detail.reviews.length} avaliação(ões) de clientes',
-          ),
-          const SizedBox(height: 10),
-          if (detail.reviews.isEmpty)
+          ],
+          if (_selectedTab == 2)
             AppCard(
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.rate_review_outlined,
-                    color: context.mutedColor,
-                    size: 22,
+                  Text(
+                    'Sobre ${establishment.name}',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'As avaliações aparecem aqui depois de pedidos entregues.',
-                      style: TextStyle(color: context.mutedColor, fontSize: 12),
+                  if (establishment.description.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      establishment.description,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: context.mutedColor),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  InfoRow(
+                    icon: Icons.location_on_outlined,
+                    text: establishment.address,
+                  ),
+                  InfoRow(
+                    icon: Icons.phone_outlined,
+                    text: establishment.phone,
+                  ),
+                  InfoRow(
+                    icon: Icons.schedule_rounded,
+                    text:
+                        'Horário: ${establishment.opensAt}–${establishment.closesAt}',
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StoreTabStrip extends StatelessWidget {
+  const _StoreTabStrip({required this.selectedIndex, required this.onSelected});
+
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  static const _tabs = ['Menu', 'Avaliações', 'Sobre'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var index = 0; index < _tabs.length; index++)
+          Expanded(
+            child: InkWell(
+              onTap: () => onSelected(index),
+              child: Column(
+                children: [
+                  Text(
+                    _tabs[index],
+                    style: TextStyle(
+                      color: selectedIndex == index
+                          ? AppColors.primary
+                          : context.mutedColor,
+                      fontSize: 12,
+                      fontWeight: selectedIndex == index
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: selectedIndex == index
+                          ? AppColors.primary
+                          : context.lineColor,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ],
               ),
-            )
-          else
-            for (final review in detail.reviews)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _ReviewCard(review: review),
-              ),
-        ],
-      ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -195,91 +283,139 @@ class _StoreHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: 170,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              NetworkThumb(
-                imageUrl: establishment.imageUrl,
-                size: 72,
-                radius: 16,
+              if (establishment.imageUrl != null &&
+                  establishment.imageUrl!.isNotEmpty)
+                Image.network(
+                  establishment.imageUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => _storeImageFallback(),
+                )
+              else
+                _storeImageFallback(),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Color(0xB3000000)],
+                  ),
+                ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Positioned(
+                left: 14,
+                bottom: 14,
+                child: Row(
                   children: [
+                    const Icon(
+                      Icons.star_rounded,
+                      color: Color(0xFFFFC247),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 3),
                     Text(
-                      establishment.name,
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      establishment.rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      establishment.description,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: context.mutedColor),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 6,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        StarRating(
-                          rating: establishment.rating,
-                          count: establishment.reviewCount,
+                    if (establishment.reviewCount > 0) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '(${establishment.reviewCount} avaliações)',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 11,
                         ),
-                        StatusBadge(
-                          status: establishment.isOpen
-                              ? 'accepted'
-                              : 'cancelled',
-                          label: establishment.isOpen ? 'Aberto' : 'Fechado',
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
+                ),
+              ),
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: StatusBadge(
+                  status: establishment.isOpen ? 'accepted' : 'cancelled',
+                  label: establishment.isOpen ? 'Aberto' : 'Fechado',
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Divider(color: context.lineColor),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 20,
-            runSpacing: 8,
+        ),
+        const SizedBox(height: 10),
+        AppCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _HeaderMeta(
-                icon: Icons.delivery_dining_rounded,
-                label: 'Entrega',
-                value: formatMoney(establishment.deliveryFeeCents),
+              Text(
+                establishment.name,
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-              _HeaderMeta(
-                icon: Icons.schedule_rounded,
-                label: 'Preparação',
-                value: '${establishment.prepMinutes} min',
+              if (establishment.description.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  establishment.description,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: context.mutedColor),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 20,
+                runSpacing: 8,
+                children: [
+                  _HeaderMeta(
+                    icon: Icons.delivery_dining_rounded,
+                    label: 'Entrega',
+                    value: formatMoney(establishment.deliveryFeeCents),
+                  ),
+                  _HeaderMeta(
+                    icon: Icons.schedule_rounded,
+                    label: 'Preparação',
+                    value: '${establishment.prepMinutes} min',
+                  ),
+                  _HeaderMeta(
+                    icon: Icons.storefront_rounded,
+                    label: 'Horário',
+                    value: '${establishment.opensAt}–${establishment.closesAt}',
+                  ),
+                ],
               ),
-              _HeaderMeta(
-                icon: Icons.storefront_rounded,
-                label: 'Horário',
-                value: '${establishment.opensAt}–${establishment.closesAt}',
+              const SizedBox(height: 8),
+              InfoRow(
+                icon: Icons.location_on_outlined,
+                text: establishment.address,
               ),
+              InfoRow(icon: Icons.phone_outlined, text: establishment.phone),
             ],
           ),
-          const SizedBox(height: 10),
-          InfoRow(
-            icon: Icons.location_on_outlined,
-            text: establishment.address,
-          ),
-          InfoRow(icon: Icons.phone_outlined, text: establishment.phone),
-        ],
-      ),
+        ),
+      ],
     );
   }
+
+  Widget _storeImageFallback() => const ColoredBox(
+    color: AppColors.primarySoft,
+    child: Center(
+      child: Icon(Icons.storefront_rounded, color: AppColors.primary, size: 56),
+    ),
+  );
 }
 
 class _HeaderMeta extends StatelessWidget {
@@ -315,7 +451,7 @@ class _HeaderMeta extends StatelessWidget {
           style: TextStyle(
             color: context.inkColor,
             fontSize: 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -346,8 +482,8 @@ class _ProductCard extends StatelessWidget {
           NetworkThumb(
             imageUrl: product.imageUrl,
             icon: Icons.restaurant_rounded,
-            size: 54,
-            radius: 12,
+            size: 84,
+            radius: 14,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -388,16 +524,17 @@ class _ProductCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 8,
                   children: [
-                    Expanded(
-                      child: Text(
-                        formatMoney(product.priceCents),
-                        style: TextStyle(
-                          color: context.accentColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
+                    Text(
+                      formatMoney(product.priceCents),
+                      style: TextStyle(
+                        color: context.accentColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     if (quantity > 0)
@@ -407,14 +544,13 @@ class _ProductCard extends StatelessWidget {
                         onDecrement: () => state.decrement(product.id),
                       )
                     else
-                      IconButton.filled(
-                        tooltip: 'Adicionar ${product.name}',
+                      FilledButton.icon(
                         onPressed: enabled ? onAdd : null,
-                        icon: const Icon(Icons.add_rounded, size: 20),
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(44, 44),
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: const Text('Adicionar'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                         ),
                       ),
                   ],
@@ -487,7 +623,7 @@ class _CartBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: context.cardColor,
-      elevation: 8,
+      elevation: 0,
       child: SafeArea(
         top: false,
         child: Padding(
@@ -507,16 +643,22 @@ class _CartBar extends StatelessWidget {
                       formatMoney(totalCents),
                       style: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
-              FilledButton(
-                onPressed: onTap,
-                style: FilledButton.styleFrom(minimumSize: const Size(170, 48)),
-                child: const Text('Ver carrinho'),
+              SizedBox(
+                width: 154,
+                child: FilledButton.icon(
+                  onPressed: onTap,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                  icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                  label: const Text('Pedir agora'),
+                ),
               ),
             ],
           ),

@@ -45,11 +45,14 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _changePassword() async {
+    final state = AppScope.of(context);
     final input = await showPasswordDialog(context);
     if (input == null) return;
     try {
-      await AppScope.of(context)
-          .changePassword(currentPassword: input.$1, newPassword: input.$2);
+      await state.changePassword(
+        currentPassword: input.$1,
+        newPassword: input.$2,
+      );
       if (mounted) showAppSnack(context, 'Palavra-passe alterada.');
     } on ApiException catch (error) {
       if (mounted) showAppSnack(context, error.message, error: true);
@@ -57,10 +60,11 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _addAddress() async {
+    final state = AppScope.of(context);
     final input = await showAddressDialog(context);
     if (input == null) return;
     try {
-      await AppScope.of(context).addAddress(
+      await state.addAddress(
         label: input.label,
         line: input.line,
         reference: input.reference,
@@ -75,10 +79,11 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _editAddress(Address address) async {
+    final state = AppScope.of(context);
     final input = await showAddressDialog(context, initial: address);
     if (input == null) return;
     try {
-      await AppScope.of(context).updateAddress(
+      await state.updateAddress(
         address.id,
         label: input.label,
         line: input.line,
@@ -94,6 +99,7 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _deleteAddress(Address address) async {
+    final state = AppScope.of(context);
     final confirmed = await showConfirmDialog(
       context,
       title: 'Remover morada',
@@ -103,7 +109,7 @@ class _AccountScreenState extends State<AccountScreen> {
     );
     if (!confirmed) return;
     try {
-      await AppScope.of(context).deleteAddress(address.id);
+      await state.deleteAddress(address.id);
       if (mounted) showAppSnack(context, 'Morada removida.');
     } on ApiException catch (error) {
       if (mounted) showAppSnack(context, error.message, error: true);
@@ -111,6 +117,7 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _logout() async {
+    final state = AppScope.of(context);
     final confirmed = await showConfirmDialog(
       context,
       title: 'Terminar sessão',
@@ -118,7 +125,12 @@ class _AccountScreenState extends State<AccountScreen> {
       confirmLabel: 'Sair',
       destructive: true,
     );
-    if (confirmed) await AppScope.of(context).logout();
+    if (confirmed) await state.logout();
+  }
+
+  void _leaveGuestMode() {
+    AppScope.of(context).exitGuestMode();
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override
@@ -126,7 +138,59 @@ class _AccountScreenState extends State<AccountScreen> {
     final state = AppScope.of(context);
     final user = state.user;
     if (user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      if (state.isGuest) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('A tua conta')),
+          body: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: AppCard(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 68,
+                        height: 68,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primarySoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.person_outline_rounded,
+                          color: AppColors.primary,
+                          size: 34,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        'Estás a explorar como convidado',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Podes descobrir lojas e produtos. Para fazer pedidos '
+                        'e acompanhar entregas, entra ou cria uma conta.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: context.mutedColor),
+                      ),
+                      const SizedBox(height: 22),
+                      FilledButton(
+                        onPressed: _leaveGuestMode,
+                        child: const Text('Entrar ou criar conta'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+      return const Scaffold(body: Center(child: LoadingBlock()));
     }
     return Scaffold(
       appBar: AppBar(title: const Text('A sua conta')),
@@ -176,7 +240,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                   style: const TextStyle(
                                     color: AppColors.primary,
                                     fontSize: 10,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -225,26 +289,12 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
               const SizedBox(height: 10),
               if (state.addresses.isEmpty)
-                AppCard(
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.location_off_outlined,
-                        color: context.mutedColor,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Ainda não guardou nenhuma morada.',
-                          style: TextStyle(
-                            color: context.mutedColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                EmptyState(
+                  icon: Icons.location_off_outlined,
+                  title: 'Sem moradas',
+                  message: 'Ainda não guardou nenhuma morada.',
+                  actionLabel: 'Adicionar',
+                  onAction: _addAddress,
                 )
               else
                 for (final address in state.addresses)
@@ -290,7 +340,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                         style: TextStyle(
                                           color: AppColors.primary,
                                           fontSize: 10,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ],

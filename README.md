@@ -37,7 +37,9 @@ totais calculados no servidor.
 - Gestão de pedidos: aceitar, rejeitar com motivo, iniciar preparação e marcar
   como pronto (transições validadas no servidor).
 - Gestão de produtos: criar, editar, preço em MZN, stock, categoria do menu,
-  disponibilidade e desativação.
+  disponibilidade, carregamento de fotografias do dispositivo (JPEG, PNG ou
+  WebP até 5 MB) e desativação. As imagens ficam em `server/data/uploads`;
+  links públicos HTTPS também continuam suportados.
 - Perfil do estabelecimento: descrição, contacto, morada, horário e abertura.
 
 ### Estafeta
@@ -58,13 +60,17 @@ totais calculados no servidor.
 ### Transversal
 - Design system centralizado, tema claro fixo (o tema escuro existe em
   `AppTheme.dark()` mas não é aplicado automaticamente):
-  - tipografia Inter incluída na aplicação: títulos em negrito de 18–20 px,
-    texto regular de 14 px e detalhes em cinza, peso médio, de 12–13 px;
-  - fundo branco puro `#FFFFFF`, texto `#111827`, secundário `#6B7280`;
-  - azul royal `#1A56DB` em ícones, estados ativos, pesquisa e botões;
-  - cartões brancos com raio de 16 px e sombra `0 4px 12px rgba(0,0,0,.08)`;
-  - barra inferior branca com sombra, ícones de contorno e ativo preenchido.
-- Layout responsivo: *bottom navigation* em mobile, *sidebar* em ecrãs ≥900 px.
+  - tipografia Poppins incluída na aplicação, com pesos Regular, Medium,
+    SemiBold e Bold;
+  - azul `#0755E9`, azul-claro `#3478F6`, superfícies `#FFFFFF` e `#F5F8FC`,
+    texto `#202124` e secundário `#929292`;
+  - cartões brancos com raio de 16–22 px, borda discreta e sombra suave;
+  - navegação ativa azul com indicador azul-claro, botões e campos com estados
+    consistentes;
+  - splash com fotografia noturna de Nacala, capas de estabelecimentos e
+    fotografias reais dos produtos carregadas pelos parceiros.
+- Layout responsivo: navegação inferior para cliente/parceiro/estafeta, trilho
+  lateral azul para administração em mobile e *sidebar* em ecrãs largos.
 - Estados de carregamento, vazio e erro em todos os ecrãs com dados remotos.
 - Feedback em português; alvos de toque ≥44 px; *safe areas* respeitadas.
 - Sessão persistida e revalidada em `/api/auth/me`; `401` limpa a sessão.
@@ -152,6 +158,7 @@ Variáveis de ambiente:
 | ------------ | ---------------------------------------- | --------- |
 | `PORT`       | `8080`                                   | porta HTTP |
 | `DB_PATH`    | `data`                                   | caminho da base SQLite |
+| `UPLOADS_DIR` | `data/uploads`                          | pasta persistente para imagens carregadas |
 | `JWT_SECRET` | segredo de desenvolvimento (com aviso)   | **definir em produção** |
 | `SEED`       | ativo                                    | `SEED=0` não cria administrador/categorias |
 | `SEED_DEMO`  | desligado                                | `SEED_DEMO=1` cria dados de demonstração (apenas desenvolvimento/testes) |

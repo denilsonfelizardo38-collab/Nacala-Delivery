@@ -219,6 +219,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       if (action == 'complete' || action == 'decline') {
         await _stopLocationSharing(assignment.id);
       }
+      if (!mounted) return;
       showAppSnack(context, switch (action) {
         'accept' => 'Entrega aceite. Recolha o pedido no parceiro.',
         'start' => 'Entrega iniciada. A sua localização está a ser partilhada.',
@@ -453,15 +454,15 @@ class _Tab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected ? context.accentColor : context.cardColor,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(999),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Container(
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: selected ? context.accentColor : context.lineColor,
             ),
@@ -471,7 +472,7 @@ class _Tab extends StatelessWidget {
             style: TextStyle(
               color: selected ? Colors.white : context.inkColor,
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -581,7 +582,7 @@ class _AssignmentCard extends StatelessWidget {
                 formatMoney(assignment.totalCents),
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],

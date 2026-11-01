@@ -60,6 +60,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Future<void> _changeRole(AdminUser user, String role) async {
+    final api = AppScope.of(context).api;
     final confirmed = await showConfirmDialog(
       context,
       title: 'Alterar papel',
@@ -71,7 +72,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     if (!confirmed) return;
     setState(() => _busyId = user.id);
     try {
-      await AppScope.of(context).api.adminUpdateUser(user.id, role: role);
+      await api.adminUpdateUser(user.id, role: role);
       if (!mounted) return;
       showAppSnack(context, 'Papel atualizado.');
       _reload();
@@ -237,7 +238,7 @@ class _RoleChip extends StatelessWidget {
             style: TextStyle(
               color: selected ? Colors.white : context.inkColor,
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -297,7 +298,7 @@ class _UserCard extends StatelessWidget {
                             style: const TextStyle(
                               color: AppColors.primary,
                               fontSize: 10,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -381,7 +382,7 @@ class _UserCard extends StatelessWidget {
                         ? context.successColor
                         : context.dangerColor,
                     fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Switch(value: user.isActive, onChanged: onActive),

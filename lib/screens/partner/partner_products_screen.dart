@@ -1,10 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/api_client.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 
@@ -21,6 +24,7 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
   final _search = TextEditingController();
   String _query = '';
   String? _busyId;
+  bool _savingProduct = false;
 
   @override
   void didChangeDependencies() {
@@ -43,13 +47,18 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
   }
 
   Future<void> _openEditor([Product? product]) async {
+    final api = AppScope.of(context).api;
     final input = await showDialog<_ProductInput>(
       context: context,
       builder: (_) => _ProductDialog(product: product),
     );
-    if (input == null) return;
+    if (input == null || !mounted) return;
+    setState(() => _savingProduct = true);
     try {
-      await AppScope.of(context).api.saveProduct(
+      final imageUrl = input.imageFile == null
+          ? input.imageUrl
+          : await api.uploadProductImage(input.imageFile!);
+      await api.saveProduct(
         id: product?.id,
         name: input.name,
         description: input.description,
@@ -57,6 +66,7 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
         category: input.category,
         isAvailable: input.isAvailable,
         stock: input.stock,
+        imageUrl: imageUrl,
       );
       if (!mounted) return;
       showAppSnack(
@@ -66,6 +76,8 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
       _reload();
     } on ApiException catch (error) {
       if (mounted) showAppSnack(context, error.message, error: true);
+    } finally {
+      if (mounted) setState(() => _savingProduct = false);
     }
   }
 
@@ -80,6 +92,7 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
         category: product.category,
         isAvailable: !product.isAvailable,
         stock: product.stock,
+        imageUrl: product.imageUrl,
       );
       if (!mounted) return;
       showAppSnack(
@@ -97,6 +110,7 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
   }
 
   Future<void> _remove(Product product) async {
+    final api = AppScope.of(context).api;
     final confirmed = await showConfirmDialog(
       context,
       title: 'Desativar produto',
@@ -109,7 +123,7 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
     if (!confirmed) return;
     setState(() => _busyId = product.id);
     try {
-      await AppScope.of(context).api.deleteProduct(product.id);
+      await api.deleteProduct(product.id);
       if (!mounted) return;
       showAppSnack(context, 'Produto desativado.');
       _reload();
@@ -128,7 +142,7 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
         actions: [
           IconButton(
             tooltip: 'Novo produto',
-            onPressed: () => _openEditor(),
+            onPressed: _savingProduct ? null : () => _openEditor(),
             icon: const Icon(Icons.add_rounded),
           ),
           const SizedBox(width: 4),
@@ -142,6 +156,10 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
             children: [
+              if (_savingProduct) ...[
+                const LinearProgressIndicator(),
+                const SizedBox(height: 12),
+              ],
               SearchField(
                 controller: _search,
                 hintText: 'Pesquisar nos seus produtos',
@@ -206,9 +224,7 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        onPressed: _savingProduct ? null : () => _openEditor(),
         icon: const Icon(Icons.add_rounded),
         label: const Text('Novo produto'),
       ),
@@ -241,7 +257,7 @@ class _ProductTile extends StatelessWidget {
           NetworkThumb(
             imageUrl: product.imageUrl,
             icon: Icons.restaurant_rounded,
-            size: 52,
+            size: 64,
             radius: 12,
           ),
           const SizedBox(width: 12),
@@ -350,6 +366,8 @@ class _ProductInput {
     required this.category,
     required this.isAvailable,
     required this.stock,
+    required this.imageUrl,
+    required this.imageFile,
   });
 
   final String name;
@@ -358,6 +376,8 @@ class _ProductInput {
   final String category;
   final bool isAvailable;
   final int? stock;
+  final String? imageUrl;
+  final XFile? imageFile;
 }
 
 class _ProductDialog extends StatefulWidget {
@@ -375,6 +395,10 @@ class _ProductDialogState extends State<_ProductDialog> {
   late final TextEditingController _price;
   late final TextEditingController _category;
   late final TextEditingController _stock;
+  final ImagePicker _imagePicker = ImagePicker();
+  late String? _imageUrl;
+  XFile? _imageFile;
+  Uint8List? _imageBytes;
   late bool _available;
 
   @override
@@ -388,6 +412,7 @@ class _ProductDialogState extends State<_ProductDialog> {
     );
     _category = TextEditingController(text: product?.category ?? 'Geral');
     _stock = TextEditingController(text: product?.stock?.toString() ?? '');
+    _imageUrl = product?.imageUrl;
     _available = product?.isAvailable ?? true;
   }
 
@@ -399,6 +424,49 @@ class _ProductDialogState extends State<_ProductDialog> {
     _category.dispose();
     _stock.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 82,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+      if (image == null || !mounted) return;
+      final bytes = await image.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _imageFile = image;
+        _imageBytes = bytes;
+        _imageUrl = null;
+      });
+    } on PlatformException catch (error) {
+      if (mounted) {
+        showAppSnack(
+          context,
+          error.message ?? 'Não foi possível abrir a galeria.',
+          error: true,
+        );
+      }
+    } on FileSystemException {
+      if (mounted) {
+        showAppSnack(
+          context,
+          'Não foi possível ler a imagem selecionada.',
+          error: true,
+        );
+      }
+    }
+  }
+
+  void _removeImage() {
+    setState(() {
+      _imageFile = null;
+      _imageBytes = null;
+      _imageUrl = null;
+    });
   }
 
   void _save() {
@@ -419,6 +487,8 @@ class _ProductDialogState extends State<_ProductDialog> {
             : _category.text.trim(),
         isAvailable: _available,
         stock: stockText.isEmpty ? null : int.tryParse(stockText),
+        imageUrl: _imageUrl,
+        imageFile: _imageFile,
       ),
     );
   }
@@ -452,6 +522,64 @@ class _ProductDialogState extends State<_ProductDialog> {
                   decoration: const InputDecoration(
                     labelText: 'Descrição',
                     hintText: 'Ingredientes, tamanho...',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: Text(
+                          _imageFile != null || _imageUrl != null
+                              ? 'Alterar imagem'
+                              : 'Escolher da galeria',
+                        ),
+                      ),
+                      if (_imageFile != null || _imageUrl != null)
+                        IconButton(
+                          tooltip: 'Remover imagem',
+                          onPressed: _removeImage,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: _imageBytes == null
+                            ? NetworkThumb(
+                                imageUrl: _imageUrl,
+                                icon: Icons.restaurant_rounded,
+                                size: 96,
+                                radius: 14,
+                              )
+                            : Image.memory(
+                                _imageBytes!,
+                                width: 96,
+                                height: 96,
+                                fit: BoxFit.cover,
+                              ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Pré-visualização da imagem',
+                        style: TextStyle(
+                          color: context.mutedColor,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),

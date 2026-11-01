@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
+import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
@@ -22,7 +23,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   static const _filters = [
     ('in_progress', 'Em curso'),
-    ('completed', 'Concluídos'),
+    ('completed', 'Entregues'),
     ('all', 'Todos'),
   ];
 
@@ -31,7 +32,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
-    _future = AppScope.of(context).api.orders(status: _status);
+    final state = AppScope.of(context);
+    if (!state.isGuest) _future = state.api.orders(status: _status);
+  }
+
+  void _leaveGuestMode() {
+    AppScope.of(context).exitGuestMode();
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   void _reload() {
@@ -57,9 +64,28 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (AppScope.of(context).isGuest) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Meus pedidos')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: EmptyState(
+              icon: Icons.receipt_long_outlined,
+              title: 'Os pedidos são da tua conta',
+              message:
+                  'Explora o catálogo como convidado. Para acompanhar pedidos, '
+                  'entra ou cria uma conta.',
+              actionLabel: 'Entrar ou criar conta',
+              onAction: _leaveGuestMode,
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Os meus pedidos'),
+        title: const Text('Meus pedidos'),
         actions: const [CartButton(), SizedBox(width: 4)],
       ),
       body: SafeArea(
@@ -67,7 +93,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Acompanhe o estado e os detalhes das suas encomendas.',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: context.mutedColor),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Row(
                 children: [
                   for (final filter in _filters) ...[
@@ -148,15 +185,15 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected ? context.accentColor : context.cardColor,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(999),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Container(
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: selected ? context.accentColor : context.lineColor,
             ),
@@ -166,7 +203,7 @@ class _FilterChip extends StatelessWidget {
             style: TextStyle(
               color: selected ? Colors.white : context.inkColor,
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -188,11 +225,19 @@ class _OrderCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const NetworkThumb(
-            imageUrl: null,
-            icon: Icons.restaurant_rounded,
-            size: 56,
-            radius: 12,
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.receipt_long_outlined,
+              color: AppColors.primary,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -250,7 +295,7 @@ class _OrderCard extends StatelessWidget {
                       formatMoney(order.totalCents),
                       style: const TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],

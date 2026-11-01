@@ -64,6 +64,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Cantinho da Baía'), findsOneWidget);
+    expect(find.text('1 unidade · entrega em Nacala-Porto'), findsOneWidget);
+    expect(find.text('Cupão de desconto'), findsOneWidget);
     expect(find.text('530,00 MT'), findsWidgets);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Confirmar pedido'));

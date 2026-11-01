@@ -3,6 +3,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/models.dart';
 import '../theme/app_colors.dart';
+import '../core/location_service.dart';
 import 'location_picker.dart';
 
 class AddressInput {
@@ -48,6 +49,7 @@ class _AddressDialogState extends State<_AddressDialog> {
   late final TextEditingController _line;
   late final TextEditingController _reference;
   late bool _isDefault;
+  bool _locating = false;
   double? _latitude;
   double? _longitude;
   String? _locationError;
@@ -64,6 +66,7 @@ class _AddressDialogState extends State<_AddressDialog> {
   }
 
   Future<void> _selectLocation() async {
+    if (_locating) return;
     final latitude = _latitude;
     final longitude = _longitude;
     final location = await showLocationPicker(
@@ -73,11 +76,57 @@ class _AddressDialogState extends State<_AddressDialog> {
           : LatLng(latitude, longitude),
     );
     if (location == null || !mounted) return;
+    await _applyLocation(location);
+  }
+
+  Future<void> _useCurrentLocation() async {
+    if (_locating) return;
+    setState(() {
+      _locating = true;
+      _locationError = null;
+    });
+    try {
+      final position = await LocationService.currentPosition();
+      if (!mounted) return;
+      await _applyLocation(
+        LatLng(position.latitude, position.longitude),
+        alreadyLocating: true,
+      );
+    } on LocationException catch (error) {
+      if (mounted) setState(() => _locationError = error.message);
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _applyLocation(
+    LatLng location, {
+    bool alreadyLocating = false,
+  }) async {
     setState(() {
       _latitude = location.latitude;
       _longitude = location.longitude;
+      _locating = true;
       _locationError = null;
     });
+    try {
+      final address = await LocationService.addressFromCoordinates(
+        location.latitude,
+        location.longitude,
+      );
+      if (!mounted) return;
+      if (address == null) {
+        setState(
+          () => _locationError = 'Não foi possível identificar a morada. Pode preenchê-la manualmente.',
+        );
+        return;
+      }
+      _line.text = address;
+    } on LocationException catch (error) {
+      if (mounted) setState(() => _locationError = error.message);
+    } finally {
+      if (mounted && !alreadyLocating) setState(() => _locating = false);
+    }
   }
 
   @override
@@ -135,15 +184,29 @@ class _AddressDialogState extends State<_AddressDialog> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _locating ? null : _useCurrentLocation,
+                    icon: _locating
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location_outlined),
+                    label: const Text('Preencher pela localização atual'),
+                  ),
+                ),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: _selectLocation,
+                  child: TextButton.icon(
+                    onPressed: _locating ? null : _selectLocation,
                     icon: const Icon(Icons.map_outlined),
                     label: Text(
                       _latitude == null
-                          ? 'Marcar ponto no mapa'
-                          : 'Alterar ponto no mapa',
+                          ? 'Escolher ponto no mapa'
+                          : 'Ajustar ponto no mapa',
                     ),
                   ),
                 ),

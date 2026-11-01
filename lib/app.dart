@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'screens/admin/admin_audit_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
@@ -7,6 +8,7 @@ import 'screens/admin/admin_partners_screen.dart';
 import 'screens/admin/admin_users_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/auth/welcome_screen.dart';
 import 'screens/customer/account_screen.dart';
 import 'screens/customer/cart_screen.dart';
 import 'screens/customer/categories_screen.dart';
@@ -54,43 +56,67 @@ class _NacalaDeliveryAppState extends State<NacalaDeliveryApp> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScope(
-      state: widget.state,
-      child: MaterialApp(
-        title: 'Nacala Entrega',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        // A identidade visual é definida para o tema claro (referências).
-        // O tema escuro continua disponível em `AppTheme.dark()` para uma
-        // futura preferência do utilizador, mas não é aplicado
-        // automaticamente pelo sistema.
-        themeMode: ThemeMode.light,
-        home: _RootGate(ready: _ready),
-        onGenerateRoute: _generateRoute,
-        onUnknownRoute: (settings) => MaterialPageRoute(
-          settings: settings,
-          builder: (_) => const SplashScreen(),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.white,
+      ),
+      child: AppScope(
+        state: widget.state,
+        child: MaterialApp(
+          title: 'Nacala Delivery',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          // A identidade visual é definida para o tema claro (referências).
+          // O tema escuro continua disponível em `AppTheme.dark()` para uma
+          // futura preferência do utilizador, mas não é aplicado
+          // automaticamente pelo sistema.
+          themeMode: ThemeMode.light,
+          home: _RootGate(ready: _ready),
+          onGenerateRoute: _generateRoute,
+          onUnknownRoute: (settings) => MaterialPageRoute(
+            settings: settings,
+            builder: (_) => const SplashScreen(),
+          ),
         ),
       ),
     );
   }
 }
 
-class _RootGate extends StatelessWidget {
+class _RootGate extends StatefulWidget {
   const _RootGate({required this.ready});
 
   final bool ready;
 
   @override
+  State<_RootGate> createState() => _RootGateState();
+}
+
+class _RootGateState extends State<_RootGate> {
+  bool _showLogin = false;
+
+  @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final Widget child;
-    if (!ready || state.status == SessionStatus.loading) {
+    if (!widget.ready || state.status == SessionStatus.loading) {
       child = const SplashScreen(key: ValueKey('splash'));
     } else if (state.isSignedIn) {
       child = const AppShell(key: ValueKey('shell'));
+    } else if (state.isGuest) {
+      child = const AppShell(key: ValueKey('guest-shell'));
+    } else if (_showLogin) {
+      child = LoginScreen(
+        key: const ValueKey('login'),
+        onBack: () => setState(() => _showLogin = false),
+      );
     } else {
-      child = const LoginScreen(key: ValueKey('login'));
+      child = WelcomeScreen(
+        key: const ValueKey('welcome'),
+        onSignIn: () => setState(() => _showLogin = true),
+        onGuest: () async => state.enterGuestMode(),
+      );
     }
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 260),

@@ -1,15 +1,15 @@
-
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -40,10 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await AppScope.of(context).login(
-        _identifier.text.trim(),
-        _password.text,
-      );
+      await AppScope.of(context).login(_identifier.text.trim(), _password.text);
     } on ApiException catch (error) {
       if (mounted) {
         setState(() => _error = error.message);
@@ -58,239 +55,239 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 252, 251, 251),
-
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/login_bg.jpg'),
-            fit: BoxFit.cover,
-          ),
-        ),
-
-        child: Container(
-          color: Colors.black.withOpacity(0.35),
-
-          child: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 28,
-                ),
-
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 430),
-
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
                     children: [
-                      const Center(
-                        child: AppLogo(size: 68),
+                      SizedBox(
+                        width: 48,
+                        child: widget.onBack == null
+                            ? null
+                            : IconButton(
+                                tooltip: 'Voltar',
+                                onPressed: widget.onBack,
+                                icon: const Icon(Icons.arrow_back_rounded),
+                              ),
                       ),
-
-                      const SizedBox(height: 18),
-
-                      const Text(
+                      const AppLogo(size: 42),
+                      const SizedBox(width: 10),
+                      Text(
                         'Nacala Entrega',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color.fromARGB(255, 0, 0, 0),
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      const Text(
-                        'A sua cidade, entregue à porta.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color.fromARGB(255, 0, 68, 214),
-                          fontSize: 13,
-                        ),
-                      ),
-
-                      const SizedBox(height: 26),
-
-                      Container(
-                        padding: const EdgeInsets.all(20),
-
-                        decoration: BoxDecoration(
-                          color: context.cardColor,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: context.lineColor,
-                          ),
-                        ),
-
-                        child: Form(
-                          key: _formKey,
-
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-
-                            children: [
-                              Text(
-                                'Entrar na sua conta',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall,
-                              ),
-
-                              const SizedBox(height: 4),
-
-                              Text(
-                                'Use o email ou o telemóvel associado à conta.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: context.mutedColor,
-                                    ),
-                              ),
-
-                              const SizedBox(height: 20),
-
-                              TextFormField(
-                                controller: _identifier,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-
-                                autofillHints: const [
-                                  AutofillHints.username,
-                                  AutofillHints.email,
-                                ],
-
-                                decoration: const InputDecoration(
-                                  labelText: 'Email ou telemóvel',
-                                  prefixIcon: Icon(
-                                    Icons.person_outline_rounded,
-                                  ),
-                                ),
-
-                                validator: (value) =>
-                                    (value == null ||
-                                        value.trim().length < 3)
-                                    ? 'Indique o email ou telemóvel.'
-                                    : null,
-                              ),
-
-                              const SizedBox(height: 12),
-
-                              TextFormField(
-                                controller: _password,
-                                obscureText: _obscure,
-                                textInputAction: TextInputAction.done,
-
-                                onFieldSubmitted: (_) => _submit(),
-
-                                autofillHints: const [
-                                  AutofillHints.password,
-                                ],
-
-                                decoration: InputDecoration(
-                                  labelText: 'Palavra-passe',
-
-                                  prefixIcon: const Icon(
-                                    Icons.lock_outline_rounded,
-                                  ),
-
-                                  suffixIcon: IconButton(
-                                    tooltip: _obscure
-                                        ? 'Mostrar palavra-passe'
-                                        : 'Ocultar palavra-passe',
-
-                                    onPressed: () {
-                                      setState(() {
-                                        _obscure = !_obscure;
-                                      });
-                                    },
-
-                                    icon: Icon(
-                                      _obscure
-                                          ? Icons.visibility_outlined
-                                          : Icons.visibility_off_outlined,
-                                      size: 20,
-                                    ),
-                                  ),
-                                ),
-
-                                validator: (value) =>
-                                    (value == null || value.isEmpty)
-                                    ? 'Indique a palavra-passe.'
-                                    : null,
-                              ),
-
-                              if (_error != null) ...[
-                                const SizedBox(height: 14),
-
-                                _ErrorBanner(message: _error!),
-                              ],
-
-                              const SizedBox(height: 18),
-
-                              FilledButton(
-                                onPressed: _submitting ? null : _submit,
-
-                                child: _submitting
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Text('Entrar'),
-                              ),
-
-                              const SizedBox(height: 8),
-
-                              Wrap(
-                                alignment: WrapAlignment.center,
-                                crossAxisAlignment:
-                                    WrapCrossAlignment.center,
-
-                                children: [
-                                  Text(
-                                    'Ainda não tem conta?',
-                                    style: TextStyle(
-                                      color: context.mutedColor,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-
-                                  TextButton(
-                                    onPressed: _submitting
-                                        ? null
-                                        : () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const RegisterScreen(),
-                                              ),
-                                            );
-                                          },
-
-                                    child: const Text('Criar conta'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 32),
+                  Text(
+                    'Bem-vindo de volta!',
+                    style: Theme.of(context).textTheme.headlineSmall
+                        ?.copyWith(fontSize: 27, letterSpacing: -0.5),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'A tua próxima refeição está a poucos passos.',
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: AppColors.muted, height: 1.5),
+                  ),
+                  const SizedBox(height: 24),
+                  AppCard(
+                    padding: const EdgeInsets.all(20),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Entra na tua conta',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 18),
+                          TextFormField(
+                            controller: _identifier,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [
+                              AutofillHints.username,
+                              AutofillHints.email,
+                            ],
+                            style: const TextStyle(fontSize: 13),
+                            decoration: const InputDecoration(
+                              hintText: 'Email ou telefone',
+                              prefixIcon: Icon(
+                                Icons.mail_outline_rounded,
+                                color: AppColors.primary,
+                                size: 19,
+                              ),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 13,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                              ),
+                            ),
+                            validator: (value) =>
+                                (value == null || value.trim().length < 3)
+                                ? 'Indique o email ou telemóvel.'
+                                : null,
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _password,
+                            obscureText: _obscure,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _submit(),
+                            autofillHints: const [AutofillHints.password],
+                            style: const TextStyle(fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: 'Palavra-passe',
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                                color: AppColors.primary,
+                                size: 19,
+                              ),
+                              suffixIcon: IconButton(
+                                tooltip: _obscure
+                                    ? 'Mostrar palavra-passe'
+                                    : 'Ocultar palavra-passe',
+                                onPressed: () =>
+                                    setState(() => _obscure = !_obscure),
+                                icon: Icon(
+                                  _obscure
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  size: 19,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 13,
+                              ),
+                              border: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(12),
+                                ),
+                              ),
+                            ),
+                            validator: (value) =>
+                                (value == null || value.isEmpty)
+                                ? 'Indique a palavra-passe.'
+                                : null,
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _submitting
+                                  ? null
+                                  : () => showAppSnack(
+                                      context,
+                                      'A recuperação de palavra-passe não está '
+                                      'disponível nesta versão.',
+                                    ),
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(44, 38),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                textStyle: const TextStyle(fontSize: 11),
+                              ),
+                              child: const Text('Esqueceu a palavra-passe?'),
+                            ),
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 8),
+                            _ErrorBanner(message: _error!),
+                          ],
+                          const SizedBox(height: 10),
+                          FilledButton(
+                            onPressed: _submitting ? null : _submit,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(52),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                            ),
+                            child: _submitting
+                                ? const SizedBox(
+                                    width: 19,
+                                    height: 19,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Entrar'),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: AppColors.border)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Text(
+                                  'ou',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: AppColors.muted),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: AppColors.border)),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          GoogleSignInButton(
+                            onPressed: _submitting
+                                ? null
+                                : () => showAppSnack(
+                                    context,
+                                    'A entrada com Google ainda não está '
+                                    'ativa. Falta configurar o OAuth do Google '
+                                    'e a validação segura no servidor.',
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
+                    children: [
+                      Text(
+                        'Ainda não tens conta?',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: AppColors.muted),
+                      ),
+                      TextButton(
+                        onPressed: _submitting
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const RegisterScreen(),
+                                ),
+                              ),
+                        child: const Text('Criar conta'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),

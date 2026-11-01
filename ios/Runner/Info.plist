@@ -27,7 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>A localização permite acompanhar a entrega e mostrar a rota até ao cliente.</string>
+	<string>A localização permite preencher automaticamente a morada de entrega e acompanhar a entrega.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Durante uma entrega, a localização é partilhada com o cliente mesmo quando o ecrã está bloqueado.</string>
 	<key>UIBackgroundModes</key>

@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:image_picker/image_picker.dart';
+
 import '../core/api_client.dart';
 import '../models/models.dart';
 
@@ -99,7 +104,7 @@ class NacalaApi {
       query: {
         if (category != null && category.isNotEmpty) 'category': category,
         if (query != null && query.isNotEmpty) 'q': query,
-        if (sort != null) 'sort': sort,
+        'sort': ?sort,
         if (openOnly) 'open': '1',
       },
     );
@@ -135,8 +140,8 @@ class NacalaApi {
       '/api/products',
       query: {
         if (query != null && query.isNotEmpty) 'q': query,
-        if (establishment != null) 'establishment': establishment,
-        if (category != null) 'category': category,
+        'establishment': ?establishment,
+        'category': ?category,
       },
     );
     return [
@@ -309,7 +314,7 @@ class NacalaApi {
   Future<List<Order>> partnerOrders({String? status}) async {
     final json = await client.get(
       '/api/partner/orders',
-      query: {if (status != null) 'status': status},
+      query: {'status': ?status},
     );
     return [
       for (final item in (json['orders'] as List? ?? const []))
@@ -324,7 +329,7 @@ class NacalaApi {
   }) async {
     final json = await client.post(
       '/api/partner/orders/$id/$action',
-      body: {if (reason != null) 'reason': reason},
+      body: {'reason': ?reason},
     );
     return Order.fromJson(json['order'] as Map<String, dynamic>);
   }
@@ -337,6 +342,58 @@ class NacalaApi {
     ];
   }
 
+  Future<String> uploadProductImage(XFile file) async {
+    final extension = file.name.toLowerCase().split('.').last;
+    final mimeType = switch (file.mimeType?.toLowerCase()) {
+      'image/jpeg' => 'image/jpeg',
+      'image/png' => 'image/png',
+      'image/webp' => 'image/webp',
+      _ => switch (extension) {
+        'jpg' || 'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        _ => null,
+      },
+    };
+    if (mimeType == null) {
+      throw const ApiException(
+        'Escolha uma imagem JPEG, PNG ou WebP.',
+        code: 'invalid_image',
+        status: 422,
+      );
+    }
+
+    final List<int> bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } on FileSystemException {
+      throw const ApiException(
+        'Não foi possível ler a imagem selecionada.',
+        code: 'image_read_failed',
+      );
+    }
+    if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
+      throw const ApiException(
+        'A imagem deve ter menos de 5 MB.',
+        code: 'image_too_large',
+        status: 413,
+      );
+    }
+    final response = await client.post(
+      '/api/partner/product-images',
+      body: {'mime_type': mimeType, 'data_base64': base64Encode(bytes)},
+    );
+    final imagePath = response['image_url'];
+    if (imagePath is! String || !imagePath.startsWith('/uploads/')) {
+      throw const ApiException(
+        'Resposta inválida ao carregar a imagem.',
+        code: 'invalid_response',
+        status: 502,
+      );
+    }
+    return client.resolveUri(imagePath).toString();
+  }
+
   Future<Product> saveProduct({
     String? id,
     required String name,
@@ -345,6 +402,7 @@ class NacalaApi {
     required String category,
     required bool isAvailable,
     int? stock,
+    String? imageUrl,
   }) async {
     final body = {
       'name': name,
@@ -353,6 +411,7 @@ class NacalaApi {
       'category': category,
       'is_available': isAvailable,
       'stock': stock,
+      'image_url': imageUrl,
     };
     final json = id == null
         ? await client.post('/api/partner/products', body: body)
@@ -490,10 +549,7 @@ class NacalaApi {
   }
 
   Future<List<AdminUser>> adminUsers({String? role}) async {
-    final json = await client.get(
-      '/api/admin/users',
-      query: {if (role != null) 'role': role},
-    );
+    final json = await client.get('/api/admin/users', query: {'role': ?role});
     return [
       for (final item in (json['users'] as List? ?? const []))
         AdminUser.fromJson(item as Map<String, dynamic>),
@@ -507,17 +563,14 @@ class NacalaApi {
   }) async {
     await client.patch(
       '/api/admin/users/$id',
-      body: {
-        if (role != null) 'role': role,
-        if (isActive != null) 'is_active': isActive,
-      },
+      body: {'role': ?role, 'is_active': ?isActive},
     );
   }
 
   Future<List<Order>> adminOrders({String? status}) async {
     final json = await client.get(
       '/api/admin/orders',
-      query: {if (status != null) 'status': status},
+      query: {'status': ?status},
     );
     return [
       for (final item in (json['orders'] as List? ?? const []))

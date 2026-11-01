@@ -49,6 +49,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _partnerAction(Establishment establishment, bool approve) async {
+    final api = AppScope.of(context).api;
     final confirmed = await showConfirmDialog(
       context,
       title: approve ? 'Aprovar parceiro' : 'Suspender parceiro',
@@ -61,8 +62,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (!confirmed) return;
     setState(() => _busyId = establishment.id);
     try {
-      await AppScope.of(context).api
-          .adminPartnerAction(establishment.id, approve ? 'approve' : 'reject');
+      await api.adminPartnerAction(
+        establishment.id,
+        approve ? 'approve' : 'reject',
+      );
       if (!mounted) return;
       showAppSnack(
         context,
@@ -77,6 +80,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _createCategory() async {
+    final api = AppScope.of(context).api;
     final name = await showTextPrompt(
       context,
       title: 'Nova categoria',
@@ -86,7 +90,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
     if (name == null) return;
     try {
-      await AppScope.of(context).api.createCategory(name);
+      await api.createCategory(name);
       if (!mounted) return;
       showAppSnack(context, 'Categoria criada.');
       _load();
@@ -96,6 +100,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _deleteCategory(Category category) async {
+    final api = AppScope.of(context).api;
     final confirmed = await showConfirmDialog(
       context,
       title: 'Eliminar categoria',
@@ -107,7 +112,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
     if (!confirmed) return;
     try {
-      await AppScope.of(context).api.deleteCategory(category.id);
+      await api.deleteCategory(category.id);
       if (!mounted) return;
       showAppSnack(context, 'Categoria eliminada.');
       _load();
@@ -499,6 +504,21 @@ class _AdminOrderRow extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.receipt_long_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -526,7 +546,7 @@ class _AdminOrderRow extends StatelessWidget {
                 formatMoney(order.totalCents),
                 style: const TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 4),

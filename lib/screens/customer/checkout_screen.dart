@@ -23,11 +23,14 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final _phone = TextEditingController();
   final _note = TextEditingController();
+  final _coupon = TextEditingController();
   bool _initialized = false;
   String? _selectedAddressId;
   String _payment = 'cash';
   bool _submitting = false;
+  bool _couponLoading = false;
   String? _error;
+  String? _couponError;
 
   @override
   void didChangeDependencies() {
@@ -37,12 +40,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final state = AppScope.of(context);
     _phone.text = state.user?.phone ?? '';
     _selectedAddressId = state.defaultAddress?.id;
+    _coupon.text = state.couponCode ?? '';
   }
 
   @override
   void dispose() {
     _phone.dispose();
     _note.dispose();
+    _coupon.dispose();
     super.dispose();
   }
 
@@ -51,6 +56,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (address.id == _selectedAddressId) return address;
     }
     return state.defaultAddress;
+  }
+
+  void _leaveGuestMode() {
+    AppScope.of(context).exitGuestMode();
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<void> _addAddress() async {
@@ -99,6 +109,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     } on ApiException catch (error) {
       if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
+  Future<void> _applyCoupon() async {
+    final code = _coupon.text.trim();
+    if (code.isEmpty) {
+      setState(() => _couponError = 'Indique o código do cupão.');
+      return;
+    }
+    setState(() {
+      _couponLoading = true;
+      _couponError = null;
+    });
+    try {
+      final discount = await AppScope.of(context).applyCoupon(code);
+      if (!mounted) return;
+      showAppSnack(
+        context,
+        'Cupão aplicado: ${formatMoney(discount)} de desconto.',
+      );
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _couponError = error.message);
+    } finally {
+      if (mounted) setState(() => _couponLoading = false);
     }
   }
 
@@ -162,6 +196,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    if (state.isGuest) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Finalizar pedido')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: EmptyState(
+              icon: Icons.lock_outline_rounded,
+              title: 'Entra para fazer o pedido',
+              message:
+                  'O carrinho fica guardado. Entra ou cria uma conta para '
+                  'adicionar morada e confirmar a entrega.',
+              actionLabel: 'Entrar ou criar conta',
+              onAction: _leaveGuestMode,
+            ),
+          ),
+        ),
+      );
+    }
     if (state.isCartEmpty && !_submitting) {
       return Scaffold(
         appBar: AppBar(title: const Text('Finalizar pedido')),
@@ -187,6 +240,52 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           children: [
+            AppCard(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  NetworkThumb(
+                    imageUrl: state.cartStore?.imageUrl,
+                    icon: Icons.delivery_dining_outlined,
+                    size: 48,
+                    radius: 13,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          state.cartStore?.name ?? 'O seu pedido',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        Text(
+                          '${state.cartItemCount} '
+                          '${state.cartItemCount == 1 ? 'unidade' : 'unidades'}'
+                          ' · entrega em Nacala-Porto',
+                          style: TextStyle(
+                            color: context.mutedColor,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    formatMoney(state.cartTotalCents),
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
             const SectionTitle(
               title: 'Entrega',
               subtitle: 'Onde devemos entregar o seu pedido?',
@@ -254,6 +353,95 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 labelText: 'Telemóvel',
                 hintText: '84 123 4567',
                 prefixIcon: Icon(Icons.phone_outlined),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const SectionTitle(title: 'Cupão de desconto'),
+            const SizedBox(height: 10),
+            AppCard(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _coupon,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: InputDecoration(
+                            hintText: 'Digite o cupão',
+                            isDense: true,
+                            prefixIcon: const Icon(
+                              Icons.local_offer_outlined,
+                              color: AppColors.primary,
+                            ),
+                            suffixIcon: state.couponCode == null
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Remover cupão',
+                                    onPressed: () {
+                                      state.removeCoupon();
+                                      _coupon.clear();
+                                      setState(() => _couponError = null);
+                                    },
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      size: 18,
+                                    ),
+                                  ),
+                          ),
+                          onSubmitted: (_) => _applyCoupon(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 92,
+                        child: FilledButton(
+                          onPressed: _couponLoading ? null : _applyCoupon,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                          child: _couponLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  state.couponCode == null
+                                      ? 'Aplicar'
+                                      : 'Atualizar',
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (state.couponCode != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '${state.couponCode} aplicado · '
+                      '${formatMoney(state.couponDiscountCents)} de desconto',
+                      style: TextStyle(
+                        color: context.successColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  if (_couponError != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _couponError!,
+                      style: TextStyle(
+                        color: context.dangerColor,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             const SizedBox(height: 20),
@@ -350,14 +538,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               '${line.quantity}',
                               style: const TextStyle(
                                 color: AppColors.primary,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -373,7 +561,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             formatMoney(line.totalCents),
                             style: const TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -460,7 +648,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
       bottomNavigationBar: Material(
         color: context.cardColor,
-        elevation: 8,
+        elevation: 0,
         child: SafeArea(
           top: false,
           child: Padding(
@@ -483,27 +671,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         formatMoney(state.cartTotalCents),
                         style: const TextStyle(
                           fontSize: 17,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
                 ),
-                FilledButton(
-                  onPressed: _submitting ? null : _submit,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(190, 48),
+                SizedBox(
+                  width: 180,
+                  child: FilledButton(
+                    onPressed: _submitting ? null : _submit,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Confirmar pedido'),
                   ),
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text('Confirmar pedido'),
                 ),
               ],
             ),
@@ -562,14 +750,14 @@ class _AddressOption extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text(
                           'Predefinida',
                           style: TextStyle(
                             color: AppColors.primary,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),

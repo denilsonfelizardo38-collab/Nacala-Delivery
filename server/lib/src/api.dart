@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:shelf/shelf.dart';
@@ -22,10 +25,15 @@ Response jsonResponse(Object? data, {int status = 200}) => Response(
     );
 
 class Api {
-  Api({required this.db, required this.jwt});
+  Api({
+    required this.db,
+    required this.jwt,
+    Directory? imageDirectory,
+  }) : imageDirectory = imageDirectory ?? Directory('data/uploads');
 
   final Database db;
   final JwtService jwt;
+  final Directory imageDirectory;
 
   Handler get handler => const Pipeline()
       .addMiddleware(_cors())
@@ -34,6 +42,7 @@ class Api {
 
   late final Router _router = Router()
     ..get('/health', (Request _) => jsonResponse({'status': 'ok'}))
+    ..get('/uploads/<filename>', _productImage)
     ..get('/api/categories', _categories)
     ..get('/api/establishments', _establishments)
     ..get('/api/establishments/<id>', _establishment)
@@ -63,6 +72,7 @@ class Api {
     ..post('/api/partner/orders/<id>/preparing', _partnerPreparing)
     ..post('/api/partner/orders/<id>/ready', _partnerReady)
     ..get('/api/partner/products', _partnerProducts)
+    ..post('/api/partner/product-images', _partnerUploadProductImage)
     ..post('/api/partner/products', _partnerCreateProduct)
     ..patch('/api/partner/products/<id>', _partnerUpdateProduct)
     ..delete('/api/partner/products/<id>', _partnerDeleteProduct)
@@ -152,6 +162,49 @@ class Api {
       throw ApiError(400, 'invalid_body', 'Corpo do pedido inválido.');
     }
     return _body(decoded);
+  }
+
+  Future<Map<String, dynamic>> _readBodyLimited(
+    Request request, {
+    required int maxBytes,
+  }) async {
+    final contentLength = int.tryParse(request.headers['content-length'] ?? '');
+    if (contentLength != null && contentLength > maxBytes) {
+      throw ApiError(
+          413, 'image_too_large', 'A imagem excede o tamanho máximo.');
+    }
+
+    final bytes = BytesBuilder(copy: false);
+    var totalBytes = 0;
+    await for (final chunk in request.read()) {
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) {
+        throw ApiError(
+          413,
+          'image_too_large',
+          'A imagem excede o tamanho máximo.',
+        );
+      }
+      bytes.add(chunk);
+    }
+
+    final String raw;
+    try {
+      raw = utf8.decode(bytes.takeBytes());
+    } on FormatException {
+      throw ApiError(400, 'invalid_body', 'Corpo do pedido inválido.');
+    }
+    if (raw.trim().isEmpty) return <String, dynamic>{};
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      throw ApiError(400, 'invalid_body', 'Corpo do pedido inválido.');
+    }
+    if (decoded is! Map<String, dynamic>) {
+      throw ApiError(400, 'invalid_body', 'Corpo do pedido inválido.');
+    }
+    return decoded;
   }
 
   String requiredString(
@@ -1688,6 +1741,116 @@ class Api {
     });
   }
 
+  Future<Response> _partnerUploadProductImage(Request request) async {
+    final user = requireRole(request, ['partner']);
+    requirePartnerEstablishment(user);
+    final body = await _readBodyLimited(
+      request,
+      maxBytes: 7 * 1024 * 1024,
+    );
+    final mimeType = body['mime_type'];
+    final encoded = body['data_base64'];
+    const maxImageBytes = 5 * 1024 * 1024;
+    if (mimeType is! String ||
+        !const {'image/jpeg', 'image/png', 'image/webp'}.contains(mimeType) ||
+        encoded is! String ||
+        encoded.isEmpty ||
+        encoded.length > ((maxImageBytes + 2) ~/ 3) * 4) {
+      throw ApiError(
+        422,
+        'invalid_image',
+        'Escolha uma imagem JPEG, PNG ou WebP até 5 MB.',
+      );
+    }
+
+    final Uint8List imageBytes;
+    try {
+      imageBytes = base64Decode(encoded);
+    } on FormatException {
+      throw ApiError(422, 'invalid_image', 'O ficheiro da imagem é inválido.');
+    }
+    if (imageBytes.isEmpty ||
+        imageBytes.length > maxImageBytes ||
+        !_matchesImageSignature(imageBytes, mimeType)) {
+      throw ApiError(
+        422,
+        'invalid_image',
+        'O conteúdo da imagem não corresponde ao formato indicado.',
+      );
+    }
+
+    final extension = switch (mimeType) {
+      'image/jpeg' => 'jpg',
+      'image/png' => 'png',
+      'image/webp' => 'webp',
+      _ => throw StateError('Formato de imagem não suportado.'),
+    };
+    final random = Random.secure();
+    final id = List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    final filename = '$id.$extension';
+    await imageDirectory.create(recursive: true);
+    await File('${imageDirectory.path}/$filename').writeAsBytes(
+      imageBytes,
+      flush: true,
+    );
+    audit(user.id, 'product.image_uploaded', 'product_image', id);
+    return jsonResponse({'image_url': '/uploads/$filename'}, status: 201);
+  }
+
+  bool _matchesImageSignature(Uint8List bytes, String mimeType) {
+    switch (mimeType) {
+      case 'image/jpeg':
+        return bytes.length >= 3 &&
+            bytes[0] == 0xff &&
+            bytes[1] == 0xd8 &&
+            bytes[2] == 0xff;
+      case 'image/png':
+        return bytes.length >= 8 &&
+            bytes[0] == 0x89 &&
+            bytes[1] == 0x50 &&
+            bytes[2] == 0x4e &&
+            bytes[3] == 0x47 &&
+            bytes[4] == 0x0d &&
+            bytes[5] == 0x0a &&
+            bytes[6] == 0x1a &&
+            bytes[7] == 0x0a;
+      case 'image/webp':
+        return bytes.length >= 12 &&
+            String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
+            String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP';
+      default:
+        return false;
+    }
+  }
+
+  Future<Response> _productImage(Request request, String filename) async {
+    if (!RegExp(r'^[a-f0-9]{32}\.(jpg|png|webp)$').hasMatch(filename)) {
+      throw ApiError(404, 'not_found', 'Imagem não encontrada.');
+    }
+    final file = File('${imageDirectory.path}/$filename');
+    if (!await file.exists()) {
+      throw ApiError(404, 'not_found', 'Imagem não encontrada.');
+    }
+    final contentType = switch (filename.split('.').last) {
+      'jpg' => 'image/jpeg',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => 'application/octet-stream',
+    };
+    return Response.ok(
+      file.openRead(),
+      headers: {
+        'content-type': contentType,
+        'content-length': '${await file.length()}',
+        'cache-control': 'public, max-age=31536000, immutable',
+        'x-content-type-options': 'nosniff',
+      },
+    );
+  }
+
   Future<Response> _partnerCreateProduct(Request request) async {
     final user = requireRole(request, ['partner']);
     final establishment = requirePartnerEstablishment(user);
@@ -1699,13 +1862,18 @@ class Api {
     final available = body['is_available'] != false;
     final stock =
         body['stock'] == null ? null : intValue(body['stock'], min: 0);
+    final imageUrl = _productImageUrl(
+      body['image_url'],
+      requestUri: request.requestedUri,
+    );
     final id = newId();
     final timestamp = nowIso();
     db.execute(
       '''
       INSERT INTO products (id, establishment_id, name, description,
-        price_cents, category, stock, is_available, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        price_cents, category, image_url, stock, is_available, created_at,
+        updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       [
         id,
@@ -1714,6 +1882,7 @@ class Api {
         description,
         price,
         category,
+        imageUrl,
         stock,
         available ? 1 : 0,
         timestamp,
@@ -1755,14 +1924,22 @@ class Api {
     final stock = body.containsKey('stock')
         ? (body['stock'] == null ? null : intValue(body['stock'], min: 0))
         : current['stock'];
+    final imageUrl = body.containsKey('image_url')
+        ? _productImageUrl(
+            body['image_url'],
+            requestUri: request.requestedUri,
+          )
+        : current['image_url'];
     db.execute(
       'UPDATE products SET name = ?, description = ?, price_cents = ?, '
-      'category = ?, stock = ?, is_available = ?, updated_at = ? WHERE id = ?',
+      'category = ?, image_url = ?, stock = ?, is_available = ?, '
+      'updated_at = ? WHERE id = ?',
       [
         name,
         description,
         price,
         category,
+        imageUrl,
         stock,
         available ? 1 : 0,
         nowIso(),
@@ -1772,6 +1949,34 @@ class Api {
     final row = db.select('SELECT * FROM products WHERE id = ?', [id]).first;
     audit(user.id, 'product.updated', 'product', id, {'name': name});
     return jsonResponse({'product': productJson(row)});
+  }
+
+  String? _productImageUrl(Object? value, {required Uri requestUri}) {
+    if (value == null) return null;
+    if (value is! String) {
+      throw ApiError(422, 'invalid_image_url', 'O link da imagem é inválido.');
+    }
+    final text = value.trim();
+    if (text.isEmpty) return null;
+    final uri = Uri.tryParse(text);
+    final isHttps = uri != null &&
+        uri.hasAuthority &&
+        uri.host.isNotEmpty &&
+        uri.scheme == 'https';
+    final isUploadedImage = uri != null &&
+        uri.scheme == requestUri.scheme &&
+        uri.authority == requestUri.authority &&
+        RegExp(r'^/uploads/[a-f0-9]{32}\.(jpg|png|webp)$').hasMatch(uri.path) &&
+        !uri.hasQuery &&
+        !uri.hasFragment;
+    if (uri == null || text.length > 2048 || (!isHttps && !isUploadedImage)) {
+      throw ApiError(
+        422,
+        'invalid_image_url',
+        'Indique um link HTTPS ou uma imagem carregada nesta API.',
+      );
+    }
+    return text;
   }
 
   Future<Response> _partnerDeleteProduct(Request request, String id) async {

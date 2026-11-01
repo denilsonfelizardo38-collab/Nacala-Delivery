@@ -27,6 +27,11 @@ class ApiClient {
   final String baseUrl;
   String? token;
 
+  Uri resolveUri(String path) {
+    final uri = Uri.parse(path);
+    return uri.hasScheme ? uri : Uri.parse(baseUrl).resolve(path);
+  }
+
   Uri _uri(String path, [Map<String, String>? query]) {
     final base = Uri.parse(baseUrl);
     return base.replace(

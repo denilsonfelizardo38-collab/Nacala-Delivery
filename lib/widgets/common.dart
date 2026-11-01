@@ -8,6 +8,14 @@ import '../theme/app_theme.dart';
 
 const pagePadding = EdgeInsets.symmetric(horizontal: 20, vertical: 16);
 
+IconData categoryIconFor(String icon) => switch (icon) {
+  'restaurant' || 'restaurantes' => Icons.restaurant_rounded,
+  'basket' || 'mercados' => Icons.shopping_basket_rounded,
+  'pharmacy' || 'farmacias' => Icons.local_pharmacy_rounded,
+  'store' || 'lojas' => Icons.storefront_rounded,
+  _ => Icons.category_rounded,
+};
+
 /// Cartão base do sistema de design.
 class AppCard extends StatelessWidget {
   const AppCard({
@@ -50,6 +58,46 @@ class AppCard extends StatelessWidget {
             child: child,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class GoogleSignInButton extends StatelessWidget {
+  const GoogleSignInButton({
+    super.key,
+    required this.onPressed,
+    this.label = 'Continuar com Google',
+  });
+
+  final VoidCallback? onPressed;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: const SizedBox(
+        width: 20,
+        height: 20,
+        child: Center(
+          child: Text(
+            'G',
+            style: TextStyle(
+              color: Color(0xFF4285F4),
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.ink,
+        minimumSize: const Size.fromHeight(52),
+        side: const BorderSide(color: AppColors.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       ),
     );
   }
@@ -251,7 +299,7 @@ class ErrorState extends StatelessWidget {
             height: 56,
             decoration: BoxDecoration(
               color: AppColors.dangerSoft,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: const Icon(
               Icons.cloud_off_rounded,
@@ -280,7 +328,9 @@ class ErrorState extends StatelessWidget {
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
               label: const Text('Tentar novamente'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(180, 44)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+              ),
             ),
           ],
         ],
@@ -397,7 +447,7 @@ class StatusBadge extends StatelessWidget {
         style: TextStyle(
           color: foreground,
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           letterSpacing: 0.2,
         ),
       ),
@@ -442,7 +492,7 @@ class QuantityStepper extends StatelessWidget {
             child: Text(
               '$quantity',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
           _StepperButton(
@@ -519,7 +569,7 @@ class MetricTile extends StatelessWidget {
                 height: 34,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 18),
               ),
@@ -590,7 +640,7 @@ class SearchField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hintText,
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.bg,
           prefixIcon: const Icon(
             Icons.search_rounded,
             color: AppColors.primary,
@@ -640,7 +690,7 @@ class StarRating extends StatelessWidget {
           style: TextStyle(
             color: context.inkColor,
             fontSize: size - 1,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
           ),
         ),
         if (count != null && count! > 0) ...[
@@ -684,7 +734,7 @@ class PriceLine extends StatelessWidget {
             formatMoney(cents),
             style: style?.copyWith(
               color: color ?? (strong ? context.inkColor : null),
-              fontWeight: strong ? FontWeight.w800 : null,
+              fontWeight: strong ? FontWeight.w600 : null,
             ),
           ),
         ],
@@ -749,8 +799,8 @@ class EstablishmentTile extends StatelessWidget {
         children: [
           NetworkThumb(
             imageUrl: establishment.imageUrl,
-            icon: Icons.storefront_rounded,
-            size: 62,
+            icon: categoryIconFor(establishment.categorySlug),
+            size: 72,
             radius: 14,
           ),
           const SizedBox(width: 12),
@@ -829,7 +879,7 @@ class _Meta extends StatelessWidget {
           style: TextStyle(
             color: context.mutedColor,
             fontSize: 12,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -849,23 +899,15 @@ class AppLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, Color(0xFF0B4EA8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: onDark ? Colors.white : AppColors.primary,
         borderRadius: BorderRadius.circular(size * 0.28),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.28),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        boxShadow: const [AppColors.cardShadow],
       ),
       child: Icon(
-        Icons.local_shipping_rounded,
-        color: Colors.white,
+        Icons.delivery_dining_rounded,
+        color: onDark
+            ? AppColors.primary
+            : Theme.of(context).colorScheme.onPrimary,
         size: size * 0.5,
       ),
     );
@@ -885,15 +927,15 @@ class UserAvatar extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AppColors.navy,
+        color: AppColors.primary,
         borderRadius: BorderRadius.circular(size * 0.32),
       ),
       child: Text(
         initialsOf(name),
         style: TextStyle(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.onPrimary,
           fontSize: size * 0.34,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -909,7 +951,7 @@ void showAppSnack(BuildContext context, String message, {bool error = false}) {
           children: [
             Icon(
               error ? Icons.error_outline_rounded : Icons.check_circle_outline,
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onPrimary,
               size: 18,
             ),
             const SizedBox(width: 10),

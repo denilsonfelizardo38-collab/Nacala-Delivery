@@ -20,7 +20,13 @@ Future<void> main(List<String> args) async {
   }
 
   final db = openDatabase(dbPath, seed: seed, demoSeed: demoSeed);
-  final api = Api(db: db, jwt: JwtService(secret));
+  final imageDirectory =
+      Directory(Platform.environment['UPLOADS_DIR'] ?? 'data/uploads');
+  final api = Api(
+    db: db,
+    jwt: JwtService(secret),
+    imageDirectory: imageDirectory,
+  );
 
   final server = await shelf_io.serve(
     api.handler,
@@ -29,6 +35,7 @@ Future<void> main(List<String> args) async {
   );
   stdout.writeln('Nacala API em http://${server.address.host}:${server.port}');
   stdout.writeln('Base de dados: $dbPath');
+  stdout.writeln('Imagens de produtos: ${imageDirectory.path}');
 
   ProcessSignal.sigint.watch().listen((_) async {
     await server.close(force: true);

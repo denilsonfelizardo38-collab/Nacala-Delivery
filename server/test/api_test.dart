@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:nacala_server/nacala_server.dart';
 import 'package:shelf/shelf.dart';
@@ -7,6 +8,7 @@ import 'package:test/test.dart';
 
 late Database db;
 late Api api;
+late Directory imageDirectory;
 
 Future<(int, Map<String, dynamic>)> call(
   String method,
@@ -40,12 +42,20 @@ Future<String> login(String identifier, String password) async {
 }
 
 void main() {
-  setUpAll(() {
+  setUpAll(() async {
     db = openDatabase(':memory:', demoSeed: true);
-    api = Api(db: db, jwt: JwtService('test-secret'));
+    imageDirectory = await Directory.systemTemp.createTemp('nacala-images-');
+    api = Api(
+      db: db,
+      jwt: JwtService('test-secret'),
+      imageDirectory: imageDirectory,
+    );
   });
 
-  tearDownAll(() => db.dispose());
+  tearDownAll(() async {
+    db.dispose();
+    await imageDirectory.delete(recursive: true);
+  });
 
   test('catálogo público devolve categorias e estabelecimentos', () async {
     final (status, json) = await call('GET', '/api/categories');
@@ -411,21 +421,92 @@ void main() {
         'description': 'Feijão manteiga',
         'price_cents': 21000,
         'category': 'Mercearia',
+        'image_url': 'https://images.example.test/feijao.jpg',
         'stock': 12,
       },
     );
     expect(status, 201, reason: '$json');
     final productId = json['product']['id'] as String;
+    expect(
+      json['product']['image_url'],
+      'https://images.example.test/feijao.jpg',
+    );
 
     final (patchStatus, patched) = await call(
       'PATCH',
       '/api/partner/products/$productId',
       token: partner,
-      body: {'price_cents': 22500, 'is_available': false},
+      body: {
+        'price_cents': 22500,
+        'is_available': false,
+        'image_url': 'https://images.example.test/feijao-updated.jpg',
+      },
     );
     expect(patchStatus, 200);
     expect(patched['product']['price_cents'], 22500);
     expect(patched['product']['is_available'], isFalse);
+    expect(
+      patched['product']['image_url'],
+      'https://images.example.test/feijao-updated.jpg',
+    );
+
+    final (invalidImageStatus, invalidImage) = await call(
+      'PATCH',
+      '/api/partner/products/$productId',
+      token: partner,
+      body: {'image_url': 'http://images.example.test/insecure.jpg'},
+    );
+    expect(invalidImageStatus, 422);
+    expect(invalidImage['error']['code'], 'invalid_image_url');
+  });
+
+  test('parceiro carrega imagem de produto com validação de formato', () async {
+    final partner = await login('mercado@nacala.co.mz', 'Parceiro@1234');
+    final imageBytes = [0xff, 0xd8, 0xff, 0xd9];
+    final (status, json) = await call(
+      'POST',
+      '/api/partner/product-images',
+      token: partner,
+      body: {
+        'mime_type': 'image/jpeg',
+        'data_base64': base64Encode(imageBytes),
+      },
+    );
+    expect(status, 201, reason: '$json');
+    final imagePath = Uri.parse(json['image_url'] as String).path;
+    expect(imagePath, matches(RegExp(r'^/uploads/[a-f0-9]{32}\.jpg$')));
+
+    final response = await api.handler(
+      Request('GET', Uri.parse('http://localhost$imagePath')),
+    );
+    expect(response.statusCode, 200);
+    expect(response.headers['content-type'], 'image/jpeg');
+    expect(await response.read().expand((chunk) => chunk).toList(), imageBytes);
+
+    final (productStatus, productJson) = await call(
+      'POST',
+      '/api/partner/products',
+      token: partner,
+      body: {
+        'name': 'Produto com fotografia',
+        'price_cents': 1000,
+        'image_url': 'http://localhost$imagePath',
+      },
+    );
+    expect(productStatus, 201, reason: '$productJson');
+    expect(productJson['product']['image_url'], 'http://localhost$imagePath');
+
+    final (invalidStatus, invalid) = await call(
+      'POST',
+      '/api/partner/product-images',
+      token: partner,
+      body: {
+        'mime_type': 'image/jpeg',
+        'data_base64': base64Encode([1, 2, 3]),
+      },
+    );
+    expect(invalidStatus, 422);
+    expect(invalid['error']['code'], 'invalid_image');
   });
 
   test('cliente não vê pedidos de outra conta', () async {

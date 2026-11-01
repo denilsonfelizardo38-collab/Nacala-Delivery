@@ -4,6 +4,7 @@ import '../../core/api_client.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
+import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import 'partner_orders_screen.dart';
@@ -323,6 +324,21 @@ class _RecentOrder extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.receipt_long_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -347,7 +363,7 @@ class _RecentOrder extends StatelessWidget {
                 formatMoney(order.totalCents),
                 style: const TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 4),

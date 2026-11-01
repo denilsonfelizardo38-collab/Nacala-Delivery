@@ -18,6 +18,7 @@ class CategoriesScreen extends StatefulWidget {
 class _CategoriesScreenState extends State<CategoriesScreen> {
   bool _initialized = false;
   Future<List<Category>>? _categoriesFuture;
+  Future<List<Establishment>>? _allEstablishmentsFuture;
   Future<List<Establishment>>? _establishmentsFuture;
   String? _selectedSlug;
 
@@ -28,19 +29,26 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     _initialized = true;
     final api = AppScope.of(context).api;
     _categoriesFuture = api.categories();
+    _allEstablishmentsFuture = api.establishments();
     _establishmentsFuture = api.establishments();
   }
 
   Future<void> _refresh() async {
     final api = AppScope.of(context).api;
     final categories = api.categories();
+    final allEstablishments = api.establishments();
     final establishments = api.establishments(category: _selectedSlug);
     setState(() {
       _categoriesFuture = categories;
+      _allEstablishmentsFuture = allEstablishments;
       _establishmentsFuture = establishments;
     });
     try {
-      await Future.wait<Object>([categories, establishments]);
+      await Future.wait<Object>([
+        categories,
+        allEstablishments,
+        establishments,
+      ]);
     } on Exception {
       // Tratado pelo AsyncSection.
     }
@@ -84,39 +92,59 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               AsyncSection<List<Category>>(
                 future: _categoriesFuture,
                 onRetry: _refresh,
-                builder: (context, categories) {
-                  if (categories.isEmpty) {
-                    return const EmptyState(
-                      icon: Icons.category_outlined,
-                      title: 'Sem categorias',
-                      message: 'Ainda não existem categorias configuradas.',
-                    );
-                  }
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      final columns = constraints.maxWidth >= 760 ? 4 : 2;
-                      final spacing = 10.0;
-                      final width =
-                          (constraints.maxWidth - spacing * (columns - 1)) /
-                          columns;
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: [
-                          for (final category in categories)
-                            SizedBox(
-                              width: width,
-                              child: _CategoryCard(
-                                category: category,
-                                selected: _selectedSlug == category.slug,
-                                onTap: () => _select(category),
-                              ),
+                builder: (context, categories) =>
+                    FutureBuilder<List<Establishment>>(
+                      future: _allEstablishmentsFuture,
+                      builder: (context, establishmentsSnapshot) {
+                        if (establishmentsSnapshot.hasError) {
+                          return ErrorState(
+                            message: messageForError(
+                              establishmentsSnapshot.error,
                             ),
-                        ],
-                      );
-                    },
-                  );
-                },
+                            onRetry: _refresh,
+                          );
+                        }
+                        final establishments =
+                            establishmentsSnapshot.data ?? [];
+                        if (categories.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.category_outlined,
+                            title: 'Sem categorias',
+                            message:
+                                'Ainda não existem categorias configuradas.',
+                          );
+                        }
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            final columns = constraints.maxWidth >= 760 ? 4 : 2;
+                            final spacing = 10.0;
+                            final width =
+                                (constraints.maxWidth -
+                                    spacing * (columns - 1)) /
+                                columns;
+                            return Wrap(
+                              spacing: spacing,
+                              runSpacing: spacing,
+                              children: [
+                                for (final category in categories)
+                                  SizedBox(
+                                    width: width,
+                                    child: _CategoryCard(
+                                      category: category,
+                                      imageUrl: _imageFor(
+                                        category,
+                                        establishments,
+                                      ),
+                                      selected: _selectedSlug == category.slug,
+                                      onTap: () => _select(category),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
               ),
               const SizedBox(height: 26),
               SectionTitle(
@@ -164,26 +192,31 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       ),
     );
   }
+
+  String? _imageFor(Category category, List<Establishment> establishments) {
+    for (final establishment in establishments) {
+      if (establishment.categorySlug == category.slug &&
+          establishment.imageUrl != null &&
+          establishment.imageUrl!.isNotEmpty) {
+        return establishment.imageUrl;
+      }
+    }
+    return null;
+  }
 }
 
 class _CategoryCard extends StatelessWidget {
   const _CategoryCard({
     required this.category,
+    required this.imageUrl,
     required this.selected,
     required this.onTap,
   });
 
   final Category category;
+  final String? imageUrl;
   final bool selected;
   final VoidCallback onTap;
-
-  static IconData iconFor(String icon) => switch (icon) {
-    'restaurant' => Icons.restaurant_rounded,
-    'basket' => Icons.shopping_basket_rounded,
-    'pharmacy' => Icons.local_pharmacy_rounded,
-    'store' => Icons.storefront_rounded,
-    _ => Icons.category_rounded,
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -191,26 +224,65 @@ class _CategoryCard extends StatelessWidget {
       onTap: onTap,
       color: selected ? AppColors.primarySoft : null,
       borderColor: selected ? AppColors.primary : null,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: selected
-                  ? AppColors.primary
-                  : AppColors.primary.withValues(alpha: 0.10),
+          SizedBox(
+            width: double.infinity,
+            height: 92,
+            child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              iconFor(category.icon),
-              size: 21,
-              color: selected ? Colors.white : AppColors.primary,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (imageUrl != null)
+                    Image.network(
+                      imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _imageFallback(),
+                    )
+                  else
+                    _imageFallback(),
+                  if (imageUrl != null)
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Color(0x70000000), Colors.transparent],
+                        ),
+                      ),
+                    ),
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${category.establishmentCount}',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             category.name,
             maxLines: 1,
@@ -220,10 +292,21 @@ class _CategoryCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             '${category.establishmentCount} parceiro(s)',
-            style: TextStyle(color: context.mutedColor, fontSize: 11),
+            style: TextStyle(color: context.mutedColor, fontSize: 10),
           ),
         ],
       ),
     );
   }
+
+  Widget _imageFallback() => ColoredBox(
+    color: selected ? AppColors.primary : AppColors.primarySoft,
+    child: Center(
+      child: Icon(
+        categoryIconFor(category.icon),
+        size: 36,
+        color: selected ? Colors.white : AppColors.primary,
+      ),
+    ),
+  );
 }

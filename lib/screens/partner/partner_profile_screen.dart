@@ -34,13 +34,14 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
   }
 
   Future<void> _editEstablishment(Establishment establishment) async {
+    final api = AppScope.of(context).api;
     final input = await showDialog<_EstablishmentInput>(
       context: context,
       builder: (_) => _EstablishmentDialog(establishment: establishment),
     );
     if (input == null) return;
     try {
-      await AppScope.of(context).api.updatePartnerEstablishment(
+      await api.updatePartnerEstablishment(
         description: input.description,
         phone: digitsOnly(input.phone),
         address: input.address,
@@ -74,11 +75,14 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
   }
 
   Future<void> _changePassword() async {
+    final state = AppScope.of(context);
     final input = await showPasswordDialog(context);
     if (input == null) return;
     try {
-      await AppScope.of(context)
-          .changePassword(currentPassword: input.$1, newPassword: input.$2);
+      await state.changePassword(
+        currentPassword: input.$1,
+        newPassword: input.$2,
+      );
       if (mounted) showAppSnack(context, 'Palavra-passe alterada.');
     } on ApiException catch (error) {
       if (mounted) showAppSnack(context, error.message, error: true);
@@ -86,6 +90,7 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
   }
 
   Future<void> _logout() async {
+    final state = AppScope.of(context);
     final confirmed = await showConfirmDialog(
       context,
       title: 'Terminar sessão',
@@ -93,7 +98,7 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
       confirmLabel: 'Sair',
       destructive: true,
     );
-    if (confirmed) await AppScope.of(context).logout();
+    if (confirmed) await state.logout();
   }
 
   @override
@@ -140,7 +145,7 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
                         user?.name ?? '',
                         style: const TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       subtitle: Text(

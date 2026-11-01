@@ -282,28 +282,33 @@ class CartStore {
     required this.id,
     required this.name,
     required this.deliveryFeeCents,
+    this.imageUrl,
   });
 
   final String id;
   final String name;
   final int deliveryFeeCents;
+  final String? imageUrl;
 
   factory CartStore.fromEstablishment(Establishment establishment) => CartStore(
     id: establishment.id,
     name: establishment.name,
     deliveryFeeCents: establishment.deliveryFeeCents,
+    imageUrl: establishment.imageUrl,
   );
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'delivery_fee_cents': deliveryFeeCents,
+    'image_url': imageUrl,
   };
 
   factory CartStore.fromJson(Map<String, dynamic> json) => CartStore(
     id: _str(json['id']),
     name: _str(json['name']),
     deliveryFeeCents: _int(json['delivery_fee_cents']),
+    imageUrl: json['image_url'] as String?,
   );
 }
 

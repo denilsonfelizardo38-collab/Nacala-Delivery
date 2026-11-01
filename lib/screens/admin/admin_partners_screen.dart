@@ -51,6 +51,7 @@ class _AdminPartnersScreenState extends State<AdminPartnersScreen> {
   }
 
   Future<void> _action(Establishment establishment, bool approve) async {
+    final api = AppScope.of(context).api;
     final confirmed = await showConfirmDialog(
       context,
       title: approve ? 'Aprovar parceiro' : 'Suspender parceiro',
@@ -63,8 +64,10 @@ class _AdminPartnersScreenState extends State<AdminPartnersScreen> {
     if (!confirmed) return;
     setState(() => _busyId = establishment.id);
     try {
-      await AppScope.of(context).api
-          .adminPartnerAction(establishment.id, approve ? 'approve' : 'reject');
+      await api.adminPartnerAction(
+        establishment.id,
+        approve ? 'approve' : 'reject',
+      );
       if (!mounted) return;
       showAppSnack(
         context,

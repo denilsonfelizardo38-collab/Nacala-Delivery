@@ -85,6 +85,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
   }
 
   Future<void> _cancel() async {
+    final state = AppScope.of(context);
     final reason = await showTextPrompt(
       context,
       title: 'Cancelar pedido',
@@ -96,8 +97,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     if (reason == null) return;
     setState(() => _actionLoading = true);
     try {
-      final order = await AppScope.of(context).api
-          .cancelOrder(widget.orderId, reason);
+      final order = await state.api.cancelOrder(widget.orderId, reason);
       if (!mounted) return;
       setState(() => _order = order);
       showAppSnack(context, 'Pedido cancelado.');
@@ -109,6 +109,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
   }
 
   Future<void> _review() async {
+    final state = AppScope.of(context);
     final input = await showDialog<_ReviewInput>(
       context: context,
       builder: (_) => const _ReviewDialog(),
@@ -116,8 +117,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     if (input == null) return;
     setState(() => _actionLoading = true);
     try {
-      await AppScope.of(context).api
-          .reviewOrder(widget.orderId, input.rating, input.comment);
+      await state.api.reviewOrder(widget.orderId, input.rating, input.comment);
       if (!mounted) return;
       showAppSnack(context, 'Obrigado pela sua avaliação.');
     } on ApiException catch (error) {
@@ -137,6 +137,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
         id: detail.establishment.id,
         name: detail.establishment.name,
         deliveryFeeCents: detail.establishment.deliveryFeeCents,
+        imageUrl: detail.establishment.imageUrl,
       );
       if (!state.cartBelongsTo(store.id) && !state.isCartEmpty) {
         final replace = await showConfirmDialog(
@@ -434,7 +435,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                           style: TextStyle(
                             color: context.accentColor,
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                     ],
@@ -464,7 +465,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                           style: TextStyle(
                             color: context.mutedColor,
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -492,7 +493,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                           formatMoney(item.lineTotalCents),
                           style: const TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -669,7 +670,7 @@ class _TimelineStep extends StatelessWidget {
                     style: TextStyle(
                       color: done ? context.inkColor : context.mutedColor,
                       fontSize: 13,
-                      fontWeight: done ? FontWeight.w700 : FontWeight.w500,
+                      fontWeight: done ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                 ),

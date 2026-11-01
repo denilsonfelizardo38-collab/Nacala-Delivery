@@ -1,29 +1,32 @@
 import 'package:flutter/material.dart';
 
-/// Paleta oficial da Nacala Entrega.
+/// Paleta oficial da Nacala Entrega — redesign global.
 ///
-/// Identidade de alto contraste: fundo branco puro, azul royal saturado e
-/// tipografia quase preta. As variantes `dark*` mantêm-se apenas para o tema
-/// escuro opcional (não aplicado automaticamente).
+/// Identidade visual: azul vivo (#0755E9) sobre fundo branco e superfícies
+/// muito claras (#F5F8FC), com texto quase preto (#202124) e texto secundário
+/// neutro (#929292). Estados (sucesso, aviso, erro) usam cores semânticas
+/// próximas do original, mas harmonizadas com a nova identidade.
 abstract final class AppColors {
-  static const primary = Color.fromARGB(255, 0, 66, 248);
-  static const primaryPressed = Color.fromARGB(255, 5, 100, 243);
-  static const primarySoft = Color.fromARGB(255, 255, 255, 255);
+  // Identidade principal.
+  static const primary = Color(0xFF0755E9); // #0755E9
+  static const primaryLight = Color(0xFF3478F6); // #3478F6
+  static const primaryPressed = Color(0xFF0A63E8);
+  static const primarySoft = Color(0xFFEAF1FF);
 
-  static const navy = Color.fromARGB(255, 6, 88, 219);
-  static const darkBg = Color.fromARGB(255, 17, 17, 17);
+  // Fundamentos.
+  static const bg = Color(0xFFFFFFFF); // #FFFFFF
+  static const surface = Color(0xFFF5F8FC); // #F5F8FC
+  static const ink = Color(0xFF202124); // #202124
+  static const muted = Color(0xFF929292); // #929292
+  static const border = Color(0xFFE8E8E8);
 
-  static const bg = Color(0xFFFFFFFF);
-  static const ink = Color(0xFF111827);
-  static const muted = Color(0xFF6B7280);
-  static const border = Color.fromARGB(255, 255, 255, 255);
-
-  static const success = Color(0xFF12B76A);
-  static const successSoft = Color.fromARGB(255, 252, 253, 253);
-  static const warning = Color(0xFFF79009);
-  static const warningSoft = Color.fromARGB(255, 255, 255, 255);
-  static const danger = Color(0xFFF04438);
-  static const dangerSoft = Color.fromARGB(255, 252, 252, 252);
+  // Estados.
+  static const success = Color(0xFF20A36B);
+  static const successSoft = Color(0xFFE7F6EF);
+  static const warning = Color(0xFFE99B32); // #E99B32
+  static const warningSoft = Color(0xFFFCEFDD);
+  static const danger = Color(0xFFDC4545);
+  static const dangerSoft = Color(0xFFFBEAE9);
 
   /// Sombra suave usada em cartões e na barra de navegação:
   /// `0 4px 12px rgba(0, 0, 0, 0.08)`.
@@ -34,15 +37,16 @@ abstract final class AppColors {
   );
 
   // Superfícies do tema escuro.
+  static const darkBg = Color(0xFF111111);
   static const darkCard = Color(0xFF0A2140);
   static const darkElevated = Color(0xFF0F2B4D);
   static const darkInk = Color(0xFFE9F0FA);
-  static const darkMuted = Color.fromARGB(255, 28, 29, 29);
-  static const darkBorder = Color.fromARGB(255, 20, 20, 20);
+  static const darkMuted = Color(0xFF1C1D1D);
+  static const darkBorder = Color(0xFF14161F);
 
   // Aliases históricos usados em ecrãs e widgets.
   static const blue = primary;
-  static const surface = bg;
+  static const surfaceAlias = bg;
   static const line = border;
   static const paleBlue = primarySoft;
   static const green = success;

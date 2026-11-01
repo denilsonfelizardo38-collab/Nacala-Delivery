@@ -24,7 +24,12 @@ Product _product(String id, int priceCents) => Product(
   isAvailable: true,
 );
 
-const _store = CartStore(id: 'e1', name: 'Cantinho', deliveryFeeCents: 10000);
+const _store = CartStore(
+  id: 'e1',
+  name: 'Cantinho',
+  deliveryFeeCents: 10000,
+  imageUrl: 'https://images.example.test/cantinho.jpg',
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -80,9 +85,32 @@ void main() {
       expect(state.isSignedIn, isFalse);
       expect(prefs.getString('nacala.token.v2'), isNull);
     });
+
+    test('modo convidado é local e conserva o carrinho', () async {
+      final state = AppState(prefs, api: FakeApi());
+      state.addToCart(_product('p1', 45000), _store);
+
+      await state.enterGuestMode();
+
+      expect(state.isGuest, isTrue);
+      expect(state.isSignedIn, isFalse);
+      expect(state.user, isNull);
+      expect(state.cartItemCount, 1);
+      expect(prefs.getString('nacala.token.v2'), isNull);
+
+      state.exitGuestMode();
+      expect(state.isGuest, isFalse);
+      expect(state.status, SessionStatus.signedOut);
+      expect(state.cartItemCount, 1);
+    });
   });
 
   group('carrinho', () {
+    test('a imagem do estabelecimento persiste no carrinho', () {
+      final restored = CartStore.fromJson(_store.toJson());
+      expect(restored.imageUrl, _store.imageUrl);
+    });
+
     test('soma linhas e taxa de entrega em centavos', () {
       final state = AppState(prefs, api: FakeApi());
       state.addToCart(_product('p1', 45000), _store);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,7 +8,7 @@ import '../core/api_client.dart';
 import '../data/api_service.dart';
 import '../models/models.dart';
 
-enum SessionStatus { loading, signedOut, signedIn }
+enum SessionStatus { loading, signedOut, signedIn, guest }
 
 /// Estado global da aplicação: sessão autenticada, moradas e carrinho.
 ///
@@ -55,6 +56,7 @@ class AppState extends ChangeNotifier {
   SessionStatus get status => _status;
   UserAccount? get user => _user;
   bool get isSignedIn => _status == SessionStatus.signedIn && _user != null;
+  bool get isGuest => _status == SessionStatus.guest;
   bool get isBusy => _busy;
   String? get startupMessage => _startupMessage;
   List<Address> get addresses => List.unmodifiable(_addresses);
@@ -77,7 +79,9 @@ class AppState extends ChangeNotifier {
   // ------------------------------------------------------------------ sessão
 
   /// Restaura a sessão guardada e revalida-a junto da API.
-  Future<void> bootstrap() async {
+  Future<void> bootstrap({
+    Duration serverTimeout = const Duration(seconds: 5),
+  }) async {
     _restoreCart();
     final token = _prefs.getString(_tokenKey);
     final cachedUser = _prefs.getString(_userKey);
@@ -101,12 +105,15 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     try {
-      final data = await _api.me();
+      final data = await _api.me().timeout(serverTimeout);
       _user = data.user;
       _addresses = data.addresses;
       _status = SessionStatus.signedIn;
       _startupMessage = null;
       await _persistSession();
+    } on TimeoutException {
+      _startupMessage = 'A ligação ao servidor está lenta. Podes tentar novamente mais tarde.';
+      if (_user == null) _status = SessionStatus.signedOut;
     } on ApiException catch (error) {
       if (error.isUnauthorized) {
         await _clearSession();
@@ -163,6 +170,19 @@ class AppState extends ChangeNotifier {
       // Mesmo sem rede, a sessão local é terminada.
     }
     await _clearSession();
+    notifyListeners();
+  }
+
+  Future<void> enterGuestMode() async {
+    await _clearSession();
+    _startupMessage = null;
+    _status = SessionStatus.guest;
+    notifyListeners();
+  }
+
+  void exitGuestMode() {
+    if (!isGuest) return;
+    _status = SessionStatus.signedOut;
     notifyListeners();
   }
 

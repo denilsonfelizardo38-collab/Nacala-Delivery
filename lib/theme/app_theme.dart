@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
-/// Tema Material 3 da Nacala Entrega, claro e escuro.
+/// Tema Material 3 da Nacala Entrega, claro e escuro — redesign global.
+///
+/// Identidade visual: azul vivo (#0755E9), fundos brancos e superfícies
+/// claras (#F5F8FC), tipografia Poppins (títulos SemiBold, subtítulos Medium,
+/// textos Regular, valores importantes SemiBold).
 abstract final class AppTheme {
   static ThemeData light() => _build(
     brightness: Brightness.light,
-    surface: AppColors.bg,
-    card: Colors.white,
+    surface: AppColors.surface,
+    card: AppColors.bg,
     ink: AppColors.ink,
     muted: AppColors.muted,
     border: AppColors.border,
@@ -47,7 +51,7 @@ abstract final class AppTheme {
         : const ColorScheme.light(
             primary: AppColors.primary,
             onPrimary: Colors.white,
-            secondary: AppColors.navy,
+            secondary: AppColors.primaryLight,
             onSecondary: Colors.white,
             surface: AppColors.bg,
             onSurface: AppColors.ink,
@@ -57,65 +61,64 @@ abstract final class AppTheme {
           );
 
     final typography = Typography.material2021();
-    final baseText = isDark ? typography.white : typography.black;
+    final base = isDark ? typography.white : typography.black;
 
-    final textTheme = baseText
+    TextStyle style(
+      Color color,
+      double? fontSize, {
+      FontWeight? fontWeight,
+      double height = 1.45,
+      double? letterSpacing,
+    }) => TextStyle(
+      color: color,
+      fontSize: fontSize ?? 14,
+      fontWeight: fontWeight ?? FontWeight.w400,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+
+    final textTheme = base
+        .apply(fontFamily: 'Poppins')
         .copyWith(
-          displaySmall: TextStyle(
-            color: ink,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
-            height: 1.25,
-          ),
-          headlineSmall: TextStyle(
-            color: ink,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-            height: 1.25,
-          ),
-          titleLarge: TextStyle(
-            color: ink,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-          ),
-          titleMedium: TextStyle(
-            color: ink,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-          titleSmall: TextStyle(
-            color: ink,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-          bodyLarge: TextStyle(color: ink, fontSize: 14, height: 1.45),
-          bodyMedium: TextStyle(color: ink, fontSize: 14, height: 1.45),
-          bodySmall: TextStyle(
-            color: muted,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            height: 1.4,
-          ),
-          labelLarge: TextStyle(
-            color: ink,
-            fontSize: 14,
+          displaySmall: style(
+            ink,
+            26,
             fontWeight: FontWeight.w600,
+            height: 1.2,
+            letterSpacing: -0.4,
           ),
-          labelSmall: TextStyle(
-            color: muted,
-            fontSize: 12,
+          headlineSmall: style(
+            ink,
+            22,
+            fontWeight: FontWeight.w600,
+            height: 1.25,
+            letterSpacing: -0.2,
+          ),
+          titleLarge: style(ink, 22, fontWeight: FontWeight.w600, height: 1.3),
+          titleMedium: style(
+            ink,
+            17,
+            fontWeight: FontWeight.w600,
+            height: 1.35,
+          ),
+          titleSmall: style(ink, 16, fontWeight: FontWeight.w600, height: 1.35),
+          bodyLarge: style(ink, 16, height: 1.45),
+          bodyMedium: style(ink, 14, height: 1.45),
+          bodySmall: style(muted, 12, height: 1.45),
+          labelLarge: style(ink, 14, fontWeight: FontWeight.w600, height: 1.3),
+          labelSmall: style(
+            muted,
+            11,
             fontWeight: FontWeight.w500,
-            letterSpacing: 0.2,
+            height: 1.35,
+            letterSpacing: 0.4,
           ),
-        )
-        .apply(fontFamily: 'Inter');
+        );
 
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
-      fontFamily: 'Inter',
+      fontFamily: 'Poppins',
       colorScheme: scheme,
       scaffoldBackgroundColor: surface,
       canvasColor: surface,
@@ -125,33 +128,27 @@ abstract final class AppTheme {
       visualDensity: VisualDensity.standard,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: surface,
+        backgroundColor: card,
         surfaceTintColor: Colors.transparent,
         foregroundColor: ink,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleSpacing: 20,
-        titleTextStyle: TextStyle(
-          color: ink,
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
+        titleTextStyle: style(
+          ink,
+          22,
+          fontWeight: FontWeight.w600,
+          height: 1.25,
+          letterSpacing: -0.2,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: card,
-        hintStyle: TextStyle(color: muted, fontSize: 14),
-        labelStyle: TextStyle(
-          color: muted,
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-        ),
-        floatingLabelStyle: TextStyle(
-          color: primary,
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-        ),
+        hintStyle: style(muted, 14),
+        labelStyle: style(muted, 13, fontWeight: FontWeight.w500),
+        floatingLabelStyle: style(primary, 13, fontWeight: FontWeight.w500),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
@@ -170,26 +167,25 @@ abstract final class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.danger),
+          borderSide: BorderSide(color: AppColors.danger),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.danger, width: 1.6),
+          borderSide: BorderSide(color: AppColors.danger, width: 1.6),
         ),
         errorStyle: const TextStyle(color: AppColors.danger, fontSize: 12),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: card,
-        // Ícone ativo preenchido a azul royal, sem "pílula" de fundo.
-        indicatorColor: Colors.transparent,
+        indicatorColor: isDark ? AppColors.darkElevated : AppColors.primarySoft,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        height: 72,
+        height: 70,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             color: states.contains(WidgetState.selected) ? primary : muted,
           ),
         ),
@@ -207,10 +203,16 @@ abstract final class AppTheme {
           disabledBackgroundColor: primary.withValues(alpha: 0.4),
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: primary,
+        foregroundColor: isDark ? const Color(0xFF04152B) : Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
@@ -218,7 +220,7 @@ abstract final class AppTheme {
           minimumSize: const Size.fromHeight(50),
           side: BorderSide(color: border),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
@@ -250,20 +252,21 @@ abstract final class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isDark ? AppColors.darkElevated : AppColors.navy,
+        backgroundColor: isDark ? AppColors.darkElevated : AppColors.primary,
         contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
-        actionTextColor: const Color(0xFF8FC0FA),
+        actionTextColor: Colors.white,
         insetPadding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: card,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         titleTextStyle: TextStyle(
           color: ink,
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
+          fontSize: 22,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
         ),
         contentTextStyle: TextStyle(color: muted, fontSize: 14, height: 1.45),
       ),
@@ -281,7 +284,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           side: BorderSide(color: border),
         ),
       ),
@@ -301,7 +304,7 @@ abstract final class AppTheme {
         iconColor: muted,
         textColor: ink,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }

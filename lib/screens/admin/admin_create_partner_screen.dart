@@ -328,7 +328,6 @@ class _AdminCreatePartnerScreenState extends State<AdminCreatePartnerScreen> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
                         ),
                       )
                     : const Text('Criar parceiro'),

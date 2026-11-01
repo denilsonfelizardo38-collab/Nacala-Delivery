@@ -60,7 +60,9 @@ class _CartScreenState extends State<CartScreen> {
       confirmLabel: 'Esvaziar',
       destructive: true,
     );
-    if (confirmed) AppScope.of(context).clearCart();
+    if (!confirmed) return;
+    if (!mounted) return;
+    AppScope.of(context).clearCart();
   }
 
   Future<void> _editNote(String productId, String? current) async {
@@ -81,6 +83,11 @@ class _CartScreenState extends State<CartScreen> {
   void _continue() {
     final state = AppScope.of(context);
     if (state.isCartEmpty) return;
+    if (state.isGuest) {
+      state.exitGuestMode();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
     if (!state.isSignedIn) {
       Navigator.of(context).pushNamed('/login');
       return;
@@ -128,6 +135,8 @@ class _CartScreenState extends State<CartScreen> {
                 children: [
                   _StoreCard(
                     name: state.cartStore?.name ?? '',
+                    imageUrl: state.cartStore?.imageUrl,
+                    itemCount: state.cartItemCount,
                     onTap: () {
                       final id = state.cartStore?.id;
                       if (id == null) return;
@@ -156,19 +165,20 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                   const SizedBox(height: 8),
-                  _CouponCard(
-                    controller: _couponController,
-                    loading: _couponLoading,
-                    error: _couponError,
-                    appliedCode: state.couponCode,
-                    discountCents: state.couponDiscountCents,
-                    onApply: _applyCoupon,
-                    onRemove: () {
-                      state.removeCoupon();
-                      _couponController.clear();
-                      setState(() => _couponError = null);
-                    },
-                  ),
+                  if (!state.isGuest)
+                    _CouponCard(
+                      controller: _couponController,
+                      loading: _couponLoading,
+                      error: _couponError,
+                      appliedCode: state.couponCode,
+                      discountCents: state.couponDiscountCents,
+                      onApply: _applyCoupon,
+                      onRemove: () {
+                        state.removeCoupon();
+                        _couponController.clear();
+                        setState(() => _couponError = null);
+                      },
+                    ),
                   const SizedBox(height: 16),
                   AppCard(
                     child: Column(
@@ -230,7 +240,7 @@ class _CartScreenState extends State<CartScreen> {
           ? null
           : Material(
               color: context.cardColor,
-              elevation: 8,
+              elevation: 0,
               child: SafeArea(
                 top: false,
                 child: Padding(
@@ -254,18 +264,29 @@ class _CartScreenState extends State<CartScreen> {
                               formatMoney(state.cartTotalCents),
                               style: const TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      FilledButton(
-                        onPressed: _continue,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(180, 48),
+                      SizedBox(
+                        width: 166,
+                        child: FilledButton.icon(
+                          onPressed: _continue,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(52),
+                          ),
+                          icon: const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 18,
+                          ),
+                          label: Text(
+                            state.isGuest
+                                ? 'Entrar para pedir'
+                                : 'Finalizar pedido',
+                          ),
                         ),
-                        child: const Text('Continuar'),
                       ),
                     ],
                   ),
@@ -277,9 +298,16 @@ class _CartScreenState extends State<CartScreen> {
 }
 
 class _StoreCard extends StatelessWidget {
-  const _StoreCard({required this.name, required this.onTap});
+  const _StoreCard({
+    required this.name,
+    required this.imageUrl,
+    required this.itemCount,
+    required this.onTap,
+  });
 
   final String name;
+  final String? imageUrl;
+  final int itemCount;
   final VoidCallback onTap;
 
   @override
@@ -289,18 +317,11 @@ class _StoreCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.storefront_rounded,
-              color: AppColors.primary,
-              size: 22,
-            ),
+          NetworkThumb(
+            imageUrl: imageUrl,
+            icon: Icons.storefront_rounded,
+            size: 50,
+            radius: 13,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -308,10 +329,10 @@ class _StoreCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Encomendar em',
+                  'A sua encomenda',
                   style: TextStyle(
                     color: context.mutedColor,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -320,6 +341,10 @@ class _StoreCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Text(
+                  '$itemCount ${itemCount == 1 ? 'unidade' : 'unidades'}',
+                  style: TextStyle(color: context.mutedColor, fontSize: 10),
                 ),
               ],
             ),
@@ -357,6 +382,13 @@ class _CartLineCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              NetworkThumb(
+                imageUrl: line.product.imageUrl,
+                icon: Icons.restaurant_rounded,
+                size: 64,
+                radius: 12,
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,7 +445,10 @@ class _CartLineCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 4,
             children: [
               TextButton.icon(
                 onPressed: onEditNote,
@@ -424,15 +459,13 @@ class _CartLineCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
               ),
-              const Spacer(),
               QuantityStepper(
                 quantity: line.quantity,
                 onIncrement: onIncrement,
                 onDecrement: onDecrement,
               ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 92,
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
                 child: Text(
                   formatMoney(line.totalCents),
                   textAlign: TextAlign.right,
@@ -504,7 +537,7 @@ class _CouponCard extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.greenInk,
                           fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -513,7 +546,7 @@ class _CouponCard extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.greenInk,
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -538,18 +571,21 @@ class _CouponCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton.tonal(
-                  onPressed: loading ? null : onApply,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(96, 50),
+                SizedBox(
+                  width: 100,
+                  child: FilledButton.tonal(
+                    onPressed: loading ? null : onApply,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                    child: loading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Aplicar'),
                   ),
-                  child: loading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Aplicar'),
                 ),
               ],
             ),

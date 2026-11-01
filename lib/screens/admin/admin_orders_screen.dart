@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
+import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 
@@ -159,7 +160,7 @@ class _OrderFilter extends StatelessWidget {
             style: TextStyle(
               color: selected ? Colors.white : context.inkColor,
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -184,9 +185,10 @@ class _OrderAdminCard extends StatelessWidget {
             children: [
               const NetworkThumb(
                 imageUrl: null,
-                icon: Icons.restaurant_rounded,
+                icon: Icons.receipt_long_outlined,
                 size: 46,
-                radius: 12,
+                radius: 13,
+                color: AppColors.primarySoft,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -250,7 +252,7 @@ class _OrderAdminCard extends StatelessWidget {
                 formatMoney(order.totalCents),
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],

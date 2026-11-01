@@ -40,6 +40,33 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
+  static const _guestDestinations = [
+    _Destination(
+      'Início',
+      Icons.home_outlined,
+      Icons.home_rounded,
+      CustomerHomeScreen(),
+    ),
+    _Destination(
+      'Categorias',
+      Icons.grid_view_outlined,
+      Icons.grid_view_rounded,
+      CategoriesScreen(),
+    ),
+    _Destination(
+      'Pedidos',
+      Icons.receipt_long_outlined,
+      Icons.receipt_long_rounded,
+      OrdersScreen(),
+    ),
+    _Destination(
+      'Conta',
+      Icons.person_outline_rounded,
+      Icons.person_rounded,
+      AccountScreen(),
+    ),
+  ];
+
   List<_Destination> _destinationsFor(UserAccount role) {
     if (role.isPartner) {
       return const [
@@ -50,16 +77,16 @@ class _AppShellState extends State<AppShell> {
           PartnerDashboardScreen(),
         ),
         _Destination(
-          'Pedidos',
-          Icons.receipt_long_outlined,
-          Icons.receipt_long_rounded,
-          PartnerOrdersScreen(),
-        ),
-        _Destination(
           'Produtos',
           Icons.inventory_2_outlined,
           Icons.inventory_2_rounded,
           PartnerProductsScreen(),
+        ),
+        _Destination(
+          'Pedidos',
+          Icons.receipt_long_outlined,
+          Icons.receipt_long_rounded,
+          PartnerOrdersScreen(),
         ),
         _Destination(
           'Perfil',
@@ -151,26 +178,36 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final role = state.user;
-    if (role == null) return const SizedBox.shrink();
-    final destinations = _destinationsFor(role);
+    if (role == null && !state.isGuest) return const SizedBox.shrink();
+    final destinations = role == null
+        ? _guestDestinations
+        : _destinationsFor(role);
     if (_index >= destinations.length) _index = 0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
         if (!wide) {
+          if (role?.isAdmin ?? false) {
+            return Scaffold(
+              body: Row(
+                children: [
+                  _AdminNavigationRail(
+                    destinations: destinations,
+                    index: _index,
+                    onSelected: (value) => setState(() => _index = value),
+                  ),
+                  Expanded(child: destinations[_index].screen),
+                ],
+              ),
+            );
+          }
           return Scaffold(
             body: destinations[_index].screen,
             bottomNavigationBar: DecoratedBox(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x14000000),
-                    blurRadius: 16,
-                    offset: Offset(0, -4),
-                  ),
-                ],
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                boxShadow: [AppColors.cardShadow],
               ),
               child: NavigationBar(
                 selectedIndex: _index,
@@ -216,6 +253,65 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
+class _AdminNavigationRail extends StatelessWidget {
+  const _AdminNavigationRail({
+    required this.destinations,
+    required this.index,
+    required this.onSelected,
+  });
+
+  final List<_Destination> destinations;
+  final int index;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 62,
+      color: AppColors.primary,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: AppLogo(size: 36, onDark: true),
+            ),
+            const SizedBox(height: 8),
+            for (var i = 0; i < destinations.length; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Tooltip(
+                  message: destinations[i].label,
+                  child: Material(
+                    color: i == index
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      onTap: () => onSelected(i),
+                      borderRadius: BorderRadius.circular(14),
+                      child: SizedBox(
+                        width: 42,
+                        height: 42,
+                        child: Icon(
+                          i == index
+                              ? destinations[i].selectedIcon
+                              : destinations[i].icon,
+                          size: 20,
+                          color: i == index ? AppColors.primary : Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Sidebar extends StatelessWidget {
   const _Sidebar({
     required this.destinations,
@@ -249,10 +345,10 @@ class _Sidebar extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Nacala Entrega',
+                          'Nacala Delivery',
                           style: TextStyle(
                             fontSize: 15,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(
@@ -296,7 +392,7 @@ class _Sidebar extends StatelessWidget {
                                 : destinations[i].icon,
                             size: 20,
                             color: i == index
-                                ? Colors.white
+                                ? Theme.of(context).colorScheme.onPrimary
                                 : context.mutedColor,
                           ),
                           const SizedBox(width: 12),
@@ -304,11 +400,11 @@ class _Sidebar extends StatelessWidget {
                             destinations[i].label,
                             style: TextStyle(
                               color: i == index
-                                  ? Colors.white
+                                  ? Theme.of(context).colorScheme.onPrimary
                                   : context.inkColor,
                               fontSize: 13,
                               fontWeight: i == index
-                                  ? FontWeight.w800
+                                  ? FontWeight.w600
                                   : FontWeight.w600,
                             ),
                           ),
@@ -336,7 +432,7 @@ class _Sidebar extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Text(

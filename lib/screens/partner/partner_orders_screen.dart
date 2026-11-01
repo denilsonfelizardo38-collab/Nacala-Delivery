@@ -50,6 +50,7 @@ class _PartnerOrdersScreenState extends State<PartnerOrdersScreen> {
   }
 
   Future<void> _act(Order order, String action) async {
+    final api = AppScope.of(context).api;
     String? reason;
     if (action == 'reject') {
       reason = await showTextPrompt(
@@ -64,8 +65,7 @@ class _PartnerOrdersScreenState extends State<PartnerOrdersScreen> {
     }
     setState(() => _busyOrderId = order.id);
     try {
-      await AppScope.of(context).api
-          .partnerAction(order.id, action, reason: reason);
+      await api.partnerAction(order.id, action, reason: reason);
       if (!mounted) return;
       showAppSnack(context, _messageFor(action));
       _reload();
@@ -184,15 +184,15 @@ class _FilterTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected ? context.accentColor : context.cardColor,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(999),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Container(
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: selected ? context.accentColor : context.lineColor,
             ),
@@ -202,7 +202,7 @@ class _FilterTab extends StatelessWidget {
             style: TextStyle(
               color: selected ? Colors.white : context.inkColor,
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -231,11 +231,19 @@ class _PartnerOrderCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const NetworkThumb(
-                imageUrl: null,
-                icon: Icons.restaurant_rounded,
-                size: 46,
-                radius: 12,
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.receipt_long_outlined,
+                  color: AppColors.primary,
+                  size: 21,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -285,7 +293,7 @@ class _PartnerOrderCard extends StatelessWidget {
                     style: TextStyle(
                       color: context.mutedColor,
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -314,7 +322,7 @@ class _PartnerOrderCard extends StatelessWidget {
                 formatMoney(order.totalCents),
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
