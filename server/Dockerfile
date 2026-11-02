@@ -4,10 +4,10 @@
 FROM dart:3.13 AS build
 WORKDIR /app
 
-COPY pubspec.yaml pubspec.lock ./
+COPY server/pubspec.yaml server/pubspec.lock ./
 RUN dart pub get
 
-COPY . .
+COPY server/ ./
 RUN dart compile exe bin/server.dart -o /app/nacala_server
 
 # ---------------------------------------------------------------- runtime
