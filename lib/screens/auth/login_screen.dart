@@ -232,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 18),
         Text(
-          'Bem-vindo\\nde volta!',
+          'Bem-vindo de volta!',
           style: TextStyle(
             color: _loginInk,
             fontSize: compact ? 34 : 46,

@@ -78,13 +78,9 @@ void main() {
 
     await tester.tap(find.widgetWithText(FilledButton, 'Adicionar'));
     await tester.pumpAndSettle();
-    expect(find.text('Pedir agora'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Pedir agora'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Carrinho'), findsOneWidget);
-    expect(find.text('Finalizar pedido'), findsOneWidget);
+    expect(find.text('Frango grelhado adicionado ao carrinho.'), findsOneWidget);
+    expect(find.text('Ver carrinho'), findsOneWidget);
+    expect(find.text('1 item no carrinho'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

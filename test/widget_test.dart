@@ -58,12 +58,17 @@ void main() {
 
     expect(state.status, SessionStatus.signedOut);
     expect(find.byType(SplashScreen), findsNothing);
-    expect(find.text('O sabor de Nacala,\nà tua porta.'), findsOneWidget);
+    expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
   });
 
   testWidgets('sem sessão apresenta boas-vindas antes do formulário', (
     tester,
   ) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final api = FakeApi(user: _customer)
       ..loginResult = const AuthResult(token: 'token-123', user: _customer);
     final state = await newState(api);
@@ -73,20 +78,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 900));
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('O sabor de Nacala,\nà tua porta.'), findsOneWidget);
+    expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
     expect(find.text('Entrar'), findsOneWidget);
-    expect(find.text('Criar conta'), findsOneWidget);
+    expect(find.text('Criar Conta'), findsOneWidget);
     expect(find.text('Email ou telefone'), findsNothing);
+    expect(tester.getSize(find.byType(AppLogo)), const Size(104, 104));
 
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
     expect(find.text('Bem-vindo de volta!'), findsOneWidget);
     expect(find.text('Email ou telefone'), findsOneWidget);
-    expect(tester.getSize(find.byType(AppLogo)), const Size(42, 42));
-
     await tester.tap(find.byTooltip('Voltar'));
     await tester.pumpAndSettle();
-    expect(find.text('O sabor de Nacala,\nà tua porta.'), findsOneWidget);
+    expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
     expect(find.text('Email ou telefone'), findsNothing);
 
     await tester.tap(find.text('Entrar'));
@@ -109,7 +113,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 900));
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.text('Continuar com Google'), findsOneWidget);
+      expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
       await tester.ensureVisible(find.text('Explorar como convidado'));
       await tester.tap(find.text('Explorar como convidado'));
       await tester.pumpAndSettle();
@@ -124,7 +128,7 @@ void main() {
       await tester.tap(find.text('Entrar ou criar conta'));
       await tester.pumpAndSettle();
       expect(state.isGuest, isFalse);
-      expect(find.text('O sabor de Nacala,\nà tua porta.'), findsOneWidget);
+      expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
     },
   );
 
