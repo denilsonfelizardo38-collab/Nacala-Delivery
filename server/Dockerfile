@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---------------------------------------------------------------- build
-FROM dart:3.13-slim AS build
+FROM dart:3.13.7-slim AS build
 WORKDIR /app
 
 COPY pubspec.yaml pubspec.lock ./
