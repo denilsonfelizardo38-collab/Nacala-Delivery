@@ -6,12 +6,16 @@ import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/address_dialog.dart';
 import '../../widgets/common.dart';
 import '../../widgets/location_picker.dart';
 import 'tracking_screen.dart';
+
+const Color _checkoutOrange = Color(0xFFFF6B00);
+const Color _checkoutOrangeSoft = Color(0xFFFFF0E5);
+const Color _checkoutOrangeDark = Color(0xFFE85D00);
+const Color _checkoutInk = Color(0xFF171717);
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -234,7 +238,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Finalizar pedido')),
+      appBar: AppBar(
+        title: const Text('Finalizar pedido'),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        foregroundColor: _checkoutInk,
+        elevation: 0,
+      ),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -277,9 +286,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   Text(
                     formatMoney(state.cartTotalCents),
                     style: const TextStyle(
-                      color: AppColors.primary,
+                      color: _checkoutOrange,
                       fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -331,6 +340,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   onPressed: () => _markDeliveryPoint(selected),
                   icon: const Icon(Icons.map_outlined),
                   label: const Text('Marcar ponto de entrega no mapa'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _checkoutOrangeDark,
+                    side: const BorderSide(color: _checkoutOrange),
+                  ),
                 ),
                 const SizedBox(height: 8),
               ],
@@ -338,6 +351,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 onPressed: _addAddress,
                 icon: const Icon(Icons.add_location_alt_outlined, size: 18),
                 label: const Text('Adicionar outra morada'),
+                style: TextButton.styleFrom(foregroundColor: _checkoutOrange),
               ),
             ],
             const SizedBox(height: 20),
@@ -374,7 +388,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             isDense: true,
                             prefixIcon: const Icon(
                               Icons.local_offer_outlined,
-                              color: AppColors.primary,
+                              color: _checkoutOrange,
                             ),
                             suffixIcon: state.couponCode == null
                                 ? null
@@ -400,6 +414,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         child: FilledButton(
                           onPressed: _couponLoading ? null : _applyCoupon,
                           style: FilledButton.styleFrom(
+                            backgroundColor: _checkoutOrange,
+                            foregroundColor: Colors.white,
                             minimumSize: const Size.fromHeight(48),
                           ),
                           child: _couponLoading
@@ -408,6 +424,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   height: 18,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
+                                    color: Colors.white,
                                   ),
                                 )
                               : Text(
@@ -481,7 +498,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.warningSoft,
+                  color: _checkoutOrangeSoft,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Row(
@@ -490,7 +507,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Icon(
                       Icons.info_outline_rounded,
                       size: 18,
-                      color: AppColors.amberInk,
+                      color: _checkoutOrangeDark,
                     ),
                     SizedBox(width: 8),
                     Expanded(
@@ -499,7 +516,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         'ativa. O pedido será registado com pagamento pendente '
                         'de integração; não será cobrado automaticamente.',
                         style: TextStyle(
-                          color: AppColors.amberInk,
+                          color: _checkoutOrangeDark,
                           fontSize: 11,
                           height: 1.45,
                         ),
@@ -537,15 +554,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             height: 26,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: AppColors.primarySoft,
+                              color: _checkoutOrangeSoft,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               '${line.quantity}',
                               style: const TextStyle(
-                                color: AppColors.primary,
+                                color: _checkoutOrangeDark,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -616,23 +633,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.dangerSoft,
+                  color: context.dangerColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: context.dangerColor.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline_rounded,
-                      color: AppColors.danger,
+                      color: context.dangerColor,
                       size: 18,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         _error!,
-                        style: const TextStyle(
-                          color: AppColors.danger,
+                        style: TextStyle(
+                          color: context.dangerColor,
                           fontSize: 12,
                           height: 1.4,
                         ),
@@ -648,7 +668,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
       bottomNavigationBar: Material(
         color: context.cardColor,
-        elevation: 0,
+        elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: 0.08),
         child: SafeArea(
           top: false,
           child: Padding(
@@ -670,8 +691,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       Text(
                         formatMoney(state.cartTotalCents),
                         style: const TextStyle(
+                          color: _checkoutInk,
                           fontSize: 17,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],
@@ -682,15 +704,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: FilledButton(
                     onPressed: _submitting ? null : _submit,
                     style: FilledButton.styleFrom(
+                      backgroundColor: _checkoutOrange,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: _checkoutOrange.withValues(
+                        alpha: 0.45,
+                      ),
                       minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     child: _submitting
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
-                        : const Text('Confirmar pedido'),
+                        : const Text(
+                            'Confirmar pedido',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
                   ),
                 ),
               ],
@@ -717,8 +753,8 @@ class _AddressOption extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: onTap,
-      borderColor: selected ? AppColors.primary : null,
-      color: selected ? AppColors.primarySoft : null,
+      borderColor: selected ? _checkoutOrange : null,
+      color: selected ? _checkoutOrangeSoft : null,
       padding: const EdgeInsets.all(14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -728,7 +764,7 @@ class _AddressOption extends StatelessWidget {
                 ? Icons.radio_button_checked_rounded
                 : Icons.radio_button_off_rounded,
             size: 20,
-            color: selected ? AppColors.primary : context.mutedColor,
+            color: selected ? _checkoutOrange : context.mutedColor,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -737,9 +773,13 @@ class _AddressOption extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(
-                      address.label,
-                      style: Theme.of(context).textTheme.titleSmall,
+                    Flexible(
+                      child: Text(
+                        address.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
                     ),
                     if (address.isDefault) ...[
                       const SizedBox(width: 8),
@@ -749,22 +789,22 @@ class _AddressOption extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.12),
+                          color: _checkoutOrange.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text(
                           'Predefinida',
                           style: TextStyle(
-                            color: AppColors.primary,
+                            color: _checkoutOrangeDark,
                             fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                     ],
                   ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   address.fullLine,
                   style: TextStyle(
@@ -803,8 +843,8 @@ class _PaymentOption extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: onTap,
-      borderColor: selected ? AppColors.primary : null,
-      color: selected ? AppColors.primarySoft : null,
+      borderColor: selected ? _checkoutOrange : null,
+      color: selected ? _checkoutOrangeSoft : null,
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
@@ -812,13 +852,13 @@ class _PaymentOption extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: selected ? AppColors.primary : AppColors.primarySoft,
+              color: selected ? _checkoutOrange : _checkoutOrangeSoft,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               icon,
               size: 21,
-              color: selected ? Colors.white : AppColors.primary,
+              color: selected ? Colors.white : _checkoutOrangeDark,
             ),
           ),
           const SizedBox(width: 12),
@@ -827,7 +867,7 @@ class _PaymentOption extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   style: TextStyle(color: context.mutedColor, fontSize: 11),
@@ -840,7 +880,7 @@ class _PaymentOption extends StatelessWidget {
                 ? Icons.radio_button_checked_rounded
                 : Icons.radio_button_off_rounded,
             size: 20,
-            color: selected ? AppColors.primary : context.mutedColor,
+            color: selected ? _checkoutOrange : context.mutedColor,
           ),
         ],
       ),

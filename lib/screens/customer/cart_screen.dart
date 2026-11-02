@@ -10,6 +10,9 @@ import '../../widgets/common.dart';
 import 'checkout_screen.dart';
 import 'store_screen.dart';
 
+const _brandOrange = Color(0xFFFF7900);
+const _brandBlack = Color(0xFF151515);
+
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
 
@@ -60,8 +63,7 @@ class _CartScreenState extends State<CartScreen> {
       confirmLabel: 'Esvaziar',
       destructive: true,
     );
-    if (!confirmed) return;
-    if (!mounted) return;
+    if (!confirmed || !mounted) return;
     AppScope.of(context).clearCart();
   }
 
@@ -92,17 +94,42 @@ class _CartScreenState extends State<CartScreen> {
       Navigator.of(context).pushNamed('/login');
       return;
     }
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const CheckoutScreen()));
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CheckoutScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final empty = state.isCartEmpty;
+
     return Scaffold(
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: const Text('Carrinho'),
+        backgroundColor: _brandBlack,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        titleSpacing: 20,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'O meu carrinho',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            ),
+            SizedBox(height: 2),
+            Text(
+              'NACALA DELIVERY',
+              style: TextStyle(
+                color: _brandOrange,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.8,
+              ),
+            ),
+          ],
+        ),
         actions: [
           if (!empty)
             IconButton(
@@ -110,7 +137,7 @@ class _CartScreenState extends State<CartScreen> {
               onPressed: _clearCart,
               icon: const Icon(Icons.delete_outline_rounded),
             ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
         ],
       ),
       body: SafeArea(
@@ -119,19 +146,65 @@ class _CartScreenState extends State<CartScreen> {
             ? Center(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
-                  child: EmptyState(
-                    icon: Icons.shopping_bag_outlined,
-                    title: 'O carrinho está vazio',
-                    message:
-                        'Explore os parceiros de Nacala-Porto e adicione os '
-                        'produtos que precisa.',
-                    actionLabel: 'Ver estabelecimentos',
-                    onAction: () => Navigator.of(context).pop(),
+                  child: AppCard(
+                    padding: const EdgeInsets.fromLTRB(24, 30, 24, 26),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 86,
+                          height: 86,
+                          decoration: BoxDecoration(
+                            color: _brandOrange.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.shopping_bag_outlined,
+                            color: _brandOrange,
+                            size: 42,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'O carrinho está vazio',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Explore os parceiros de Nacala-Porto e adicione '
+                          'os produtos que precisa.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: context.mutedColor,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: FilledButton.icon(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.storefront_rounded),
+                            label: const Text('Ver estabelecimentos'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _brandOrange,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               )
             : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
                 children: [
                   _StoreCard(
                     name: state.cartStore?.name ?? '',
@@ -147,21 +220,22 @@ class _CartScreenState extends State<CartScreen> {
                       );
                     },
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   SectionTitle(
-                    title: 'Itens',
+                    title: 'Os teus artigos',
                     subtitle: '${state.cartItemCount} unidade(s) no carrinho',
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   for (final line in state.cart)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.only(bottom: 12),
                       child: _CartLineCard(
                         line: line,
                         onIncrement: () => state.increment(line.product.id),
                         onDecrement: () => state.decrement(line.product.id),
                         onRemove: () => state.removeLine(line.product.id),
-                        onEditNote: () => _editNote(line.product.id, line.note),
+                        onEditNote: () =>
+                            _editNote(line.product.id, line.note),
                       ),
                     ),
                   const SizedBox(height: 8),
@@ -181,54 +255,66 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   const SizedBox(height: 16),
                   AppCard(
+                    padding: const EdgeInsets.all(18),
                     child: Column(
                       children: [
                         PriceLine(
                           label: 'Subtotal',
                           cents: state.cartSubtotalCents,
                         ),
+                        const SizedBox(height: 10),
                         PriceLine(
                           label: 'Taxa de entrega',
                           cents: state.cartDeliveryFeeCents,
                         ),
-                        if (state.couponDiscountCents > 0)
+                        if (state.couponDiscountCents > 0) ...[
+                          const SizedBox(height: 10),
                           PriceLine(
                             label: 'Desconto (${state.couponCode})',
                             cents: -state.couponDiscountCents,
                             color: context.successColor,
                           ),
+                        ],
                         const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Divider(),
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          child: Divider(height: 1),
                         ),
                         PriceLine(
                           label: 'Total estimado',
                           cents: state.cartTotalCents,
                           strong: true,
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              size: 15,
-                              color: context.mutedColor,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'O total final é calculado pelo servidor ao '
-                                'confirmar o pedido.',
-                                style: TextStyle(
-                                  color: context.mutedColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  height: 1.4,
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(11),
+                          decoration: BoxDecoration(
+                            color: context.isDarkMode
+                                ? AppColors.darkElevated
+                                : AppColors.bg,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                size: 16,
+                                color: context.mutedColor,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'O total final é calculado pelo servidor '
+                                  'ao confirmar o pedido.',
+                                  style: TextStyle(
+                                    color: context.mutedColor,
+                                    fontSize: 11,
+                                    height: 1.45,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -240,11 +326,12 @@ class _CartScreenState extends State<CartScreen> {
           ? null
           : Material(
               color: context.cardColor,
-              elevation: 0,
+              elevation: 12,
+              shadowColor: Colors.black.withValues(alpha: 0.10),
               child: SafeArea(
                 top: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                   child: Row(
                     children: [
                       Expanded(
@@ -253,29 +340,38 @@ class _CartScreenState extends State<CartScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Total',
+                              'TOTAL A PAGAR',
                               style: TextStyle(
                                 color: context.mutedColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
                               ),
                             ),
+                            const SizedBox(height: 3),
                             Text(
                               formatMoney(state.cartTotalCents),
                               style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
+                                color: _brandOrange,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 12),
                       SizedBox(
-                        width: 166,
+                        width: 178,
                         child: FilledButton.icon(
                           onPressed: _continue,
                           style: FilledButton.styleFrom(
+                            backgroundColor: _brandOrange,
+                            foregroundColor: Colors.white,
                             minimumSize: const Size.fromHeight(52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
                           ),
                           icon: const Icon(
                             Icons.arrow_forward_rounded,
@@ -285,6 +381,10 @@ class _CartScreenState extends State<CartScreen> {
                             state.isGuest
                                 ? 'Entrar para pedir'
                                 : 'Finalizar pedido',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ),
@@ -314,42 +414,57 @@ class _StoreCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: onTap,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(15),
+      radius: 18,
       child: Row(
         children: [
-          NetworkThumb(
-            imageUrl: imageUrl,
-            icon: Icons.storefront_rounded,
-            size: 50,
-            radius: 13,
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: _brandOrange.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: NetworkThumb(
+              imageUrl: imageUrl,
+              icon: Icons.storefront_rounded,
+              size: 54,
+              radius: 13,
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'A sua encomenda',
+                  'A TUA ENCOMENDA',
                   style: TextStyle(
                     color: context.mutedColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
+                const SizedBox(height: 3),
                 Text(
                   '$itemCount ${itemCount == 1 ? 'unidade' : 'unidades'}',
-                  style: TextStyle(color: context.mutedColor, fontSize: 10),
+                  style: TextStyle(
+                    color: context.mutedColor,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
           ),
-          Icon(Icons.chevron_right_rounded, color: context.mutedColor),
+          const Icon(Icons.chevron_right_rounded, color: _brandOrange),
         ],
       ),
     );
@@ -375,7 +490,8 @@ class _CartLineCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final note = line.note;
     return AppCard(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(13),
+      radius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -385,8 +501,8 @@ class _CartLineCard extends StatelessWidget {
               NetworkThumb(
                 imageUrl: line.product.imageUrl,
                 icon: Icons.restaurant_rounded,
-                size: 64,
-                radius: 12,
+                size: 68,
+                radius: 14,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -395,15 +511,16 @@ class _CartLineCard extends StatelessWidget {
                   children: [
                     Text(
                       line.product.name,
-                      style: Theme.of(context).textTheme.titleSmall,
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 5),
                     Text(
                       '${formatMoney(line.product.priceCents)} / unidade',
                       style: TextStyle(
                         color: context.mutedColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -412,32 +529,40 @@ class _CartLineCard extends StatelessWidget {
               IconButton(
                 tooltip: 'Remover item',
                 onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 18),
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.danger.withValues(alpha: 0.08),
+                  foregroundColor: AppColors.danger,
+                ),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
               ),
             ],
           ),
           if (note != null && note.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
               decoration: BoxDecoration(
                 color: context.isDarkMode
                     ? AppColors.darkElevated
                     : AppColors.bg,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(11),
               ),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.edit_note_rounded,
-                    size: 15,
-                    color: context.mutedColor,
+                    size: 16,
+                    color: _brandOrange,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 7),
                   Expanded(
                     child: Text(
                       note,
-                      style: TextStyle(color: context.mutedColor, fontSize: 14),
+                      style: TextStyle(
+                        color: context.mutedColor,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -448,15 +573,16 @@ class _CartLineCard extends StatelessWidget {
           Wrap(
             alignment: WrapAlignment.spaceBetween,
             crossAxisAlignment: WrapCrossAlignment.center,
-            runSpacing: 4,
+            runSpacing: 6,
             children: [
               TextButton.icon(
                 onPressed: onEditNote,
-                icon: const Icon(Icons.edit_note_rounded, size: 16),
+                icon: const Icon(Icons.edit_note_rounded, size: 17),
                 label: Text(note == null ? 'Adicionar nota' : 'Editar nota'),
                 style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  foregroundColor: _brandOrange,
+                  minimumSize: const Size(0, 42),
+                  padding: const EdgeInsets.symmetric(horizontal: 7),
                 ),
               ),
               QuantityStepper(
@@ -469,10 +595,10 @@ class _CartLineCard extends StatelessWidget {
                 child: Text(
                   formatMoney(line.totalCents),
                   textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: context.mutedColor,
+                  style: const TextStyle(
+                    color: _brandBlack,
                     fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -506,54 +632,79 @@ class _CouponCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      padding: const EdgeInsets.all(17),
+      radius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Cupão', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 10),
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: _brandOrange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.local_offer_outlined,
+                  color: _brandOrange,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Cupão de desconto',
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
           if (appliedCode != null)
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.successSoft,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.local_offer_rounded,
-                        size: 16,
-                        color: AppColors.success,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        appliedCode!,
-                        style: const TextStyle(
-                          color: AppColors.greenInk,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.successSoft,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: AppColors.success,
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '−${formatMoney(discountCents)}',
-                        style: const TextStyle(
-                          color: AppColors.greenInk,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        const SizedBox(width: 7),
+                        Flexible(
+                          child: Text(
+                            '$appliedCode · −${formatMoney(discountCents)}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.greenInk,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-                const Spacer(),
-                TextButton(onPressed: onRemove, child: const Text('Remover')),
+                TextButton(
+                  onPressed: onRemove,
+                  child: const Text(
+                    'Remover',
+                    style: TextStyle(color: AppColors.danger),
+                  ),
+                ),
               ],
             )
           else ...[
@@ -563,28 +714,53 @@ class _CouponCard extends StatelessWidget {
                   child: TextField(
                     controller: controller,
                     textCapitalization: TextCapitalization.characters,
-                    decoration: const InputDecoration(
-                      hintText: 'Código do cupão',
+                    decoration: InputDecoration(
+                      hintText: 'Introduz o código',
                       isDense: true,
+                      filled: true,
+                      fillColor: context.isDarkMode
+                          ? AppColors.darkElevated
+                          : AppColors.bg,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: context.lineColor,
+                        ),
+                      ),
                     ),
                     onSubmitted: (_) => onApply(),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 9),
                 SizedBox(
-                  width: 100,
-                  child: FilledButton.tonal(
+                  width: 104,
+                  child: FilledButton(
                     onPressed: loading ? null : onApply,
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
+                      backgroundColor: _brandBlack,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: loading
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
-                        : const Text('Aplicar'),
+                        : const Text(
+                            'Aplicar',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
                   ),
                 ),
               ],
@@ -593,7 +769,10 @@ class _CouponCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 error!,
-                style: const TextStyle(color: AppColors.danger, fontSize: 12),
+                style: const TextStyle(
+                  color: AppColors.danger,
+                  fontSize: 12,
+                ),
               ),
             ],
           ],

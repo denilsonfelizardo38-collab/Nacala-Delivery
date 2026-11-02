@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
 import 'store_screen.dart';
+
+const Color _orange = Color(0xFFFF6B00);
+const Color _orangeLight = Color(0xFFFFF0E5);
+const Color _black = Color(0xFF171717);
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -17,17 +20,22 @@ class CategoriesScreen extends StatefulWidget {
 
 class _CategoriesScreenState extends State<CategoriesScreen> {
   bool _initialized = false;
+
   Future<List<Category>>? _categoriesFuture;
   Future<List<Establishment>>? _allEstablishmentsFuture;
   Future<List<Establishment>>? _establishmentsFuture;
+
   String? _selectedSlug;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     if (_initialized) return;
     _initialized = true;
+
     final api = AppScope.of(context).api;
+
     _categoriesFuture = api.categories();
     _allEstablishmentsFuture = api.establishments();
     _establishmentsFuture = api.establishments();
@@ -35,14 +43,19 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   Future<void> _refresh() async {
     final api = AppScope.of(context).api;
+
     final categories = api.categories();
     final allEstablishments = api.establishments();
-    final establishments = api.establishments(category: _selectedSlug);
+    final establishments = api.establishments(
+      category: _selectedSlug,
+    );
+
     setState(() {
       _categoriesFuture = categories;
       _allEstablishmentsFuture = allEstablishments;
       _establishmentsFuture = establishments;
     });
+
     try {
       await Future.wait<Object>([
         categories,
@@ -50,15 +63,20 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         establishments,
       ]);
     } on Exception {
-      // Tratado pelo AsyncSection.
+      // Os erros são apresentados pelos respetivos AsyncSection.
     }
   }
 
   void _select(Category category) {
-    final slug = _selectedSlug == category.slug ? null : category.slug;
+    final slug = _selectedSlug == category.slug
+        ? null
+        : category.slug;
+
     setState(() {
       _selectedSlug = slug;
-      _establishmentsFuture = AppScope.of(context).api
+
+      _establishmentsFuture = AppScope.of(context)
+          .api
           .establishments(category: slug);
     });
   }
@@ -68,92 +86,140 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Categorias'),
-        actions: const [CartButton(), SizedBox(width: 4)],
+        actions: const [
+          CartButton(),
+          SizedBox(width: 4),
+        ],
       ),
       body: SafeArea(
         top: false,
         child: RefreshIndicator(
           onRefresh: _refresh,
+          color: _orange,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
             children: [
               Text(
                 'Explore por categoria',
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
               ),
-              const SizedBox(height: 4),
+
+              const SizedBox(height: 5),
+
               Text(
                 'Escolha o tipo de parceiro e veja quem está disponível.',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: context.mutedColor),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.mutedColor,
+                      height: 1.5,
+                    ),
               ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: 20),
+
               AsyncSection<List<Category>>(
                 future: _categoriesFuture,
                 onRetry: _refresh,
-                builder: (context, categories) =>
-                    FutureBuilder<List<Establishment>>(
-                      future: _allEstablishmentsFuture,
-                      builder: (context, establishmentsSnapshot) {
-                        if (establishmentsSnapshot.hasError) {
-                          return ErrorState(
-                            message: messageForError(
-                              establishmentsSnapshot.error,
-                            ),
-                            onRetry: _refresh,
-                          );
-                        }
-                        final establishments =
-                            establishmentsSnapshot.data ?? [];
-                        if (categories.isEmpty) {
-                          return const EmptyState(
-                            icon: Icons.category_outlined,
-                            title: 'Sem categorias',
-                            message:
-                                'Ainda não existem categorias configuradas.',
-                          );
-                        }
-                        return LayoutBuilder(
-                          builder: (context, constraints) {
-                            final columns = constraints.maxWidth >= 760 ? 4 : 2;
-                            final spacing = 10.0;
-                            final width =
-                                (constraints.maxWidth -
-                                    spacing * (columns - 1)) /
-                                columns;
-                            return Wrap(
-                              spacing: spacing,
-                              runSpacing: spacing,
-                              children: [
-                                for (final category in categories)
-                                  SizedBox(
-                                    width: width,
-                                    child: _CategoryCard(
-                                      category: category,
-                                      imageUrl: _imageFor(
-                                        category,
-                                        establishments,
-                                      ),
-                                      selected: _selectedSlug == category.slug,
-                                      onTap: () => _select(category),
-                                    ),
-                                  ),
-                              ],
-                            );
-                          },
+                builder: (context, categories) {
+                  return FutureBuilder<List<Establishment>>(
+                    future: _allEstablishmentsFuture,
+                    builder: (context, establishmentsSnapshot) {
+                      if (establishmentsSnapshot.hasError) {
+                        return ErrorState(
+                          message: messageForError(
+                            establishmentsSnapshot.error,
+                          ),
+                          onRetry: _refresh,
                         );
-                      },
+                      }
+
+                      final establishments =
+                          establishmentsSnapshot.data ?? [];
+
+                      if (categories.isEmpty) {
+                        return const EmptyState(
+                          icon: Icons.category_outlined,
+                          title: 'Sem categorias',
+                          message:
+                              'Ainda não existem categorias configuradas.',
+                        );
+                      }
+
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns =
+                              constraints.maxWidth >= 760 ? 4 : 2;
+
+                          const spacing = 12.0;
+
+                          final width = (constraints.maxWidth -
+                                  spacing * (columns - 1)) /
+                              columns;
+
+                          return Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              for (final category in categories)
+                                SizedBox(
+                                  width: width,
+                                  child: _CategoryCard(
+                                    category: category,
+                                    imageUrl: _imageFor(
+                                      category,
+                                      establishments,
+                                    ),
+                                    selected:
+                                        _selectedSlug == category.slug,
+                                    onTap: () => _select(category),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+
+              const SizedBox(height: 28),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: SectionTitle(
+                      title: _selectedSlug == null
+                          ? 'Todos os parceiros'
+                          : 'Parceiros na categoria',
+                      subtitle:
+                          'Toque num estabelecimento para ver o menu',
                     ),
+                  ),
+                  if (_selectedSlug != null)
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedSlug = null;
+                          _establishmentsFuture =
+                              AppScope.of(context).api.establishments();
+                        });
+                      },
+                      child: const Text(
+                        'Limpar filtro',
+                        style: TextStyle(
+                          color: _orange,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              const SizedBox(height: 26),
-              SectionTitle(
-                title: _selectedSlug == null
-                    ? 'Todos os parceiros'
-                    : 'Parceiros na categoria',
-                subtitle: 'Toque num estabelecimento para ver o menu',
-              ),
+
               const SizedBox(height: 12),
+
               AsyncSection<List<Establishment>>(
                 future: _establishmentsFuture,
                 onRetry: _refresh,
@@ -166,6 +232,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                           'Não há estabelecimentos aprovados nesta categoria.',
                     );
                   }
+
                   return Column(
                     children: [
                       for (final establishment in establishments)
@@ -193,7 +260,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  String? _imageFor(Category category, List<Establishment> establishments) {
+  String? _imageFor(
+    Category category,
+    List<Establishment> establishments,
+  ) {
     for (final establishment in establishments) {
       if (establishment.categorySlug == category.slug &&
           establishment.imageUrl != null &&
@@ -201,6 +271,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         return establishment.imageUrl;
       }
     }
+
     return null;
   }
 }
@@ -222,15 +293,15 @@ class _CategoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: onTap,
-      color: selected ? AppColors.primarySoft : null,
-      borderColor: selected ? AppColors.primary : null,
-      padding: const EdgeInsets.all(8),
+      color: selected ? _orangeLight : null,
+      borderColor: selected ? _orange : null,
+      padding: const EdgeInsets.all(9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: double.infinity,
-            height: 92,
+            height: 105,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Stack(
@@ -244,69 +315,101 @@ class _CategoryCard extends StatelessWidget {
                     )
                   else
                     _imageFallback(),
+
                   if (imageUrl != null)
                     const DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
-                          colors: [Color(0x70000000), Colors.transparent],
+                          colors: [
+                            Color(0x70000000),
+                            Colors.transparent,
+                          ],
                         ),
                       ),
                     ),
+
                   Align(
                     alignment: Alignment.bottomRight,
                     child: Padding(
-                      padding: const EdgeInsets.all(6),
+                      padding: const EdgeInsets.all(7),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 3,
+                          horizontal: 9,
+                          vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.94),
+                          color: Colors.white.withValues(alpha: 0.95),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
                           '${category.establishmentCount}',
                           style: const TextStyle(
-                            color: AppColors.primary,
+                            color: _orange,
                             fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
                     ),
                   ),
+
+                  if (selected)
+                    const Positioned(
+                      top: 7,
+                      right: 7,
+                      child: CircleAvatar(
+                        radius: 12,
+                        backgroundColor: _orange,
+                        child: Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 15,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 8),
+
+          const SizedBox(height: 10),
+
           Text(
             category.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: selected ? _orange : null,
+                ),
           ),
-          const SizedBox(height: 2),
+
+          const SizedBox(height: 3),
+
           Text(
             '${category.establishmentCount} parceiro(s)',
-            style: TextStyle(color: context.mutedColor, fontSize: 10),
+            style: TextStyle(
+              color: context.mutedColor,
+              fontSize: 10,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _imageFallback() => ColoredBox(
-    color: selected ? AppColors.primary : AppColors.primarySoft,
-    child: Center(
-      child: Icon(
-        categoryIconFor(category.icon),
-        size: 36,
-        color: selected ? Colors.white : AppColors.primary,
+  Widget _imageFallback() {
+    return ColoredBox(
+      color: _orangeLight,
+      child: Center(
+        child: Icon(
+          categoryIconFor(category.icon),
+          size: 36,
+          color: _orange,
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

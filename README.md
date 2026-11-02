@@ -209,6 +209,54 @@ estafeta em **Utilizadores**.
 
 ---
 
+## Deploy grátis (backend)
+
+O servidor Dart (Shelf + SQLite) pode ser publicado como container Docker em
+qualquer host que suporte Docker (Render, Fly.io, Railway, Koyeb, etc.).
+
+### Variáveis de ambiente
+
+| Variável     | Omissão                        | Descrição                                        |
+| ------------ | ------------------------------ | ------------------------------------------------ |
+| `PORT`       | `8080`                         | porta HTTP                                       |
+| `DB_PATH`    | `data`                         | diretório da base SQLite                        |
+| `UPLOADS_DIR` | `data/uploads`                | pasta persistente para imagens                  |
+| `JWT_SECRET` | segredo de desenvolvimento   | **definir em produção**                          |
+| `SEED`       | ativo                          | `SEED=0` não cria administrador/categorias       |
+| `SEED_DEMO`  | desligado                      | `SEED_DEMO=1` cria dados de demonstração       |
+
+### Opção 1 — Render (recomendado para teste gratuito)
+
+1. Cria conta em [render.com](https://render.com) e **New → Web Service**.
+2. Liga o repositório GitHub do Nacala Delivery.
+3. Configura: **Runtime = Docker**, **Dockerfile path = `server/Dockerfile`**.
+4. Instance type: **Free**.
+5. Define as variáveis de ambiente (`PORT=8080`, `DB_PATH=/data`,
+   `UPLOADS_DIR=/data/uploads`, `JWT_SECRET=<segredo>`, `SEED=1`, `SEED_DEMO=1`).
+6. Publica e guarda a URL gerada (ex.: `https://<nome>.onrender.com`).
+
+### Opção 2 — Fly.io
+
+```sh
+cd server
+fly launch --no-deploy
+fly volumes create data --size 1
+fly secrets set JWT_SECRET=<segredo>
+fly deploy
+```
+
+### Ligar a app Flutter ao backend remoto
+
+```sh
+flutter run --dart-define=API_BASE_URL=https://<o-teu-host>:8080
+```
+
+> **Nota:** planos gratuitos (Render, Fly.io, Koyeb) podem "adormecer" após
+> inatividade. O primeiro pedido após o spin-down demora ~30–60 s (cold start).
+> Para testes contínuos, prefira instância sempre ativa no plano gratuito.
+
+---
+
 ## API
 
 Rotas principais (todas sob `/api`, JSON, `Authorization: Bearer <token>`):

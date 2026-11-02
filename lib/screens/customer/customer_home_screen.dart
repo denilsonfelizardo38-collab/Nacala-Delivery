@@ -136,6 +136,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F7),
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -157,56 +158,87 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   Widget _buildHeader(AppState state) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(0, 0, 0, 14),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+      decoration: const BoxDecoration(
+        color: Color(0xFF151515),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'Olá, ${state.firstName}!',
-                  style: Theme.of(context).textTheme.titleMedium,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'NACALA DELIVERY',
+                      style: TextStyle(
+                        color: Color(0xFFFF7900),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2.0,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      'Olá, ${state.firstName}!',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'O que deseja pedir hoje?',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
                 ),
               ),
-              const CartButton(),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF7900),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.center,
+                child: const CartButton(),
+              ),
             ],
           ),
-          const SizedBox(height: 3),
-          Text(
-            'O que deseja pedir hoje?',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: context.mutedColor),
-          ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 17),
           Row(
             children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 14,
-                color: context.mutedColor,
+              const Icon(
+                Icons.location_on_rounded,
+                color: Color(0xFFFF7900),
+                size: 17,
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   state.defaultAddress?.fullLine ??
                       'Defina a morada de entrega no checkout',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.mutedColor, fontSize: 11),
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: SearchField(
-              controller: _searchController,
-              onChanged: _onSearchChanged,
-              hintText: 'Pesquisar lojas ou produtos',
-            ),
+          const SizedBox(height: 17),
+          SearchField(
+            controller: _searchController,
+            onChanged: _onSearchChanged,
+            hintText: 'Pesquisar lojas ou produtos...',
           ),
         ],
       ),
@@ -476,7 +508,7 @@ class _CategoryChip extends StatelessWidget {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.primary : AppColors.primarySoft,
+                  color: selected ? const Color(0xFFFF7900) : const Color(0xFFFFE9D6),
                   shape: BoxShape.circle,
                 ),
                 child: imageUrl == null
@@ -504,7 +536,7 @@ class _CategoryChip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: selected ? AppColors.primary : context.inkColor,
+                  color: selected ? const Color(0xFFFF7900) : context.inkColor,
                   fontSize: 10,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
@@ -528,12 +560,12 @@ class _HomeHero extends StatelessWidget {
     final imageUrl = establishment?.imageUrl;
     return AppCard(
       padding: EdgeInsets.zero,
-      radius: 18,
+      radius: 22,
       onTap: onTap,
       child: SizedBox(
-        height: 166,
+        height: 184,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(22),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -550,7 +582,7 @@ class _HomeHero extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
-                    colors: [Color(0xE6001F60), Color(0x18001F60)],
+                    colors: [Color(0xE6000000), Color(0x663F1B00)],
                   ),
                 ),
               ),
@@ -566,8 +598,8 @@ class _HomeHero extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -618,17 +650,17 @@ class _HomeStoreCard extends StatelessWidget {
     final imageUrl = establishment.imageUrl;
     return AppCard(
       padding: EdgeInsets.zero,
-      radius: 18,
+      radius: 21,
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            height: 142,
+            height: 158,
             width: double.infinity,
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(18),
+                top: Radius.circular(21),
               ),
               child: imageUrl == null || imageUrl.isEmpty
                   ? ColoredBox(
@@ -654,7 +686,7 @@ class _HomeStoreCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(13, 10, 13, 12),
+            padding: const EdgeInsets.fromLTRB(15, 13, 15, 15),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

@@ -1,0 +1,8 @@
+.dart_tool
+build
+data
+test
+out
+*.iml
+.idea
+analysis_options.yaml
