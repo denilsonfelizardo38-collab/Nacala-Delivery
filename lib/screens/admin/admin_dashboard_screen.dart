@@ -80,17 +80,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _createCategory() async {
+    if (!mounted) return;
     final api = AppScope.of(context).api;
     final name = await showTextPrompt(
       context,
       title: 'Nova categoria',
       label: 'Nome',
       hint: 'Ex.: Padaria',
-      confirmLabel: 'Criar',
+      confirmLabel: 'Continuar',
     );
-    if (name == null) return;
+    if (name == null || !mounted) return;
+    final imageUrl = await showTextPrompt(
+      context,
+      title: 'Foto da categoria',
+      label: 'URL da imagem',
+      hint: 'https://exemplo.com/foto.jpg',
+      confirmLabel: 'Criar',
+      allowEmpty: true,
+    );
+    if (!mounted) return;
     try {
-      await api.createCategory(name);
+      await api.createCategory(
+        name,
+        imageUrl: (imageUrl ?? '').trim().isEmpty ? null : imageUrl!.trim(),
+      );
       if (!mounted) return;
       showAppSnack(context, 'Categoria criada.');
       _load();
@@ -350,7 +363,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             children: [
               for (var i = 0; i < categories.length; i++) ...[
                 ListTile(
-                  leading: const Icon(Icons.category_outlined, size: 20),
+                  leading: NetworkThumb(
+                    imageUrl: categories[i].imageUrl,
+                    icon: Icons.category_outlined,
+                    size: 40,
+                    radius: 10,
+                  ),
                   title: Text(
                     categories[i].name,
                     style: const TextStyle(fontSize: 13),

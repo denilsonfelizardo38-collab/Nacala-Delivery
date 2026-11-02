@@ -34,6 +34,7 @@ class _AdminCreatePartnerScreenState extends State<AdminCreatePartnerScreen> {
   final _prep = TextEditingController(text: '30');
   final _opensAt = TextEditingController(text: '08:00');
   final _closesAt = TextEditingController(text: '21:00');
+  final _imageUrl = TextEditingController();
 
   bool _initialized = false;
   bool _submitting = false;
@@ -77,6 +78,7 @@ class _AdminCreatePartnerScreenState extends State<AdminCreatePartnerScreen> {
       _prep,
       _opensAt,
       _closesAt,
+      _imageUrl,
     ]) {
       controller.dispose();
     }
@@ -115,6 +117,7 @@ class _AdminCreatePartnerScreenState extends State<AdminCreatePartnerScreen> {
         prepMinutes: prep,
         opensAt: _opensAt.text.trim(),
         closesAt: _closesAt.text.trim(),
+        imageUrl: _imageUrl.text.trim().isEmpty ? null : _imageUrl.text.trim(),
       );
       if (!mounted) return;
       showAppSnack(context, 'Parceiro registado com acesso ativo.');
@@ -247,6 +250,14 @@ class _AdminCreatePartnerScreenState extends State<AdminCreatePartnerScreen> {
                 controller: _establishmentPhone,
                 label: 'Telefone do estabelecimento (opcional)',
                 keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              _field(
+                controller: _imageUrl,
+                label: 'Foto do estabelecimento (opcional)',
+                hint: 'https://exemplo.com/foto.jpg',
+                keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 12),

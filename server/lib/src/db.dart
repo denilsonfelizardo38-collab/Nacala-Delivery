@@ -259,6 +259,9 @@ const migrations = <Migration>[
     'ALTER TABLE delivery_assignments ADD COLUMN location_updated_at TEXT',
     'ALTER TABLE delivery_assignments ADD COLUMN departed_at TEXT',
   ]),
+  Migration(3, [
+    'ALTER TABLE categories ADD COLUMN image_url TEXT',
+  ]),
 ];
 
 /// Gera identificadores opacos para as linhas.

@@ -8,6 +8,11 @@ import 'app_colors.dart';
 /// claras (#F5F8FC), tipografia Poppins (títulos SemiBold, subtítulos Medium,
 /// textos Regular, valores importantes SemiBold).
 abstract final class AppTheme {
+  /// Stack tipográfico estilo iPhone (SF Pro / system).
+  static const String _iosFontStack =
+      '-apple-system, BlinkMacSystemFont, SF Pro Display, SF Pro Text, '
+      'Helvetica Neue, Arial, sans-serif';
+
   static ThemeData light() => _build(
     brightness: Brightness.light,
     surface: AppColors.surface,
@@ -78,47 +83,47 @@ abstract final class AppTheme {
     );
 
     final textTheme = base
-        .apply(fontFamily: 'Poppins')
+        .apply(fontFamily: _iosFontStack)
         .copyWith(
           displaySmall: style(
             ink,
-            26,
-            fontWeight: FontWeight.w600,
-            height: 1.2,
-            letterSpacing: -0.4,
+            32,
+            fontWeight: FontWeight.w800,
+            height: 1.08,
+            letterSpacing: -0.8,
           ),
           headlineSmall: style(
             ink,
-            22,
-            fontWeight: FontWeight.w600,
-            height: 1.25,
-            letterSpacing: -0.2,
+            27,
+            fontWeight: FontWeight.w800,
+            height: 1.15,
+            letterSpacing: -0.5,
           ),
-          titleLarge: style(ink, 22, fontWeight: FontWeight.w600, height: 1.3),
+          titleLarge: style(ink, 24, fontWeight: FontWeight.w800, height: 1.25, letterSpacing: -0.3),
           titleMedium: style(
             ink,
-            17,
-            fontWeight: FontWeight.w600,
-            height: 1.35,
+            18,
+            fontWeight: FontWeight.w700,
+            height: 1.3,
           ),
-          titleSmall: style(ink, 16, fontWeight: FontWeight.w600, height: 1.35),
-          bodyLarge: style(ink, 16, height: 1.45),
-          bodyMedium: style(ink, 14, height: 1.45),
-          bodySmall: style(muted, 12, height: 1.45),
-          labelLarge: style(ink, 14, fontWeight: FontWeight.w600, height: 1.3),
+          titleSmall: style(ink, 17, fontWeight: FontWeight.w700, height: 1.3),
+          bodyLarge: style(ink, 16, height: 1.5),
+          bodyMedium: style(ink, 15, height: 1.5),
+          bodySmall: style(muted, 13, height: 1.5),
+          labelLarge: style(ink, 14, fontWeight: FontWeight.w700, height: 1.35),
           labelSmall: style(
             muted,
-            11,
-            fontWeight: FontWeight.w500,
+            12,
+            fontWeight: FontWeight.w600,
             height: 1.35,
-            letterSpacing: 0.4,
+            letterSpacing: 0.2,
           ),
         );
 
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
-      fontFamily: 'Poppins',
+      fontFamily: _iosFontStack,
       colorScheme: scheme,
       scaffoldBackgroundColor: surface,
       canvasColor: surface,

@@ -1004,6 +1004,7 @@ Future<String?> showTextPrompt(
   String hint = '',
   int maxLines = 1,
   String confirmLabel = 'Guardar',
+  bool allowEmpty = false,
 }) async {
   final controller = TextEditingController(text: initialValue);
   final formKey = GlobalKey<FormState>();
@@ -1020,7 +1021,7 @@ Future<String?> showTextPrompt(
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(labelText: label, hintText: hint),
           validator: (value) => (value == null || value.trim().isEmpty)
-              ? 'Preencha este campo.'
+              ? (allowEmpty ? null : 'Preencha este campo.')
               : null,
         ),
       ),

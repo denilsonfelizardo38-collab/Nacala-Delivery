@@ -821,6 +821,7 @@ class Api {
             'name': row['name'],
             'slug': row['slug'],
             'icon': row['icon'],
+            'image_url': row['image_url'],
             'establishment_count': row['establishment_count'],
           },
       ],
@@ -2037,13 +2038,17 @@ class Api {
         (body['opens_at'] as String?)?.trim() ?? establishment['opens_at'];
     final closesAt =
         (body['closes_at'] as String?)?.trim() ?? establishment['closes_at'];
+    final imageUrl = body.containsKey('image_url')
+        ? _imageUrlFromBody(body, request)
+        : (establishment['image_url'] as String?);
     db.execute(
       'UPDATE establishments SET description = ?, phone = ?, address = ?, '
-      'is_open = ?, opens_at = ?, closes_at = ? WHERE id = ?',
+      'image_url = ?, is_open = ?, opens_at = ?, closes_at = ? WHERE id = ?',
       [
         description,
         phone,
         address,
+        imageUrl,
         isOpen ? 1 : 0,
         opensAt,
         closesAt,
@@ -2552,6 +2557,7 @@ class Api {
         (body['establishment_phone'] as String?)?.trim().isNotEmpty == true
             ? (body['establishment_phone'] as String).trim()
             : phone;
+    final imageUrl = _imageUrlFromBody(body, request);
 
     var slug = normalizeText(establishmentName)
         .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
@@ -2583,9 +2589,9 @@ class Api {
       db.execute(
         '''
         INSERT INTO establishments (id, owner_user_id, category_id, name, slug,
-          description, phone, address, delivery_fee_cents, prep_minutes,
+          description, phone, address, image_url, delivery_fee_cents, prep_minutes,
           opens_at, closes_at, is_open, is_approved, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
         ''',
         [
           establishmentId,
@@ -2596,6 +2602,7 @@ class Api {
           description,
           establishmentPhone,
           address,
+          imageUrl,
           fee,
           prep,
           opensAt,
@@ -2779,18 +2786,40 @@ class Api {
           409, 'slug_taken', 'Já existe uma categoria com este nome.');
     }
     final id = newId();
+    final imageUrl = _imageUrlFromBody(body, request);
     db.execute(
-      'INSERT INTO categories (id, name, slug, icon, sort_order) '
-      'VALUES (?, ?, ?, ?, ?)',
-      [id, name, slug, icon, 99],
+      'INSERT INTO categories (id, name, slug, icon, sort_order, image_url) '
+      'VALUES (?, ?, ?, ?, ?, ?)',
+      [id, name, slug, icon, 99, imageUrl],
     );
     audit(user.id, 'category.created', 'category', id, {'name': name});
     return jsonResponse(
       {
-        'category': {'id': id, 'name': name, 'slug': slug, 'icon': icon}
+        'category': {
+          'id': id,
+          'name': name,
+          'slug': slug,
+          'icon': icon,
+          'image_url': imageUrl,
+        }
       },
       status: 201,
     );
+  }
+
+  String? _imageUrlFromBody(
+    Map<String, dynamic> body,
+    Request request, {
+    String? field = 'image_url',
+  }) {
+    final value = body[field];
+    if (value == null) return null;
+    if (value is! String) {
+      throw ApiError(422, 'invalid_image_url', 'O link da imagem é inválido.');
+    }
+    final text = value.trim();
+    if (text.isEmpty) return null;
+    return _productImageUrl(text, requestUri: request.requestedUri);
   }
 
   Future<Response> _adminUpdateCategory(Request request, String id) async {
@@ -2806,9 +2835,12 @@ class Api {
     final icon = body.containsKey('icon')
         ? (body['icon'] as String?)?.trim() ?? 'store'
         : rows.first['icon'];
+    final imageUrl = body.containsKey('image_url')
+        ? _imageUrlFromBody(body, request)
+        : (rows.first['image_url'] as String?);
     db.execute(
-      'UPDATE categories SET name = ?, icon = ? WHERE id = ?',
-      [name, icon, id],
+      'UPDATE categories SET name = ?, icon = ?, image_url = ? WHERE id = ?',
+      [name, icon, imageUrl, id],
     );
     audit(user.id, 'category.updated', 'category', id);
     return jsonResponse({'ok': true});

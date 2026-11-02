@@ -264,9 +264,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     Category category,
     List<Establishment> establishments,
   ) {
+    if (category.imageUrl != null && category.imageUrl!.isNotEmpty) {
+      return category.imageUrl;
+    }
     for (final establishment in establishments) {
-      if (establishment.categorySlug == category.slug &&
-          establishment.imageUrl != null &&
+      if (establishment.imageUrl != null &&
           establishment.imageUrl!.isNotEmpty) {
         return establishment.imageUrl;
       }

@@ -522,6 +522,7 @@ class NacalaApi {
     required int prepMinutes,
     required String opensAt,
     required String closesAt,
+    String? imageUrl,
   }) async {
     final json = await client.post(
       '/api/admin/partners',
@@ -537,6 +538,7 @@ class NacalaApi {
         if (address != null && address.isNotEmpty) 'address': address,
         if (establishmentPhone != null && establishmentPhone.isNotEmpty)
           'establishment_phone': establishmentPhone,
+        if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
         'delivery_fee_cents': deliveryFeeCents,
         'prep_minutes': prepMinutes,
         'opens_at': opensAt,
@@ -586,10 +588,13 @@ class NacalaApi {
     ];
   }
 
-  Future<Category> createCategory(String name) async {
+  Future<Category> createCategory(String name, {String? imageUrl}) async {
     final json = await client.post(
       '/api/admin/categories',
-      body: {'name': name},
+      body: {
+        'name': name,
+        if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
+      },
     );
     return Category.fromJson(json['category'] as Map<String, dynamic>);
   }

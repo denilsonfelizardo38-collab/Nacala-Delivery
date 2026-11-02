@@ -71,6 +71,7 @@ class Category {
     required this.slug,
     required this.icon,
     this.establishmentCount = 0,
+    this.imageUrl,
   });
 
   final String id;
@@ -78,6 +79,7 @@ class Category {
   final String slug;
   final String icon;
   final int establishmentCount;
+  final String? imageUrl;
 
   factory Category.fromJson(Map<String, dynamic> json) => Category(
     id: _str(json['id']),
@@ -85,6 +87,7 @@ class Category {
     slug: _str(json['slug']),
     icon: _str(json['icon']),
     establishmentCount: _int(json['establishment_count']),
+    imageUrl: json['image_url'] as String?,
   );
 }
 
