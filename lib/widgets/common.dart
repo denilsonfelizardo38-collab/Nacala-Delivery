@@ -437,6 +437,7 @@ class NetworkThumb extends StatelessWidget {
     this.size = 64,
     this.radius = 16,
     this.color,
+    this.categorySlug,
   });
 
   final String? imageUrl;
@@ -445,16 +446,30 @@ class NetworkThumb extends StatelessWidget {
   final double radius;
   final Color? color;
 
+  /// Categoria do estabelecimento/produto: quando indicada, o substituto
+  /// gráfico usa o gradiente da categoria (ver [BrandedCover]).
+  final String? categorySlug;
+
   @override
   Widget build(BuildContext context) {
     final fallback = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color ?? AppColors.primarySoft,
         borderRadius: BorderRadius.circular(radius),
+        // Sem cor explícita, o substituto usa o gradiente da categoria
+        // (capa premium), apresentando-se como escolha de design e não
+        // como foto em falta.
+        color: color,
+        gradient: color == null
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: BrandedCover.gradientFor(categorySlug),
+              )
+            : null,
       ),
-      child: Icon(icon, color: AppColors.primary, size: size * 0.42),
+      child: Icon(icon, color: Colors.white, size: size * 0.42),
     );
     final url = imageUrl;
     if (url == null || url.trim().isEmpty) return fallback;
@@ -491,6 +506,102 @@ int imageCacheWidthFor(BuildContext context, double logicalWidth) =>
     (logicalWidth * (MediaQuery.maybeDevicePixelRatioOf(context) ?? 1) * 1.15)
         .round()
         .clamp(320, 1280);
+
+/// Capa "brand" para substituir a fotografia em falta de um estabelecimento:
+/// gradiente associado à categoria, círculos decorativos e o ícone num selo
+/// translúcido. As fotografias dos parceiros são carregadas pelos próprios
+/// parceiros; enquanto não existirem, a capa apresenta-se como escolha de
+/// design coesa — nunca como erro.
+class BrandedCover extends StatelessWidget {
+  const BrandedCover({
+    super.key,
+    this.categorySlug,
+    this.iconSize = 42,
+    this.decorations = true,
+  });
+
+  final String? categorySlug;
+
+  /// Tamanho do ícone central; o selo de vidro e os círculos escalam na
+  /// mesma base.
+  final double iconSize;
+  final bool decorations;
+
+  /// Duas cores por categoria, com contraste garantido sobre o branco
+  /// translúcido usado no selo e nos círculos decorativos.
+  static const _palettes = <String, (Color, Color)>{
+    'restaurantes': (Color(0xFFFFB067), Color(0xFFFF7900)),
+    'mercados': (Color(0xFF5FC49A), Color(0xFF12836B)),
+    'farmacias': (Color(0xFF66C2B4), Color(0xFF137D74)),
+    'lojas': (Color(0xFF98A6F6), Color(0xFF4551C4)),
+    'padarias': (Color(0xFFFFC386), Color(0xFFB96F0B)),
+    'bebidas': (Color(0xFF7BCDF2), Color(0xFF1776A0)),
+    'talhos': (Color(0xFFF29E9E), Color(0xFFA93939)),
+    'peixarias': (Color(0xFF85B8F2), Color(0xFF2A5EA6)),
+  };
+
+  static List<Color> gradientFor(String? slug) {
+    final palette =
+        _palettes[slug ?? ''] ?? const (Color(0xFFFFB067), Color(0xFFFF7900));
+    return [palette.$1, palette.$2];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradientFor(categorySlug),
+        ),
+      ),
+      child: Stack(
+        children: [
+          if (decorations) ...[
+            Positioned(
+              top: -iconSize * 0.75,
+              right: -iconSize * 0.45,
+              child: _ring(iconSize * 2.4, 0.10),
+            ),
+            Positioned(
+              bottom: -iconSize * 0.85,
+              left: -iconSize * 0.55,
+              child: _ring(iconSize * 2.0, 0.08),
+            ),
+          ],
+          Center(
+            child: Container(
+              width: iconSize * 1.65,
+              height: iconSize * 1.65,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.34)),
+              ),
+              child: Icon(
+                categoryIconFor(categorySlug ?? 'store'),
+                color: Colors.white,
+                size: iconSize,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ring(double size, double alpha) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: alpha),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
 
 class StatusBadge extends StatelessWidget {
   const StatusBadge({super.key, required this.status, this.label});

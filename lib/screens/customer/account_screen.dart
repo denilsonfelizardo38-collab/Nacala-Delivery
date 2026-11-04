@@ -42,6 +42,24 @@ class _AccountScreenState extends State<AccountScreen> {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
+  /// Explica que as áreas de parceiro, estafeta e administração usam
+  /// contas próprias e permite sair da sessão atual para trocar.
+  Future<void> _openAreaExchange() async {
+    final state = AppScope.of(context);
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Trocar de área',
+      message:
+          'As áreas de parceiro, estafeta e administração usam contas '
+          'próprias. Termina esta sessão e, no ecrã de entrada, toca em '
+          '«Contas para explorar» para entrar com uma dessas contas.',
+      confirmLabel: 'Terminar sessão',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    await state.logout();
+  }
+
   Future<void> _editProfile() async {
     final state = AppScope.of(context);
     final user = state.user;
@@ -378,6 +396,13 @@ class _AccountScreenState extends State<AccountScreen> {
                 title: 'Política de privacidade',
                 subtitle: 'Como tratamos os teus dados',
                 onTap: () => _open(const PrivacyScreen()),
+              ),
+              const SizedBox(height: 18),
+              _LinkCard(
+                icon: Icons.switch_account_rounded,
+                title: 'Área de parceiro, estafeta ou administração',
+                subtitle: 'Entra com a conta própria da tua área',
+                onTap: _openAreaExchange,
               ),
 
               const SizedBox(height: 22),

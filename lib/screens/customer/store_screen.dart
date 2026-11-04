@@ -566,12 +566,8 @@ class _StoreHeader extends StatelessWidget {
     );
   }
 
-  Widget _storeImageFallback() => const ColoredBox(
-    color: AppColors.primarySoft,
-    child: Center(
-      child: Icon(Icons.storefront_rounded, color: AppColors.primary, size: 58),
-    ),
-  );
+  Widget _storeImageFallback() =>
+      BrandedCover(categorySlug: establishment.categorySlug, iconSize: 58);
 }
 
 class _HeaderMeta extends StatelessWidget {

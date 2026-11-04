@@ -180,24 +180,10 @@ class _AppShellState extends State<AppShell> {
           }
           return Scaffold(
             body: destinations[_index].screen,
-            bottomNavigationBar: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                boxShadow: [AppColors.cardShadow],
-              ),
-              child: NavigationBar(
-                selectedIndex: _index,
-                onDestinationSelected: (value) =>
-                    setState(() => _index = value),
-                destinations: [
-                  for (final destination in destinations)
-                    NavigationDestination(
-                      icon: Icon(destination.icon),
-                      selectedIcon: Icon(destination.selectedIcon),
-                      label: destination.label,
-                    ),
-                ],
-              ),
+            bottomNavigationBar: _AppBottomBar(
+              destinations: destinations,
+              index: _index,
+              onSelected: (value) => setState(() => _index = value),
             ),
           );
         }
@@ -439,6 +425,118 @@ class _Sidebar extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Barra de navegação inferior própria do Nacala Delivery: item ativo num
+/// selo laranja com transição animada, tipografia consistente com os
+/// cartões e semas discretas — mais coesa que o [NavigationBar] material
+/// e igualmente leve em Android de gama baixa.
+class _AppBottomBar extends StatelessWidget {
+  const _AppBottomBar({
+    required this.destinations,
+    required this.index,
+    required this.onSelected,
+  });
+
+  final List<_Destination> destinations;
+  final int index;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: const [AppColors.cardShadow],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(height: 1, color: AppColors.border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 10, 6, 7),
+              child: Row(
+                children: [
+                  for (var i = 0; i < destinations.length; i++)
+                    Expanded(
+                      child: _BottomBarItem(
+                        destination: destinations[i],
+                        selected: i == index,
+                        onTap: () => onSelected(i),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomBarItem extends StatelessWidget {
+  const _BottomBarItem({
+    required this.destination,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _Destination destination;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 210),
+                curve: Curves.easeOut,
+                width: selected ? 58 : 46,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.primarySoft : Colors.transparent,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(
+                  selected ? destination.selectedIcon : destination.icon,
+                  size: selected ? 20 : 21,
+                  color: selected ? AppColors.primary : AppColors.muted,
+                ),
+              ),
+              const SizedBox(height: 3),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 210),
+                style: TextStyle(
+                  fontSize: selected ? 11 : 10.5,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  color: selected ? AppColors.primaryPressed : AppColors.muted,
+                  letterSpacing: selected ? 0.1 : 0,
+                ),
+                child: Text(
+                  destination.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

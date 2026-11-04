@@ -396,15 +396,6 @@ class _CategoryCard extends StatelessWidget {
   }
 
   Widget _imageFallback() {
-    return ColoredBox(
-      color: AppColors.primarySoft,
-      child: Center(
-        child: Icon(
-          categoryIconFor(category.icon),
-          size: 36,
-          color: AppColors.primary,
-        ),
-      ),
-    );
+    return BrandedCover(categorySlug: category.slug, iconSize: 38);
   }
 }

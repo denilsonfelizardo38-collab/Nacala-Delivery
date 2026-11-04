@@ -594,7 +594,155 @@ class _LoginScreenState extends State<LoginScreen> {
                       );
                     },
             ),
+
+            const SizedBox(height: 12),
+
+            // CONTAS DE EXPLORAÇÃO (cliente, parceiro, estafeta, admin).
+            _buildDemoAccountsEntry(),
           ],
+        ),
+      ),
+    );
+  }
+
+  // --------------------------------------------------
+  // CONTAS DE DEMONSTRAÇÃO
+  // --------------------------------------------------
+
+  Widget _buildDemoAccountsEntry() {
+    return TextButton.icon(
+      onPressed: _submitting ? null : _showDemoAccountsSheet,
+      icon: const Icon(Icons.explore_outlined, size: 16),
+      label: const Text('Contas para explorar'),
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.muted,
+        minimumSize: const Size(44, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  /// Folha com as contas semeada pelo servidor. Tocar em «Usar» preenche
+  /// o formulário e entra — assim o utilizador descobre as áreas de
+  /// parceiro, estafeta e administração que existem na plataforma.
+  Future<void> _showDemoAccountsSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Contas para explorar',
+                style: TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                'O servidor cria estas contas de demonstração. Toca em '
+                '«Usar» para preencher o formulário e entrar.',
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11.5,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 14),
+              for (final account in _demoAccounts)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(11, 9, 5, 9),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: const BoxDecoration(
+                            color: AppColors.primarySoft,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            account.icon,
+                            color: AppColors.primary,
+                            size: 19,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                account.roleLabel,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                account.email,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.muted,
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _identifier.text = account.email;
+                              _password.text = account.password;
+                              _error = null;
+                            });
+                            Navigator.of(sheetContext).pop();
+                            _submit();
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.primaryPressed,
+                            textStyle: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          child: const Text('Usar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              const Text(
+                'No plano gratuito do Render, os dados de demonstração são '
+                'repostos a cada reinício do serviço.',
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 9.5,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -794,3 +942,41 @@ class _ErrorBanner extends StatelessWidget {
     );
   }
 }
+
+/// Contas de demonstração criadas pelo seed do servidor (dados oficiais
+/// da plataforma para testar cada área com um toque).
+class _DemoAccount {
+  const _DemoAccount(this.roleLabel, this.email, this.password, this.icon);
+
+  final String roleLabel;
+  final String email;
+  final String password;
+  final IconData icon;
+}
+
+const _demoAccounts = [
+  _DemoAccount(
+    'Cliente',
+    'cliente@nacala.co.mz',
+    'Cliente@1234',
+    Icons.person_rounded,
+  ),
+  _DemoAccount(
+    'Parceiro · Cantinho da Baía',
+    'cantinho@nacala.co.mz',
+    'Parceiro@1234',
+    Icons.storefront_rounded,
+  ),
+  _DemoAccount(
+    'Estafeta',
+    'estafeta@nacala.co.mz',
+    'Estafeta@1234',
+    Icons.delivery_dining_rounded,
+  ),
+  _DemoAccount(
+    'Administração',
+    'admin@nacala.co.mz',
+    'Admin@1234',
+    Icons.shield_rounded,
+  ),
+];

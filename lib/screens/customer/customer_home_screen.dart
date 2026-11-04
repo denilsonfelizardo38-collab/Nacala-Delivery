@@ -757,24 +757,17 @@ class _HomeStoreCard extends StatelessWidget {
                 top: Radius.circular(21),
               ),
               child: imageUrl == null || imageUrl.isEmpty
-                  ? ColoredBox(
-                      color: AppColors.primarySoft,
-                      child: Icon(
-                        categoryIconFor(establishment.categorySlug),
-                        color: AppColors.primary,
-                        size: 42,
-                      ),
+                  ? BrandedCover(
+                      categorySlug: establishment.categorySlug,
+                      iconSize: 42,
                     )
                   : Image.network(
                       imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => ColoredBox(
-                        color: AppColors.primarySoft,
-                        child: Icon(
-                          categoryIconFor(establishment.categorySlug),
-                          color: AppColors.primary,
-                          size: 42,
-                        ),
+                      cacheWidth: imageCacheWidthFor(context, 320),
+                      errorBuilder: (_, _, _) => BrandedCover(
+                        categorySlug: establishment.categorySlug,
+                        iconSize: 42,
                       ),
                     ),
             ),
@@ -804,6 +797,17 @@ class _HomeStoreCard extends StatelessWidget {
                 Text(
                   establishment.categoryName,
                   style: TextStyle(color: context.mutedColor, fontSize: 11),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  establishment.address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: context.mutedColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 7),
                 Wrap(
@@ -914,25 +918,17 @@ class _PopularCard extends StatelessWidget {
                   top: Radius.circular(20),
                 ),
                 child: imageUrl == null || imageUrl.isEmpty
-                    ? ColoredBox(
-                        color: AppColors.primarySoft,
-                        child: Icon(
-                          categoryIconFor(establishment.categorySlug),
-                          color: AppColors.primary,
-                          size: 34,
-                        ),
+                    ? BrandedCover(
+                        categorySlug: establishment.categorySlug,
+                        iconSize: 34,
                       )
                     : Image.network(
                         imageUrl,
                         fit: BoxFit.cover,
                         cacheWidth: imageCacheWidthFor(context, 196),
-                        errorBuilder: (_, _, _) => ColoredBox(
-                          color: AppColors.primarySoft,
-                          child: Icon(
-                            categoryIconFor(establishment.categorySlug),
-                            color: AppColors.primary,
-                            size: 34,
-                          ),
+                        errorBuilder: (_, _, _) => BrandedCover(
+                          categorySlug: establishment.categorySlug,
+                          iconSize: 34,
                         ),
                       ),
               ),
