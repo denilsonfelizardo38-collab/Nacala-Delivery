@@ -64,11 +64,7 @@ class NacalaApi {
   }) async {
     final json = await client.patch(
       '/api/auth/profile',
-      body: {
-        'name': name,
-        'phone': phone,
-        'email': ?email,
-      },
+      body: {'name': name, 'phone': phone, 'email': ?email},
     );
     return UserAccount.fromJson(json['user'] as Map<String, dynamic>);
   }

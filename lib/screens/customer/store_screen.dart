@@ -22,6 +22,9 @@ class _StoreScreenState extends State<StoreScreen> {
   bool _initialized = false;
   int _selectedTab = 0;
   Future<EstablishmentDetail>? _future;
+  final _menuSearch = TextEditingController();
+  String _menuQuery = '';
+  String? _menuCategory;
 
   @override
   void didChangeDependencies() {
@@ -29,6 +32,12 @@ class _StoreScreenState extends State<StoreScreen> {
     if (_initialized) return;
     _initialized = true;
     _future = AppScope.of(context).api.establishment(widget.establishmentId);
+  }
+
+  @override
+  void dispose() {
+    _menuSearch.dispose();
+    super.dispose();
   }
 
   void _reload() {
@@ -105,10 +114,22 @@ class _StoreScreenState extends State<StoreScreen> {
 
   Widget _buildContent(EstablishmentDetail detail) {
     final establishment = detail.establishment;
+    final query = _menuQuery.toLowerCase();
     final groups = <String, List<Product>>{};
     for (final product in detail.products) {
+      if (query.isNotEmpty &&
+          !(product.name.toLowerCase().contains(query) ||
+              product.description.toLowerCase().contains(query))) {
+        continue;
+      }
+      if (_menuCategory != null && product.category != _menuCategory) {
+        continue;
+      }
       groups.putIfAbsent(product.category, () => []).add(product);
     }
+    final categories = {
+      for (final product in detail.products) product.category,
+    }.toList()..sort();
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -165,31 +186,71 @@ class _StoreScreenState extends State<StoreScreen> {
                 title: 'Menu em preparação',
                 message: 'Este parceiro ainda não publicou produtos.',
               )
-            else
-              for (final entry in groups.entries) ...[
-                _MenuSectionHeading(
-                  title: entry.key,
-                  count: entry.value.length,
-                ),
-                const SizedBox(height: 11),
-                for (final product in entry.value)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _ProductCard(
-                      product: product,
-                      enabled: establishment.isOpen && product.isAvailable,
-                      onAdd: () => _add(product, establishment),
-                      disabledNotice: !product.isAvailable
-                          ? 'Este produto está indisponível neste momento.'
-                          : !establishment.isOpen
-                          ? '${establishment.name} está '
-                                'encerrado (${establishment.opensAt}–'
-                                '${establishment.closesAt}). Volte mais tarde.'
-                          : null,
-                    ),
+            else ...[
+              SearchField(
+                controller: _menuSearch,
+                hintText: 'Pesquisar neste menu...',
+                onChanged: (value) => setState(() => _menuQuery = value.trim()),
+              ),
+              const SizedBox(height: 12),
+              if (categories.length > 1)
+                SizedBox(
+                  height: 38,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: categories.length + 1,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    padding: EdgeInsets.zero,
+                    itemBuilder: (context, index) {
+                      final isAll = index == 0;
+                      final category = isAll ? null : categories[index - 1];
+                      final selected = isAll
+                          ? _menuCategory == null
+                          : _menuCategory == category;
+                      return _MenuChip(
+                        label: isAll ? 'Todos' : category!,
+                        selected: selected,
+                        onTap: () => setState(
+                          () => _menuCategory = isAll ? null : category,
+                        ),
+                      );
+                    },
                   ),
-                const SizedBox(height: 12),
-              ],
+                ),
+              const SizedBox(height: 14),
+              if (groups.isEmpty)
+                const EmptyState(
+                  icon: Icons.search_off_rounded,
+                  title: 'Sem resultados',
+                  message: 'Nenhum produto corresponde à pesquisa ou filtro.',
+                  compact: true,
+                )
+              else
+                for (final entry in groups.entries) ...[
+                  _MenuSectionHeading(
+                    title: entry.key,
+                    count: entry.value.length,
+                  ),
+                  const SizedBox(height: 11),
+                  for (final product in entry.value)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _ProductCard(
+                        product: product,
+                        enabled: establishment.isOpen && product.isAvailable,
+                        onAdd: () => _add(product, establishment),
+                        disabledNotice: !product.isAvailable
+                            ? 'Este produto está indisponível neste momento.'
+                            : !establishment.isOpen
+                            ? '${establishment.name} está '
+                                  'encerrado (${establishment.opensAt}–'
+                                  '${establishment.closesAt}). Volte mais tarde.'
+                            : null,
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                ],
+            ],
           ],
           if (_selectedTab == 1) ...[
             _MenuSectionHeading(
@@ -725,44 +786,62 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (quantity > 0)
-                      QuantityStepper(
-                        quantity: quantity,
-                        onIncrement: () => state.increment(product.id),
-                        onDecrement: () => state.decrement(product.id),
-                      )
-                    else
-                      SizedBox(
-                        height: 44,
-                        child: FilledButton.icon(
-                          onPressed: enabled
-                              ? onAdd
-                              : () => showAppSnack(
-                                  context,
-                                  notice ?? 'Indisponível agora.',
-                                  error: true,
-                                ),
-                          icon: const Icon(Icons.add_rounded, size: 17),
-                          label: const Text('Adicionar'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: AppColors.border,
-                            disabledForegroundColor: AppColors.muted,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 11),
-                            minimumSize: const Size(0, 38),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(11),
-                            ),
-                            textStyle: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOut,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(
+                            begin: 0.92,
+                            end: 1,
+                          ).animate(animation),
+                          child: child,
                         ),
                       ),
+                      child: quantity > 0
+                          ? QuantityStepper(
+                              key: const ValueKey('stepper'),
+                              quantity: quantity,
+                              onIncrement: () => state.increment(product.id),
+                              onDecrement: () => state.decrement(product.id),
+                            )
+                          : SizedBox(
+                              key: const ValueKey('add-button'),
+                              height: 44,
+                              child: FilledButton.icon(
+                                onPressed: enabled
+                                    ? onAdd
+                                    : () => showAppSnack(
+                                        context,
+                                        notice ?? 'Indisponível agora.',
+                                        error: true,
+                                      ),
+                                icon: const Icon(Icons.add_rounded, size: 17),
+                                label: const Text('Adicionar'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor: AppColors.border,
+                                  disabledForegroundColor: AppColors.muted,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 11,
+                                  ),
+                                  minimumSize: const Size(0, 44),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                  textStyle: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                    ),
                   ],
                 ),
               ],
@@ -1035,6 +1114,51 @@ class _CartBar extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Chip de filtro das secções do menu (Horizontal). Selecionado usa o
+/// laranja da marca, tal como os chips de categoria da página inicial.
+class _MenuChip extends StatelessWidget {
+  const _MenuChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.primary : Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      shape: StadiumBorder(
+        side: BorderSide(
+          color: selected ? AppColors.primary : AppColors.border,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
+              style: TextStyle(
+                color: selected ? Colors.white : AppColors.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ),
       ),

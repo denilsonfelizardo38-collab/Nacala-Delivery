@@ -458,6 +458,13 @@ class NetworkThumb extends StatelessWidget {
     );
     final url = imageUrl;
     if (url == null || url.trim().isEmpty) return fallback;
+    // Decodifica o ficheiro à dimensão real de apresentação (com margem
+    // para o devicePixelRatio): essencial em telemóveis de gama baixa,
+    // onde fotografias originais (1200+ px) estouram a memória.
+    final cacheWidth =
+        (size * (MediaQuery.maybeDevicePixelRatioOf(context) ?? 1) * 1.35)
+            .round()
+            .clamp(96, 1024);
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Image.network(
@@ -465,6 +472,7 @@ class NetworkThumb extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.cover,
+        cacheWidth: cacheWidth,
         errorBuilder: (_, _, _) => fallback,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
@@ -474,6 +482,15 @@ class NetworkThumb extends StatelessWidget {
     );
   }
 }
+
+/// Largura de cache para imagens grandes (capas de estabelecimento).
+/// As fotos dos parceiros podem ter até ~1600 px; decodificá-las na
+/// dimensão apresentada reduz o uso de memória em Android Android de
+/// gama baixa sem perda visual.
+int imageCacheWidthFor(BuildContext context, double logicalWidth) =>
+    (logicalWidth * (MediaQuery.maybeDevicePixelRatioOf(context) ?? 1) * 1.15)
+        .round()
+        .clamp(320, 1280);
 
 class StatusBadge extends StatelessWidget {
   const StatusBadge({super.key, required this.status, this.label});

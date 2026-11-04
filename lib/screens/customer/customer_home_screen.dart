@@ -333,28 +333,67 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     itemBuilder: (context, index) {
                       final isAll = index == 0;
                       final category = isAll ? null : visible[index - 1];
-                        final selected = isAll
-                            ? _selectedCategory == null
-                            : _selectedCategory == category!.slug;
-                        return _CategoryChip(
-                          label: isAll ? 'Todas' : category!.name,
-                          icon: isAll
-                              ? Icons.grid_view_rounded
-                              : categoryIconFor(category!.icon),
-                          imageUrl: isAll
-                              ? null
-                              : _categoryImage(
-                                  category!,
-                                  establishmentsSnapshot.data ?? const [],
-                                ),
-                          selected: selected,
-                          onTap: () =>
-                              _selectCategory(isAll ? null : category!.slug),
-                        );
-                      },
-                    ),
+                      final selected = isAll
+                          ? _selectedCategory == null
+                          : _selectedCategory == category!.slug;
+                      return _CategoryChip(
+                        label: isAll ? 'Todas' : category!.name,
+                        icon: isAll
+                            ? Icons.grid_view_rounded
+                            : categoryIconFor(category!.icon),
+                        imageUrl: isAll
+                            ? null
+                            : _categoryImage(
+                                category!,
+                                establishmentsSnapshot.data ?? const [],
+                              ),
+                        selected: selected,
+                        onTap: () =>
+                            _selectCategory(isAll ? null : category!.slug),
+                      );
+                    },
                   ),
-                );
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+          child: const SectionTitle(
+            title: 'Mais bem avaliados',
+            subtitle: 'Populares entre os utilizadores · avaliações reais',
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: FutureBuilder<List<Establishment>>(
+            future: _allEstablishmentsFuture,
+            builder: (context, snapshot) {
+              final rated = [
+                for (final e in (snapshot.data ?? const <Establishment>[]))
+                  if (e.rating > 0) e,
+              ]..sort((a, b) => b.rating.compareTo(a.rating));
+              if (rated.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return SizedBox(
+                height: 206,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.zero,
+                  itemCount: rated.length.clamp(0, 6),
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) => _PopularCard(
+                    establishment: rated[index],
+                    onTap: () => _openStore(rated[index].id),
+                  ),
+                ),
+              );
             },
           ),
         ),
@@ -841,6 +880,105 @@ class _ProductResultTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Cartão compacto horizontal da secção "Mais bem avaliados". Mostra
+/// apenas dados que existem no servidor (avaliação e taxa de entrega).
+class _PopularCard extends StatelessWidget {
+  const _PopularCard({required this.establishment, required this.onTap});
+
+  final Establishment establishment;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = establishment.imageUrl;
+    return AppCard(
+      padding: EdgeInsets.zero,
+      radius: 20,
+      onTap: onTap,
+      child: SizedBox(
+        width: 196,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 104,
+              width: double.infinity,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                child: imageUrl == null || imageUrl.isEmpty
+                    ? ColoredBox(
+                        color: AppColors.primarySoft,
+                        child: Icon(
+                          categoryIconFor(establishment.categorySlug),
+                          color: AppColors.primary,
+                          size: 34,
+                        ),
+                      )
+                    : Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        cacheWidth: imageCacheWidthFor(context, 196),
+                        errorBuilder: (_, _, _) => ColoredBox(
+                          color: AppColors.primarySoft,
+                          child: Icon(
+                            categoryIconFor(establishment.categorySlug),
+                            color: AppColors.primary,
+                            size: 34,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    establishment.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    establishment.categoryName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.mutedColor, fontSize: 9),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      StarRating(rating: establishment.rating),
+                      const Spacer(),
+                      Text(
+                        formatMoney(establishment.deliveryFeeCents),
+                        style: TextStyle(
+                          color: context.mutedColor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

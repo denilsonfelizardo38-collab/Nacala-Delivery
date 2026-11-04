@@ -17,6 +17,8 @@ import '../../widgets/address_dialog.dart';
 import '../../widgets/common.dart';
 import '../../widgets/password_dialog.dart';
 import 'favorites_screen.dart';
+import 'notifications_screen.dart';
+import 'support_info_screen.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -34,6 +36,10 @@ class _AccountScreenState extends State<AccountScreen> {
         showAppSnack(context, error.message, error: true);
       }
     }
+  }
+
+  void _open(Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   Future<void> _editProfile() async {
@@ -323,57 +329,55 @@ class _AccountScreenState extends State<AccountScreen> {
 
               const SizedBox(height: 22),
 
-              AppCard(
-                padding: const EdgeInsets.all(13),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const FavoritesScreen(),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primarySoft,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.favorite_rounded,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Favoritos',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Restaurantes que guardaste',
-                            style: TextStyle(
-                              color: AppColors.muted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.muted,
-                    ),
-                  ],
-                ),
+              _LinkCard(
+                icon: Icons.favorite_rounded,
+                title: 'Favoritos',
+                subtitle: 'Restaurantes que guardaste',
+                onTap: () => _open(const FavoritesScreen()),
+              ),
+
+              const SizedBox(height: 22),
+
+              SectionTitle(
+                title: 'Preferências e ajuda',
+                subtitle: 'Notificações, pagamentos e informação',
+              ),
+
+              const SizedBox(height: 12),
+
+              _LinkCard(
+                icon: Icons.notifications_none_rounded,
+                title: 'Notificações',
+                subtitle: 'O que aconteceu nos teus pedidos',
+                onTap: () => _open(const NotificationsScreen()),
+              ),
+              const SizedBox(height: 10),
+              _LinkCard(
+                icon: Icons.payments_outlined,
+                title: 'Métodos de pagamento',
+                subtitle: 'M-Pesa, e-Mola e dinheiro na entrega',
+                onTap: () => _open(const PaymentMethodsScreen()),
+              ),
+              const SizedBox(height: 10),
+              _LinkCard(
+                icon: Icons.help_outline_rounded,
+                title: 'Ajuda e suporte',
+                subtitle: 'Perguntas frequentes e contacto',
+                onTap: () => _open(const HelpSupportScreen()),
+              ),
+              const SizedBox(height: 10),
+              _LinkCard(
+                icon: Icons.article_outlined,
+                title: 'Termos e condições',
+                subtitle: 'Regras de uso da plataforma',
+                onTap: () => _open(const TermsScreen()),
+              ),
+              const SizedBox(height: 10),
+              _LinkCard(
+                icon: Icons.shield_outlined,
+                title: 'Política de privacidade',
+                subtitle: 'Como tratamos os teus dados',
+                onTap: () => _open(const PrivacyScreen()),
               ),
 
               const SizedBox(height: 22),
@@ -765,6 +769,62 @@ class _AppInfoCard extends StatelessWidget {
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
         ),
         subtitle: const Text(appVersion, style: TextStyle(fontSize: 11)),
+      ),
+    );
+  }
+}
+
+class _LinkCard extends StatelessWidget {
+  const _LinkCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(13),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(
+              color: AppColors.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+        ],
       ),
     );
   }
