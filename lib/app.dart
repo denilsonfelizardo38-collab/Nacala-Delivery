@@ -26,6 +26,7 @@ import 'screens/shell.dart';
 import 'screens/splash_screen.dart';
 import 'state/app_scope.dart';
 import 'state/app_state.dart';
+import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 
 class NacalaDeliveryApp extends StatefulWidget {
@@ -39,11 +40,28 @@ class NacalaDeliveryApp extends StatefulWidget {
 
 class _NacalaDeliveryAppState extends State<NacalaDeliveryApp> {
   bool _ready = false;
+  late ThemeSetting _themeSetting = widget.state.themeSetting;
 
   @override
   void initState() {
     super.initState();
+    widget.state.addListener(_onStateChange);
     _start();
+  }
+
+  @override
+  void dispose() {
+    widget.state.removeListener(_onStateChange);
+    super.dispose();
+  }
+
+  /// Reconstrói a raiz apenas quando a preferência de tema muda — as
+  /// restantes notificações (carrinho, sessão) não devem tocar no MaterialApp.
+  void _onStateChange() {
+    final setting = widget.state.themeSetting;
+    if (setting != _themeSetting) {
+      setState(() => _themeSetting = setting);
+    }
   }
 
   Future<void> _start() async {
@@ -56,22 +74,37 @@ class _NacalaDeliveryAppState extends State<NacalaDeliveryApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = switch (_themeSetting) {
+      ThemeSetting.system => ThemeMode.system,
+      ThemeSetting.light => ThemeMode.light,
+      ThemeSetting.dark => ThemeMode.dark,
+    };
+    final isDark = switch (_themeSetting) {
+      ThemeSetting.system =>
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark,
+      ThemeSetting.light => false,
+      ThemeSetting.dark => true,
+    };
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Colors.white,
-      ),
+      value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(
+            statusBarColor: Colors.transparent,
+            systemNavigationBarColor: isDark
+                ? AppColors.darkBg
+                : Colors.white,
+          ),
       child: AppScope(
         state: widget.state,
         child: MaterialApp(
           title: 'Nacala Delivery',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
-          // A identidade visual é definida para o tema claro (referências).
-          // O tema escuro continua disponível em `AppTheme.dark()` para uma
-          // futura preferência do utilizador, mas não é aplicado
-          // automaticamente pelo sistema.
-          themeMode: ThemeMode.light,
+          darkTheme: AppTheme.dark(),
+          // A identidade visual é definida para o tema claro (referências),
+          // mas o utilizador escolhe o tema em «Conta › Tema da aplicação».
+          // A opção «Sistema» segue a definição do telemóvel.
+          themeMode: themeMode,
           home: _RootGate(ready: _ready),
           onGenerateRoute: _generateRoute,
           onUnknownRoute: (settings) => MaterialPageRoute(

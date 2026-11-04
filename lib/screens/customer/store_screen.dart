@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 
 import '../../core/formatters.dart';
 import '../../models/models.dart';
@@ -299,7 +300,7 @@ class _StoreTabStrip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.isDarkMode ? AppColors.darkElevated : AppColors.surface,
         borderRadius: BorderRadius.circular(15),
       ),
       child: Row(
@@ -318,13 +319,15 @@ class _StoreTabStrip extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: selectedIndex == index
-                        ? Colors.white
+                        ? (context.isDarkMode ? AppColors.darkCard : Colors.white)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(11),
                     boxShadow: selectedIndex == index
                         ? [
                             BoxShadow(
-                              color: AppColors.ink.withValues(alpha: 0.07),
+                              color: Colors.black.withValues(
+                                alpha: context.isDarkMode ? 0.3 : 0.07,
+                              ),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -338,8 +341,8 @@ class _StoreTabStrip extends StatelessWidget {
                         _tabs[index].$2,
                         size: 15,
                         color: selectedIndex == index
-                            ? AppColors.primaryPressed
-                            : AppColors.muted,
+                            ? context.accentColor
+                            : context.mutedColor,
                       ),
                       const SizedBox(width: 5),
                       Flexible(
@@ -349,8 +352,8 @@ class _StoreTabStrip extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: selectedIndex == index
-                                ? AppColors.ink
-                                : AppColors.muted,
+                                ? context.inkColor
+                                : context.mutedColor,
                             fontSize: 11,
                             fontWeight: selectedIndex == index
                                 ? FontWeight.w700
@@ -1133,11 +1136,11 @@ class _MenuChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primary : Colors.white,
+      color: selected ? AppColors.primary : context.cardColor,
       borderRadius: BorderRadius.circular(999),
       shape: StadiumBorder(
         side: BorderSide(
-          color: selected ? AppColors.primary : AppColors.border,
+          color: selected ? AppColors.primary : context.lineColor,
         ),
       ),
       child: InkWell(
@@ -1150,7 +1153,7 @@ class _MenuChip extends StatelessWidget {
               label,
               maxLines: 1,
               style: TextStyle(
-                color: selected ? Colors.white : AppColors.muted,
+                color: selected ? Colors.white : context.mutedColor,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),

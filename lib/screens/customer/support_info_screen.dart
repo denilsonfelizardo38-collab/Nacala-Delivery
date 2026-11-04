@@ -264,19 +264,24 @@ class _OptionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isInDark = context.isDarkMode;
     final (bg, fg, badge) = switch (tone) {
-      _RowTone.active => (AppColors.successSoft, AppColors.greenInk, 'ATIVO'),
+      _RowTone.active => (
+        isInDark ? AppColors.darkElevated : AppColors.successSoft,
+        context.successColor,
+        'ATIVO',
+      ),
       _RowTone.pending => (
-        AppColors.primarySoft,
-        AppColors.primaryPressed,
+        context.primarySoftColor,
+        context.accentColor,
         'EM BREVE',
       ),
     };
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.border),
+        color: isInDark ? AppColors.darkCard : Colors.white,
+        border: Border.all(color: context.lineColor),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -348,8 +353,8 @@ class _InfoParagraph extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.border),
+        color: context.cardColor,
+        border: Border.all(color: context.lineColor),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(

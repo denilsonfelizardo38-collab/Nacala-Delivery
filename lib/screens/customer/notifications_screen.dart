@@ -4,6 +4,7 @@ import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import 'tracking_screen.dart';
 
@@ -131,16 +132,28 @@ class _NotificationTile extends StatelessWidget {
     _ => Icons.notifications_rounded,
   };
 
-  (Color, Color) _colorsFor(String status) {
+  (Color, Color) _colorsFor(BuildContext context, String status) {
     switch (status) {
       case 'delivered' || 'completed' || 'accepted':
-        return (AppColors.successSoft, AppColors.greenInk);
+        return (
+          context.isDarkMode ? AppColors.darkElevated : AppColors.successSoft,
+          context.successColor,
+        );
       case 'cancelled' || 'rejected' || 'declined':
-        return (AppColors.dangerSoft, AppColors.dangerInk);
+        return (
+          context.isDarkMode ? AppColors.darkElevated : AppColors.dangerSoft,
+          context.dangerColor,
+        );
       case 'pending' || 'preparing' || 'ready':
-        return (AppColors.warningSoft, AppColors.amberInk);
+        return (
+          context.isDarkMode ? AppColors.darkElevated : AppColors.warningSoft,
+          context.warningColor,
+        );
       default:
-        return (AppColors.primarySoft, AppColors.primaryPressed);
+        return (
+          context.primarySoftColor,
+          context.accentColor,
+        );
     }
   }
 
@@ -148,14 +161,14 @@ class _NotificationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final event = item.event;
     final order = item.order;
-    final (background, foreground) = _colorsFor(event.status);
+    final (background, foreground) = _colorsFor(context, event.status);
     final note = event.note?.trim() ?? '';
     final description = note.isNotEmpty
         ? note
         : (event.status == order.status ? order.statusDescription : '');
 
     return Material(
-      color: AppColors.bg,
+      color: context.cardColor,
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -167,7 +180,7 @@ class _NotificationTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.lineColor),
             borderRadius: BorderRadius.circular(18),
           ),
           child: Row(
@@ -205,8 +218,8 @@ class _NotificationTile extends StatelessWidget {
                       order.establishment.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
+                      style: TextStyle(
+                        color: context.mutedColor,
                         fontSize: 11,
                       ),
                     ),
@@ -214,8 +227,8 @@ class _NotificationTile extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         description,
-                        style: const TextStyle(
-                          color: AppColors.muted,
+                        style: TextStyle(
+                          color: context.mutedColor,
                           fontSize: 11,
                           height: 1.35,
                         ),
@@ -227,8 +240,8 @@ class _NotificationTile extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 formatDateTime(event.createdAt),
-                style: const TextStyle(
-                  color: AppColors.muted,
+                style: TextStyle(
+                  color: context.mutedColor,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),

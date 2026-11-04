@@ -857,7 +857,7 @@ class SearchField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hintText,
           filled: true,
-          fillColor: AppColors.bg,
+          fillColor: context.isDarkMode ? AppColors.darkElevated : AppColors.bg,
           prefixIcon: const Icon(
             Icons.search_rounded,
             color: AppColors.primary,

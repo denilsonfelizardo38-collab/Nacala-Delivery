@@ -159,4 +159,41 @@ void main() {
       expect(state.couponDiscountCents, 0);
     });
   });
+
+  group('tema', () {
+    test('predefinição é claro', () {
+      final state = AppState(prefs, api: FakeApi());
+      expect(state.themeSetting, ThemeSetting.light);
+    });
+
+    test('mudança de tema é guardada e notificada', () {
+      final state = AppState(prefs, api: FakeApi());
+      final changes = <ThemeSetting>[];
+      state.addListener(() => changes.add(state.themeSetting));
+
+      state.setThemeSetting(ThemeSetting.dark);
+
+      expect(state.themeSetting, ThemeSetting.dark);
+      expect(prefs.getString('nacala.theme.v1'), 'dark');
+      expect(changes, contains(ThemeSetting.dark));
+    });
+
+    test('restaura a preferência guardada do dispositivo', () async {
+      SharedPreferences.setMockInitialValues({'nacala.theme.v1': 'system'});
+      prefs = await SharedPreferences.getInstance();
+      final state = AppState(prefs, api: FakeApi());
+
+      expect(state.themeSetting, ThemeSetting.system);
+    });
+
+    test('definir o mesmo tema não notifica', () {
+      final state = AppState(prefs, api: FakeApi());
+      var notifications = 0;
+      state.addListener(() => notifications++);
+
+      state.setThemeSetting(ThemeSetting.light);
+
+      expect(notifications, 0);
+    });
+  });
 }

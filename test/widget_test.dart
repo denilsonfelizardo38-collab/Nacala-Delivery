@@ -154,6 +154,57 @@ void main() {
     expect(find.text('Entre na sua conta'), findsNothing);
   });
 
+  testWidgets('preferência de tema em Conta aplica e guarda o tema escuro', (
+    tester,
+  ) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = FakeApi(user: _customer)
+      ..loginResult = const AuthResult(token: 'token-123', user: _customer);
+    final state = await newState(api);
+    await state.login('cliente@teste.mz', 'segredo');
+
+    await tester.pumpWidget(NacalaDeliveryApp(state: state));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Conta'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Tema da aplicação'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Tema da aplicação'), findsOneWidget);
+
+    await tester.tap(find.text('Tema da aplicação'));
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(BottomSheet);
+    expect(find.descendant(of: sheet, matching: find.text('Sistema')), findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text('Claro')), findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text('Escuro')), findsOneWidget);
+
+    await tester.tap(find.descendant(of: sheet, matching: find.text('Escuro')));
+    await tester.pumpAndSettle();
+
+    expect(state.themeSetting, ThemeSetting.dark);
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+      ThemeMode.dark,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('nacala.theme.v1'), 'dark');
+  });
+
   testWidgets('admin tem menu de conta com palavra-passe e logout', (
     tester,
   ) async {

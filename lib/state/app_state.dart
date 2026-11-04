@@ -10,6 +10,9 @@ import '../models/models.dart';
 
 enum SessionStatus { loading, signedOut, signedIn, guest }
 
+/// Preferência de tema guardada no dispositivo.
+enum ThemeSetting { system, light, dark }
+
 /// Estado global da aplicação: sessão autenticada, moradas e carrinho.
 ///
 /// Toda a informação de negócio (preços, totais, estados de pedido) vem da API;
@@ -33,6 +36,7 @@ class AppState extends ChangeNotifier {
   static const _tokenKey = 'nacala.token.v2';
   static const _userKey = 'nacala.user.v2';
   static const _cartKey = 'nacala.cart.v2';
+  static const _themeKey = 'nacala.theme.v1';
 
   final SharedPreferences _prefs;
   final ApiClient _client;
@@ -46,6 +50,7 @@ class AppState extends ChangeNotifier {
   String? _token;
   String? _startupMessage;
   bool _busy = false;
+  late ThemeSetting _themeSetting = _restoreThemeSetting();
 
   List<Address> _addresses = const [];
   Set<String> _favoriteEstablishmentIds = {};
@@ -61,6 +66,24 @@ class AppState extends ChangeNotifier {
   bool get isBusy => _busy;
   String? get startupMessage => _startupMessage;
   List<Address> get addresses => List.unmodifiable(_addresses);
+
+  /// Preferência de tema (sistema, claro ou escuro) guardada no dispositivo.
+  ThemeSetting get themeSetting => _themeSetting;
+
+  ThemeSetting _restoreThemeSetting() {
+    final raw = _prefs.getString(_themeKey);
+    for (final setting in ThemeSetting.values) {
+      if (setting.name == raw) return setting;
+    }
+    return ThemeSetting.light;
+  }
+
+  void setThemeSetting(ThemeSetting setting) {
+    if (setting == _themeSetting) return;
+    _themeSetting = setting;
+    _prefs.setString(_themeKey, setting.name);
+    notifyListeners();
+  }
 
   /// Identificadores dos estabelecimentos favoritos do utilizador.
   Set<String> get favoriteEstablishmentIds =>

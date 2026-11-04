@@ -688,8 +688,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                       Text(
                         formatMoney(state.cartTotalCents),
-                        style: const TextStyle(
-                          color: AppColors.ink,
+                        style: TextStyle(
+                          color: context.inkColor,
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
                         ),

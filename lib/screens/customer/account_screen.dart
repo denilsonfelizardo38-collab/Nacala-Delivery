@@ -12,6 +12,7 @@ import '../../core/api_config.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
+import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/address_dialog.dart';
 import '../../widgets/common.dart';
@@ -250,6 +251,72 @@ class _AccountScreenState extends State<AccountScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  /// Escolha do tema (sistema, claro ou escuro) numa folha inferior; a
+  /// alteração aplica-se imediatamente e fica guardada no dispositivo.
+  Future<void> _openThemePicker() async {
+    final state = AppScope.of(context);
+    final current = state.themeSetting;
+    final selected = await showModalBottomSheet<ThemeSetting>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: Text(
+                'Tema da aplicação',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            for (final option in ThemeSetting.values)
+              ListTile(
+                leading: Icon(
+                  switch (option) {
+                    ThemeSetting.system => Icons.brightness_auto_rounded,
+                    ThemeSetting.light => Icons.light_mode_outlined,
+                    ThemeSetting.dark => Icons.dark_mode_outlined,
+                  },
+                ),
+                title: Text(
+                  switch (option) {
+                    ThemeSetting.system => 'Sistema',
+                    ThemeSetting.light => 'Claro',
+                    ThemeSetting.dark => 'Escuro',
+                  },
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  switch (option) {
+                    ThemeSetting.system => 'Segue a definição do telemóvel',
+                    ThemeSetting.light => 'Fundo claro em todas as áreas',
+                    ThemeSetting.dark => 'Conforto à noite e poupança de bateria',
+                  },
+                  style: TextStyle(fontSize: 11, color: sheetContext.mutedColor),
+                ),
+                trailing:
+                    option == current
+                        ? const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.primary,
+                        )
+                        : null,
+                onTap: () => Navigator.of(sheetContext).pop(option),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) state.setThemeSetting(selected);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
@@ -358,11 +425,22 @@ class _AccountScreenState extends State<AccountScreen> {
 
               SectionTitle(
                 title: 'Preferências e ajuda',
-                subtitle: 'Notificações, pagamentos e informação',
+                subtitle: 'Tema, notificações e informação útil',
               ),
 
               const SizedBox(height: 12),
 
+              _LinkCard(
+                icon: Icons.contrast_rounded,
+                title: 'Tema da aplicação',
+                subtitle: switch (state.themeSetting) {
+                  ThemeSetting.system => 'Sistema — segue o telemóvel',
+                  ThemeSetting.light => 'Claro',
+                  ThemeSetting.dark => 'Escuro',
+                },
+                onTap: _openThemePicker,
+              ),
+              const SizedBox(height: 10),
               _LinkCard(
                 icon: Icons.notifications_none_rounded,
                 title: 'Notificações',
@@ -843,7 +921,7 @@ class _LinkCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: AppColors.muted, fontSize: 11),
+                  style: TextStyle(color: context.mutedColor, fontSize: 11),
                 ),
               ],
             ),

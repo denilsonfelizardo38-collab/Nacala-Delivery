@@ -450,7 +450,7 @@ class _AppBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.isDarkMode ? AppColors.darkCard : Colors.white,
         boxShadow: const [AppColors.cardShadow],
       ),
       child: SafeArea(
@@ -458,7 +458,7 @@ class _AppBottomBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(height: 1, color: AppColors.border),
+            Container(height: 1, color: context.lineColor),
             Padding(
               padding: const EdgeInsets.fromLTRB(6, 10, 6, 7),
               child: Row(
@@ -510,13 +510,17 @@ class _BottomBarItem extends StatelessWidget {
                 width: selected ? 58 : 46,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.primarySoft : Colors.transparent,
+                  color: selected
+                      ? context.primarySoftColor
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Icon(
                   selected ? destination.selectedIcon : destination.icon,
                   size: selected ? 20 : 21,
-                  color: selected ? AppColors.primary : AppColors.muted,
+                  color: selected
+                      ? Theme.of(context).colorScheme.primary
+                      : context.mutedColor,
                 ),
               ),
               const SizedBox(height: 3),
@@ -525,7 +529,9 @@ class _BottomBarItem extends StatelessWidget {
                 style: TextStyle(
                   fontSize: selected ? 11 : 10.5,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-                  color: selected ? AppColors.primaryPressed : AppColors.muted,
+                  color: selected
+                      ? Theme.of(context).colorScheme.primary
+                      : context.mutedColor,
                   letterSpacing: selected ? 0.1 : 0,
                 ),
                 child: Text(

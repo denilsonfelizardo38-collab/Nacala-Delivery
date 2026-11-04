@@ -59,7 +59,7 @@ abstract final class AppColors {
   );
 
   // ---------------------------------------------------------------
-  // Superfícies do tema escuro (reservado a uma futura preferência).
+  // Superfícies do tema escuro.
   // ---------------------------------------------------------------
   static const darkBg = Color(0xFF14161A);
   static const darkCard = Color(0xFF1D2026);
@@ -67,6 +67,8 @@ abstract final class AppColors {
   static const darkInk = Color(0xFFE8EAED);
   static const darkMuted = Color(0xFF9AA3AF);
   static const darkBorder = Color(0xFF2B2F37);
+  static const darkPrimarySoft = Color(0xFF3A2413); // sobressalto laranja
+  static const darkPrimarySoftStrong = Color(0xFF4D3019);
 
   // ---------------------------------------------------------------
   // Aliases históricos usados em ecrãs e widgets.
