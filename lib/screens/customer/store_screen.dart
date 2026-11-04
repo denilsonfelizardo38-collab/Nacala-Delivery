@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
+
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
 import 'cart_screen.dart';
-
-const Color _storeOrange = Color(0xFFF47721);
-const Color _storeOrangeDark = Color(0xFFE76512);
-const Color _storeOrangeSoft = Color(0xFFFFF1E7);
-const Color _storeInk = Color(0xFF191715);
-const Color _storeMuted = Color(0xFF817B75);
-const Color _storeLine = Color(0xFFECE7E2);
-const Color _storeCanvas = Color(0xFFFAF8F6);
 
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key, required this.establishmentId});
@@ -70,9 +64,9 @@ class _StoreScreenState extends State<StoreScreen> {
         !state.isCartEmpty && state.cartBelongsTo(widget.establishmentId);
 
     return Scaffold(
-      backgroundColor: _storeCanvas,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        backgroundColor: _storeCanvas,
+        backgroundColor: AppColors.surface,
         title: FutureBuilder<EstablishmentDetail>(
           future: _future,
           builder: (context, snapshot) => Text(
@@ -81,7 +75,16 @@ class _StoreScreenState extends State<StoreScreen> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        actions: const [CartButton(), SizedBox(width: 8)],
+        actions: [
+          FavoriteIconButton(
+            isFavorite: AppScope.of(context)
+                .isFavoriteEstablishment(widget.establishmentId),
+            onPressed: () => toggleFavorite(context, widget.establishmentId),
+          ),
+          const SizedBox(width: 2),
+          const CartButton(),
+          const SizedBox(width: 8),
+        ],
       ),
       body: AsyncSection<EstablishmentDetail>(
         future: _future,
@@ -93,9 +96,8 @@ class _StoreScreenState extends State<StoreScreen> {
           ? _CartBar(
               itemCount: state.cartItemCount,
               totalCents: state.cartTotalCents,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CartScreen()),
-              ),
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const CartScreen())),
             )
           : null,
     );
@@ -109,7 +111,7 @@ class _StoreScreenState extends State<StoreScreen> {
     }
 
     return RefreshIndicator(
-      color: _storeOrange,
+      color: AppColors.primary,
       onRefresh: () async => _reload(),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -126,9 +128,11 @@ class _StoreScreenState extends State<StoreScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF6E8),
+                color: AppColors.warningSoft,
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: const Color(0xFFF2DFBD)),
+                border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.35),
+                ),
               ),
               child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,6 +179,13 @@ class _StoreScreenState extends State<StoreScreen> {
                       product: product,
                       enabled: establishment.isOpen && product.isAvailable,
                       onAdd: () => _add(product, establishment),
+                      disabledNotice: !product.isAvailable
+                          ? 'Este produto está indisponível neste momento.'
+                          : !establishment.isOpen
+                          ? '${establishment.name} está '
+                                'encerrado (${establishment.opensAt}–'
+                                '${establishment.closesAt}). Volte mais tarde.'
+                          : null,
                     ),
                   ),
                 const SizedBox(height: 12),
@@ -203,8 +214,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   child: _ReviewCard(review: review),
                 ),
           ],
-          if (_selectedTab == 2)
-            _AboutCard(establishment: establishment),
+          if (_selectedTab == 2) _AboutCard(establishment: establishment),
         ],
       ),
     );
@@ -212,10 +222,7 @@ class _StoreScreenState extends State<StoreScreen> {
 }
 
 class _StoreTabStrip extends StatelessWidget {
-  const _StoreTabStrip({
-    required this.selectedIndex,
-    required this.onSelected,
-  });
+  const _StoreTabStrip({required this.selectedIndex, required this.onSelected});
 
   final int selectedIndex;
   final ValueChanged<int> onSelected;
@@ -231,7 +238,7 @@ class _StoreTabStrip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0ECE8),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(15),
       ),
       child: Row(
@@ -256,7 +263,7 @@ class _StoreTabStrip extends StatelessWidget {
                     boxShadow: selectedIndex == index
                         ? [
                             BoxShadow(
-                              color: _storeInk.withValues(alpha: 0.07),
+                              color: AppColors.ink.withValues(alpha: 0.07),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -270,8 +277,8 @@ class _StoreTabStrip extends StatelessWidget {
                         _tabs[index].$2,
                         size: 15,
                         color: selectedIndex == index
-                            ? _storeOrangeDark
-                            : _storeMuted,
+                            ? AppColors.primaryPressed
+                            : AppColors.muted,
                       ),
                       const SizedBox(width: 5),
                       Flexible(
@@ -281,11 +288,11 @@ class _StoreTabStrip extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: selectedIndex == index
-                                ? _storeInk
-                                : _storeMuted,
+                                ? AppColors.ink
+                                : AppColors.muted,
                             fontSize: 11,
                             fontWeight: selectedIndex == index
-                                ? FontWeight.w800
+                                ? FontWeight.w700
                                 : FontWeight.w600,
                           ),
                         ),
@@ -315,7 +322,7 @@ class _StoreHeader extends StatelessWidget {
           height: 205,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: _storeOrangeSoft,
+            color: AppColors.primarySoft,
             borderRadius: BorderRadius.circular(23),
           ),
           child: Stack(
@@ -373,7 +380,7 @@ class _StoreHeader extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       if (establishment.reviewCount > 0) ...[
@@ -411,7 +418,7 @@ class _StoreHeader extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 22,
                     height: 1.12,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.5,
                     shadows: [
                       Shadow(
@@ -432,7 +439,7 @@ class _StoreHeader extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(19),
-            border: Border.all(color: _storeLine),
+            border: Border.all(color: AppColors.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,7 +448,7 @@ class _StoreHeader extends StatelessWidget {
                 Text(
                   establishment.description,
                   style: const TextStyle(
-                    color: _storeMuted,
+                    color: AppColors.muted,
                     fontSize: 12,
                     height: 1.5,
                   ),
@@ -457,7 +464,7 @@ class _StoreHeader extends StatelessWidget {
                       value: formatMoney(establishment.deliveryFeeCents),
                     ),
                   ),
-                  Container(width: 1, height: 32, color: _storeLine),
+                  Container(width: 1, height: 32, color: AppColors.border),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(left: 13),
@@ -468,7 +475,7 @@ class _StoreHeader extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Container(width: 1, height: 32, color: _storeLine),
+                  Container(width: 1, height: 32, color: AppColors.border),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(left: 13),
@@ -484,16 +491,13 @@ class _StoreHeader extends StatelessWidget {
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(height: 1, color: _storeLine),
+                child: Divider(height: 1, color: AppColors.border),
               ),
               InfoRow(
                 icon: Icons.location_on_outlined,
                 text: establishment.address,
               ),
-              InfoRow(
-                icon: Icons.phone_outlined,
-                text: establishment.phone,
-              ),
+              InfoRow(icon: Icons.phone_outlined, text: establishment.phone),
             ],
           ),
         ),
@@ -502,13 +506,9 @@ class _StoreHeader extends StatelessWidget {
   }
 
   Widget _storeImageFallback() => const ColoredBox(
-    color: _storeOrangeSoft,
+    color: AppColors.primarySoft,
     child: Center(
-      child: Icon(
-        Icons.storefront_rounded,
-        color: _storeOrange,
-        size: 58,
-      ),
+      child: Icon(Icons.storefront_rounded, color: AppColors.primary, size: 58),
     ),
   );
 }
@@ -531,7 +531,7 @@ class _HeaderMeta extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 13, color: _storeOrangeDark),
+            Icon(icon, size: 13, color: AppColors.primaryPressed),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
@@ -539,7 +539,7 @@ class _HeaderMeta extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: _storeMuted,
+                  color: AppColors.muted,
                   fontSize: 9,
                   fontWeight: FontWeight.w600,
                 ),
@@ -553,9 +553,9 @@ class _HeaderMeta extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: _storeInk,
+            color: AppColors.ink,
             fontSize: 11,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -586,9 +586,9 @@ class _MenuSectionHeading extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  color: _storeInk,
+                  color: AppColors.ink,
                   fontSize: 17,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: -0.3,
                 ),
               ),
@@ -596,10 +596,7 @@ class _MenuSectionHeading extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   subtitle!,
-                  style: const TextStyle(
-                    color: _storeMuted,
-                    fontSize: 11,
-                  ),
+                  style: const TextStyle(color: AppColors.muted, fontSize: 11),
                 ),
               ],
             ],
@@ -609,7 +606,7 @@ class _MenuSectionHeading extends StatelessWidget {
           Text(
             '$count ${count == 1 ? 'opção' : 'opções'}',
             style: const TextStyle(
-              color: _storeMuted,
+              color: AppColors.muted,
               fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
@@ -624,24 +621,34 @@ class _ProductCard extends StatelessWidget {
     required this.product,
     required this.enabled,
     required this.onAdd,
+    this.disabledNotice,
   });
 
   final Product product;
   final bool enabled;
   final VoidCallback onAdd;
 
+  /// Mostrado como snackbar quando o utilizador toca num produto que não
+  /// pode ser adicionado (encerrado ou indisponível), em vez de ficar
+  /// sem qualquer resposta.
+  final String? disabledNotice;
+
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final quantity = state.quantityOf(product.id);
+    final notice = disabledNotice;
 
-    return Container(
+    return AppCard(
+      onTap: enabled
+          ? onAdd
+          : () => showAppSnack(
+              context,
+              notice ?? 'Indisponível agora.',
+              error: true,
+            ),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _storeLine),
-      ),
+      radius: 18,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -663,9 +670,9 @@ class _ProductCard extends StatelessWidget {
                       child: Text(
                         product.name,
                         style: const TextStyle(
-                          color: _storeInk,
+                          color: AppColors.ink,
                           fontSize: 13,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           height: 1.3,
                         ),
                       ),
@@ -681,7 +688,7 @@ class _ProductCard extends StatelessWidget {
                         child: Text(
                           '${product.stock} un.',
                           style: const TextStyle(
-                            color: _storeMuted,
+                            color: AppColors.muted,
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
                           ),
@@ -696,7 +703,7 @@ class _ProductCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: _storeMuted,
+                      color: AppColors.muted,
                       fontSize: 10,
                       height: 1.45,
                     ),
@@ -708,10 +715,13 @@ class _ProductCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         formatMoney(product.priceCents),
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: _storeOrangeDark,
+                          color: AppColors.primaryPressed,
                           fontSize: 14,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -723,24 +733,32 @@ class _ProductCard extends StatelessWidget {
                       )
                     else
                       SizedBox(
-                        height: 38,
+                        height: 44,
                         child: FilledButton.icon(
-                          onPressed: enabled ? onAdd : null,
+                          onPressed: enabled
+                              ? onAdd
+                              : () => showAppSnack(
+                                  context,
+                                  notice ?? 'Indisponível agora.',
+                                  error: true,
+                                ),
                           icon: const Icon(Icons.add_rounded, size: 17),
                           label: const Text('Adicionar'),
                           style: FilledButton.styleFrom(
-                            backgroundColor: _storeOrange,
+                            backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
-                            disabledBackgroundColor: const Color(0xFFE8E3DE),
-                            disabledForegroundColor: _storeMuted,
+                            disabledBackgroundColor: AppColors.border,
+                            disabledForegroundColor: AppColors.muted,
                             elevation: 0,
                             padding: const EdgeInsets.symmetric(horizontal: 11),
+                            minimumSize: const Size(0, 38),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(11),
                             ),
                             textStyle: const TextStyle(
                               fontSize: 10,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -768,7 +786,7 @@ class _ReviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: _storeLine),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -779,10 +797,7 @@ class _ReviewCard extends StatelessWidget {
               const Spacer(),
               Text(
                 formatDate(review.createdAt),
-                style: const TextStyle(
-                  color: _storeMuted,
-                  fontSize: 10,
-                ),
+                style: const TextStyle(color: AppColors.muted, fontSize: 10),
               ),
             ],
           ),
@@ -791,7 +806,7 @@ class _ReviewCard extends StatelessWidget {
             Text(
               review.comment,
               style: const TextStyle(
-                color: _storeInk,
+                color: AppColors.ink,
                 fontSize: 12,
                 height: 1.5,
               ),
@@ -802,20 +817,20 @@ class _ReviewCard extends StatelessWidget {
             children: [
               const CircleAvatar(
                 radius: 13,
-                backgroundColor: _storeOrangeSoft,
+                backgroundColor: AppColors.primarySoft,
                 child: Icon(
                   Icons.person_rounded,
                   size: 15,
-                  color: _storeOrangeDark,
+                  color: AppColors.primaryPressed,
                 ),
               ),
               const SizedBox(width: 7),
               Text(
                 review.customerName,
                 style: const TextStyle(
-                  color: _storeMuted,
+                  color: AppColors.muted,
                   fontSize: 10,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -838,7 +853,7 @@ class _AboutCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(19),
-        border: Border.all(color: _storeLine),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -846,9 +861,9 @@ class _AboutCard extends StatelessWidget {
           Text(
             'Sobre ${establishment.name}',
             style: const TextStyle(
-              color: _storeInk,
+              color: AppColors.ink,
               fontSize: 17,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           if (establishment.description.isNotEmpty) ...[
@@ -856,7 +871,7 @@ class _AboutCard extends StatelessWidget {
             Text(
               establishment.description,
               style: const TextStyle(
-                color: _storeMuted,
+                color: AppColors.muted,
                 fontSize: 12,
                 height: 1.55,
               ),
@@ -906,10 +921,10 @@ class _AboutInfoRow extends StatelessWidget {
           width: 35,
           height: 35,
           decoration: BoxDecoration(
-            color: _storeOrangeSoft,
+            color: AppColors.primarySoft,
             borderRadius: BorderRadius.circular(11),
           ),
-          child: Icon(icon, color: _storeOrangeDark, size: 17),
+          child: Icon(icon, color: AppColors.primaryPressed, size: 17),
         ),
         const SizedBox(width: 11),
         Expanded(
@@ -919,7 +934,7 @@ class _AboutInfoRow extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  color: _storeMuted,
+                  color: AppColors.muted,
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
@@ -928,7 +943,7 @@ class _AboutInfoRow extends StatelessWidget {
               Text(
                 value,
                 style: const TextStyle(
-                  color: _storeInk,
+                  color: AppColors.ink,
                   fontSize: 12,
                   height: 1.4,
                   fontWeight: FontWeight.w700,
@@ -958,10 +973,10 @@ class _CartBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: const Border(top: BorderSide(color: _storeLine)),
+        border: const Border(top: BorderSide(color: AppColors.border)),
         boxShadow: [
           BoxShadow(
-            color: _storeInk.withValues(alpha: 0.06),
+            color: AppColors.ink.withValues(alpha: 0.06),
             blurRadius: 18,
             offset: const Offset(0, -5),
           ),
@@ -981,7 +996,7 @@ class _CartBar extends StatelessWidget {
                     Text(
                       '$itemCount ${itemCount == 1 ? 'item' : 'itens'} no carrinho',
                       style: const TextStyle(
-                        color: _storeMuted,
+                        color: AppColors.muted,
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),
@@ -990,9 +1005,9 @@ class _CartBar extends StatelessWidget {
                     Text(
                       formatMoney(totalCents),
                       style: const TextStyle(
-                        color: _storeInk,
+                        color: AppColors.ink,
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -1004,7 +1019,7 @@ class _CartBar extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: onTap,
                   style: FilledButton.styleFrom(
-                    backgroundColor: _storeOrange,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -1012,7 +1027,7 @@ class _CartBar extends StatelessWidget {
                     ),
                     textStyle: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   icon: const Icon(Icons.shopping_bag_outlined, size: 17),

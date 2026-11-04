@@ -60,7 +60,7 @@ void main() {
   test('catálogo público devolve categorias e estabelecimentos', () async {
     final (status, json) = await call('GET', '/api/categories');
     expect(status, 200);
-    expect((json['categories'] as List).length, 4);
+    expect((json['categories'] as List).length, 8);
 
     final (listStatus, list) = await call(
       'GET',
@@ -599,6 +599,94 @@ void main() {
     );
     expect(auditStatus, 200);
     expect((audit['logs'] as List).isNotEmpty, isTrue);
+  });
+
+  test('favoritos alternam (add/remove) e exigem sessão', () async {
+    final (anonStatus, _) = await call('GET', '/api/favorites');
+    expect(anonStatus, 401);
+
+    final token = await login('cliente@nacala.co.mz', 'Cliente@1234');
+
+    final (addStatus, _) =
+        await call('POST', '/api/favorites/est_cantinho', token: token);
+    expect(addStatus, 201);
+    final (add2Status, _) =
+        await call('POST', '/api/favorites/est_cantinho', token: token);
+    expect(add2Status, 201);
+
+    final (listStatus, list) =
+        await call('GET', '/api/favorites', token: token);
+    expect(listStatus, 200);
+    expect((list['establishments'] as List).length, 1);
+    expect(
+      (list['establishments'] as List).first['id'],
+      'est_cantinho',
+    );
+
+    final (missingStatus, _) =
+        await call('POST', '/api/favorites/est_inexistente', token: token);
+    expect(missingStatus, 404);
+
+    final (delStatus, _) =
+        await call('DELETE', '/api/favorites/est_cantinho', token: token);
+    expect(delStatus, 200);
+    final (emptyStatus, empty) =
+        await call('GET', '/api/favorites', token: token);
+    expect(emptyStatus, 200);
+    expect((empty['establishments'] as List).isEmpty, isTrue);
+  });
+
+  test('perfil atualiza email e rejeita duplicados', () async {
+    final token = await login('cliente@nacala.co.mz', 'Cliente@1234');
+
+    final (status, json) = await call(
+      'PATCH',
+      '/api/auth/profile',
+      token: token,
+      body: {
+        'name': 'Cliente Demonstração',
+        'phone': '841111111',
+        'email': 'cliente@nacala.co.mz',
+      },
+    );
+    expect(status, 200, reason: '$json');
+
+    final (dupStatus, dup) = await call(
+      'PATCH',
+      '/api/auth/profile',
+      token: token,
+      body: {
+        'name': 'Cliente Demonstração',
+        'phone': '841111111',
+        'email': 'admin@nacala.co.mz',
+      },
+    );
+    expect(dupStatus, 409);
+    expect(dup['error']['code'], 'email_taken');
+  });
+
+  test('avatar autenticado é aceite e devolvido no /api/auth/me', () async {
+    final token = await login('cliente@nacala.co.mz', 'Cliente@1234');
+    // PNG mínimo válido (apenas assinatura + alguns bytes).
+    final png = base64Encode([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    ]);
+
+    final (status, json) = await call(
+      'POST',
+      '/api/auth/avatar',
+      token: token,
+      body: {'mime_type': 'image/png', 'data_base64': png},
+    );
+    expect(status, 201, reason: '$json');
+    final imageUrl = json['image_url'] as String;
+    expect(imageUrl, startsWith('/uploads/'));
+
+    final (meStatus, me) = await call('GET', '/api/auth/me', token: token);
+    expect(meStatus, 200);
+    expect(me['user']['avatar_url'], imageUrl);
   });
 
   test('logout invalida o token anterior', () async {

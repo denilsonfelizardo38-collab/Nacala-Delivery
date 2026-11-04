@@ -40,9 +40,13 @@ void seedDatabase(Database db, {bool demo = false}) {
 
   const categories = [
     ('cat_restaurantes', 'Restaurantes', 'restaurantes', 'restaurant', 1),
-    ('cat_mercados', 'Mercados', 'mercados', 'basket', 2),
+    ('cat_mercados', 'Supermercados', 'mercados', 'basket', 2),
     ('cat_farmacias', 'Farmácias', 'farmacias', 'pharmacy', 3),
     ('cat_lojas', 'Lojas', 'lojas', 'store', 4),
+    ('cat_padarias', 'Padarias', 'padarias', 'bakery', 5),
+    ('cat_bebidas', 'Bebidas', 'bebidas', 'drinks', 6),
+    ('cat_talhos', 'Talhos', 'talhos', 'butchery', 7),
+    ('cat_peixarias', 'Peixarias', 'peixarias', 'fish', 8),
   ];
   for (final category in categories) {
     db.execute(

@@ -17,12 +17,12 @@ class SplashScreen extends StatelessWidget {
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.deepNavy,
         body: Stack(
           fit: StackFit.expand,
           children: [
             Image.asset(
-              'assets/images/login_bg.jpg',
+              'assets/images/login_bg.png',
               fit: BoxFit.cover,
               alignment: Alignment.center,
               errorBuilder: (_, _, _) =>
@@ -34,10 +34,10 @@ class SplashScreen extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0xAA0755E9),
-                    Color(0x300755E9),
-                    Color(0xA6031A43),
-                    Color(0xE6031A43),
+                    Color(0xCC06264B),
+                    Color(0x3306264B),
+                    Color(0xA806264B),
+                    Color(0xF206264B),
                   ],
                   stops: [0, 0.38, 0.72, 1],
                 ),
@@ -61,12 +61,17 @@ class SplashScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 13),
-                  Text(
-                    'A cidade à sua porta.',
+                  const Text(
+                    'Pedido feito. Entrega garantida!',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.92),
+                      color: Colors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
+                      height: 1.35,
+                      shadows: [
+                        Shadow(color: Color(0x80000000), blurRadius: 8),
+                      ],
                     ),
                   ),
                   const Spacer(flex: 5),

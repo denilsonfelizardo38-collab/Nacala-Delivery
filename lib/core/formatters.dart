@@ -62,6 +62,26 @@ String formatDate(DateTime date) {
 
 String digitsOnly(String value) => value.replaceAll(RegExp(r'[^0-9]'), '');
 
+/// Esconde a maior parte do endereço: "denilson@gmail.com" -> "d*****@gmail.com"
+String maskEmail(String email) {
+  final at = email.indexOf('@');
+  if (at <= 0) return email;
+  final local = email.substring(0, at);
+  final domain = email.substring(at);
+  final visible = local.substring(0, 1);
+  final hidden = '*' * (local.length - 1).clamp(3, 10);
+  return '$visible$hidden$domain';
+}
+
+/// Esconde o miolo do número: "844101199" -> "84•••••199"
+String maskPhone(String phone) {
+  final digits = digitsOnly(phone);
+  if (digits.length < 6) return phone;
+  final start = digits.substring(0, 2);
+  final end = digits.substring(digits.length - 3);
+  return '$start•••••$end';
+}
+
 /// Converte texto introduzido pelo utilizador em centavos, sem vírgula
 /// flutuante: "1.250,50" -> 125050, "450" -> 45000, "450.00" -> 45000.
 int? parseMoneyToCents(String input) {

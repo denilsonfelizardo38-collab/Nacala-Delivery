@@ -1,4 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../theme/app_colors.dart';
 
 import '../../core/api_client.dart';
 import '../../core/api_config.dart';
@@ -9,11 +16,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/address_dialog.dart';
 import '../../widgets/common.dart';
 import '../../widgets/password_dialog.dart';
-
-const Color _orange = Color(0xFFFF6B00);
-const Color _orangeLight = Color(0xFFFFF0E5);
-const Color _black = Color(0xFF171717);
-const Color _white = Color(0xFFFFFFFF);
+import 'favorites_screen.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -38,20 +41,42 @@ class _AccountScreenState extends State<AccountScreen> {
     final user = state.user;
     if (user == null) return;
 
-    final input = await showDialog<(String, String)>(
+    final input = await showDialog<_ProfileInput>(
       context: context,
       builder: (_) => _ProfileDialog(
         name: user.name,
         phone: user.phone,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
       ),
     );
 
     if (input == null) return;
 
     try {
+      final picked = input.pickedImage;
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        final mimeType = _mimeTypeFor(picked);
+        if (mimeType == null) {
+          if (mounted) {
+            showAppSnack(
+              context,
+              'Escolha uma imagem JPEG, PNG ou WebP.',
+              error: true,
+            );
+          }
+          return;
+        }
+        await state.uploadAvatar(
+          mimeType: mimeType,
+          dataBase64: base64Encode(bytes),
+        );
+      }
       await state.updateProfile(
-        name: input.$1,
-        phone: digitsOnly(input.$2),
+        name: input.name,
+        phone: digitsOnly(input.phone),
+        email: input.email,
       );
 
       if (mounted) {
@@ -62,6 +87,21 @@ class _AccountScreenState extends State<AccountScreen> {
         showAppSnack(context, error.message, error: true);
       }
     }
+  }
+
+  String? _mimeTypeFor(XFile file) {
+    final ext = file.name.toLowerCase().split('.').lastOrNull;
+    final mime = file.mimeType?.toLowerCase();
+    if (mime != null &&
+        const {'image/jpeg', 'image/png', 'image/webp'}.contains(mime)) {
+      return mime;
+    }
+    return switch (ext) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => null,
+    };
   }
 
   Future<void> _changePassword() async {
@@ -114,10 +154,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
   Future<void> _editAddress(Address address) async {
     final state = AppScope.of(context);
-    final input = await showAddressDialog(
-      context,
-      initial: address,
-    );
+    final input = await showAddressDialog(context, initial: address);
 
     if (input == null) return;
 
@@ -199,9 +236,7 @@ class _AccountScreenState extends State<AccountScreen> {
         return _buildGuestView(context);
       }
 
-      return const Scaffold(
-        body: Center(child: LoadingBlock()),
-      );
+      return const Scaffold(body: Center(child: LoadingBlock()));
     }
 
     return Scaffold(
@@ -220,7 +255,7 @@ class _AccountScreenState extends State<AccountScreen> {
         top: false,
         child: RefreshIndicator(
           onRefresh: _refresh,
-          color: _orange,
+          color: AppColors.primary,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(18, 10, 18, 30),
@@ -230,6 +265,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 email: user.email,
                 phone: user.phone,
                 roleLabel: user.roleLabel,
+                avatarUrl: user.avatarUrl,
               ),
 
               const SizedBox(height: 14),
@@ -287,11 +323,66 @@ class _AccountScreenState extends State<AccountScreen> {
 
               const SizedBox(height: 22),
 
+              AppCard(
+                padding: const EdgeInsets.all(13),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const FavoritesScreen(),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primarySoft,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.favorite_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Favoritos',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Restaurantes que guardaste',
+                            style: TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.muted,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
               const SectionTitle(title: 'Aplicação'),
 
               const SizedBox(height: 12),
 
-              _AppInfoCard(apiBaseUrl: state.apiBaseUrl),
+              _AppInfoCard(),
 
               const SizedBox(height: 24),
 
@@ -300,8 +391,8 @@ class _AccountScreenState extends State<AccountScreen> {
                 icon: const Icon(Icons.logout_rounded, size: 18),
                 label: const Text('Terminar sessão'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _orange,
-                  side: const BorderSide(color: _orange),
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
                   minimumSize: const Size.fromHeight(50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -317,7 +408,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   style: TextStyle(
                     color: context.mutedColor.withValues(alpha: 0.65),
                     fontSize: 10,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: 2,
                   ),
                 ),
@@ -331,9 +422,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
   Widget _buildGuestView(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('A tua conta'),
-      ),
+      appBar: AppBar(title: const Text('A tua conta')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(22),
@@ -348,12 +437,12 @@ class _AccountScreenState extends State<AccountScreen> {
                     width: 76,
                     height: 76,
                     decoration: BoxDecoration(
-                      color: _orangeLight,
+                      color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: const Icon(
                       Icons.person_outline_rounded,
-                      color: _orange,
+                      color: AppColors.primary,
                       size: 38,
                     ),
                   ),
@@ -361,19 +450,16 @@ class _AccountScreenState extends State<AccountScreen> {
                   Text(
                     'Estás a explorar como convidado',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 9),
                   Text(
                     'Podes descobrir lojas e produtos. Para fazer pedidos '
                     'e acompanhar entregas, entra ou cria uma conta.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: context.mutedColor,
-                          height: 1.5,
-                        ),
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: context.mutedColor, height: 1.5),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -383,8 +469,8 @@ class _AccountScreenState extends State<AccountScreen> {
                       icon: const Icon(Icons.login_rounded),
                       label: const Text('Entrar ou criar conta'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: _orange,
-                        foregroundColor: _white,
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
                         minimumSize: const Size.fromHeight(50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -402,48 +488,55 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
+class _ProfileHeader extends StatefulWidget {
   const _ProfileHeader({
     required this.name,
     required this.email,
     required this.phone,
     required this.roleLabel,
+    this.avatarUrl,
   });
 
   final String name;
   final String email;
   final String phone;
   final String roleLabel;
+  final String? avatarUrl;
+
+  @override
+  State<_ProfileHeader> createState() => _ProfileHeaderState();
+}
+
+class _ProfileHeaderState extends State<_ProfileHeader> {
+  bool _revealed = false;
 
   @override
   Widget build(BuildContext context) {
+    final email = _revealed ? widget.email : maskEmail(widget.email);
+    final phone = _revealed ? widget.phone : maskPhone(widget.phone);
     return AppCard(
       padding: const EdgeInsets.all(18),
       child: Row(
         children: [
-          UserAvatar(name: name, size: 62),
+          UserAvatar(name: widget.name, size: 62, avatarUrl: widget.avatarUrl),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
+                  widget.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   email,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.mutedColor,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: context.mutedColor, fontSize: 12),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -457,15 +550,15 @@ class _ProfileHeader extends StatelessWidget {
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: _orangeLight,
+                        color: AppColors.primarySoft,
                         borderRadius: BorderRadius.circular(7),
                       ),
                       child: Text(
-                        roleLabel,
+                        widget.roleLabel,
                         style: const TextStyle(
-                          color: _orange,
+                          color: AppColors.primary,
                           fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -480,6 +573,19 @@ class _ProfileHeader extends StatelessWidget {
                   ],
                 ),
               ],
+            ),
+          ),
+          IconButton(
+            tooltip: _revealed
+                ? 'Ocultar dados pessoais'
+                : 'Mostrar dados pessoais',
+            onPressed: () => setState(() => _revealed = !_revealed),
+            icon: Icon(
+              _revealed
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: context.mutedColor,
+              size: 21,
             ),
           ),
         ],
@@ -504,19 +610,13 @@ class _QuickAction extends StatelessWidget {
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 17),
-      label: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
       style: OutlinedButton.styleFrom(
-        foregroundColor: _black,
+        foregroundColor: AppColors.ink,
         minimumSize: const Size.fromHeight(48),
         padding: const EdgeInsets.symmetric(horizontal: 10),
         side: BorderSide(color: context.lineColor),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(13),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
       ),
     );
   }
@@ -546,12 +646,12 @@ class _AddressCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _orangeLight,
+              color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(
               isWork ? Icons.work_outline_rounded : Icons.home_outlined,
-              color: _orange,
+              color: AppColors.primary,
               size: 20,
             ),
           ),
@@ -567,9 +667,8 @@ class _AddressCard extends StatelessWidget {
                   children: [
                     Text(
                       address.label,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     if (address.isDefault)
                       Container(
@@ -578,15 +677,15 @@ class _AddressCard extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: _orangeLight,
+                          color: AppColors.primarySoft,
                           borderRadius: BorderRadius.circular(5),
                         ),
                         child: const Text(
                           'PREDEFINIDA',
                           style: TextStyle(
-                            color: _orange,
+                            color: AppColors.primary,
                             fontSize: 8,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: 0.4,
                           ),
                         ),
@@ -641,86 +740,62 @@ class _AddressCard extends StatelessWidget {
 }
 
 class _AppInfoCard extends StatelessWidget {
-  const _AppInfoCard({required this.apiBaseUrl});
-
-  final String apiBaseUrl;
+  const _AppInfoCard();
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
       padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          ListTile(
-            leading: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: _orangeLight,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.dns_outlined,
-                color: _orange,
-                size: 19,
-              ),
-            ),
-            title: const Text(
-              'Servidor da API',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            subtitle: Text(
-              apiBaseUrl,
-              style: TextStyle(
-                color: context.mutedColor,
-                fontSize: 11,
-              ),
-            ),
+      child: ListTile(
+        leading: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: context.cardColor,
+            borderRadius: BorderRadius.circular(10),
           ),
-          Divider(height: 1, color: context.lineColor),
-          ListTile(
-            leading: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: context.cardColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.info_outline_rounded,
-                color: context.mutedColor,
-                size: 19,
-              ),
-            ),
-            title: const Text(
-              'Versão da aplicação',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            subtitle: const Text(
-              appVersion,
-              style: TextStyle(fontSize: 11),
-            ),
+          child: Icon(
+            Icons.info_outline_rounded,
+            color: context.mutedColor,
+            size: 19,
           ),
-        ],
+        ),
+        title: const Text(
+          'Versão da aplicação',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        ),
+        subtitle: const Text(appVersion, style: TextStyle(fontSize: 11)),
       ),
     );
   }
+}
+
+class _ProfileInput {
+  const _ProfileInput({
+    required this.name,
+    required this.phone,
+    required this.email,
+    this.pickedImage,
+  });
+
+  final String name;
+  final String phone;
+  final String email;
+  final XFile? pickedImage;
 }
 
 class _ProfileDialog extends StatefulWidget {
   const _ProfileDialog({
     required this.name,
     required this.phone,
+    required this.email,
+    this.avatarUrl,
   });
 
   final String name;
   final String phone;
+  final String email;
+  final String? avatarUrl;
 
   @override
   State<_ProfileDialog> createState() => _ProfileDialogState();
@@ -728,59 +803,222 @@ class _ProfileDialog extends StatefulWidget {
 
 class _ProfileDialogState extends State<_ProfileDialog> {
   final _formKey = GlobalKey<FormState>();
+  final _imagePicker = ImagePicker();
 
   late final TextEditingController _name;
   late final TextEditingController _phone;
+  late final TextEditingController _email;
+  XFile? _pickedImage;
 
   @override
   void initState() {
     super.initState();
     _name = TextEditingController(text: widget.name);
     _phone = TextEditingController(text: widget.phone);
+    _email = TextEditingController(text: widget.email);
   }
 
   @override
   void dispose() {
     _name.dispose();
     _phone.dispose();
+    _email.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final image = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 800,
+        maxHeight: 800,
+      );
+      if (image == null || !mounted) return;
+      setState(() => _pickedImage = image);
+    } on PlatformException catch (error) {
+      if (mounted) {
+        showAppSnack(
+          context,
+          error.message ?? 'Não foi possível abrir a imagem.',
+          error: true,
+        );
+      }
+    }
+  }
+
+  Future<void> _chooseSource() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 14, 20, 6),
+              child: Text(
+                'Fotografia de perfil',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Galeria'),
+              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Câmara'),
+              onTap: () => Navigator.of(context).pop(ImageSource.camera),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    await _pickImage(source);
   }
 
   @override
   Widget build(BuildContext context) {
+    final picked = _pickedImage;
+
     return AlertDialog(
       title: const Text('Editar perfil'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _name,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Nome',
-              ),
-              validator: (value) =>
-                  (value == null || value.trim().length < 2)
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _ProfileSectionLabel('Fotografia'),
+                Center(
+                  child: Column(
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          picked != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(26),
+                                  child: Image.file(
+                                    File(picked.path),
+                                    width: 88,
+                                    height: 88,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : UserAvatar(
+                                  name: _name.text.isEmpty ? 'N' : _name.text,
+                                  size: 88,
+                                  avatarUrl: widget.avatarUrl,
+                                ),
+                          Positioned(
+                            right: -6,
+                            bottom: -6,
+                            child: Material(
+                              color: AppColors.primary,
+                              shape: const CircleBorder(),
+                              elevation: 2,
+                              child: IconButton(
+                                tooltip: 'Alterar fotografia',
+                                onPressed: _chooseSource,
+                                icon: const Icon(
+                                  Icons.photo_camera_rounded,
+                                  color: Colors.white,
+                                  size: 17,
+                                ),
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(34, 34),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: _chooseSource,
+                        child: Text(
+                          picked == null
+                              ? 'Tocar para escolher da galeria ou câmara'
+                              : 'Tocar para escolher outra fotografia',
+                          style: TextStyle(
+                            color: context.mutedColor,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+                const _ProfileSectionLabel('Dados pessoais'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _name,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome completo',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                  validator: (value) =>
+                      (value == null || value.trim().length < 2)
                       ? 'Indique o seu nome.'
                       : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _phone,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Telemóvel',
-              ),
-              validator: (value) =>
-                  RegExp(r'^8[2-7][0-9]{7}$').hasMatch(
-                    digitsOnly(value ?? ''),
-                  )
+                ),
+
+                const SizedBox(height: 16),
+                const _ProfileSectionLabel('Contactos'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  maxLength: 9,
+                  decoration: const InputDecoration(
+                    labelText: 'Telemóvel',
+                    counterText: '',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                    helperText:
+                        'O estafeta liga para este número em cada entrega.',
+                    helperMaxLines: 2,
+                  ),
+                  validator: (value) =>
+                      RegExp(r'^8[2-7][0-9]{7}$')
+                          .hasMatch(digitsOnly(value ?? ''))
                       ? null
-                      : 'Número inválido (9 dígitos).',
+                      : 'Número inválido (8x, 9 dígitos).',
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.alternate_email_rounded),
+                    helperText: 'Serve para entrar na sua conta.',
+                    helperMaxLines: 2,
+                  ),
+                  validator: (value) {
+                    final text = value?.trim() ?? '';
+                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)) {
+                      return 'Indique um email válido.';
+                    }
+                    return null;
+                  },
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
       actions: [
@@ -793,19 +1031,42 @@ class _ProfileDialogState extends State<_ProfileDialog> {
             if (!(_formKey.currentState?.validate() ?? false)) {
               return;
             }
-
             Navigator.of(context).pop(
-              (_name.text.trim(), _phone.text.trim()),
+              _ProfileInput(
+                name: _name.text.trim(),
+                phone: _phone.text.trim(),
+                email: _email.text.trim(),
+                pickedImage: _pickedImage,
+              ),
             );
           },
           style: FilledButton.styleFrom(
-            backgroundColor: _orange,
-            foregroundColor: _white,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
             minimumSize: const Size(0, 44),
           ),
           child: const Text('Guardar'),
         ),
       ],
+    );
+  }
+}
+
+class _ProfileSectionLabel extends StatelessWidget {
+  const _ProfileSectionLabel(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title.toUpperCase(),
+      style: TextStyle(
+        color: context.mutedColor,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+      ),
     );
   }
 }

@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
+
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
 import 'store_screen.dart';
-
-const Color _orange = Color(0xFFFF6B00);
-const Color _orangeLight = Color(0xFFFFF0E5);
-const Color _black = Color(0xFF171717);
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -46,9 +44,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
     final categories = api.categories();
     final allEstablishments = api.establishments();
-    final establishments = api.establishments(
-      category: _selectedSlug,
-    );
+    final establishments = api.establishments(category: _selectedSlug);
 
     setState(() {
       _categoriesFuture = categories;
@@ -68,15 +64,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _select(Category category) {
-    final slug = _selectedSlug == category.slug
-        ? null
-        : category.slug;
+    final slug = _selectedSlug == category.slug ? null : category.slug;
 
     setState(() {
       _selectedSlug = slug;
 
-      _establishmentsFuture = AppScope.of(context)
-          .api
+      _establishmentsFuture = AppScope.of(context).api
           .establishments(category: slug);
     });
   }
@@ -86,35 +79,29 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Categorias'),
-        actions: const [
-          CartButton(),
-          SizedBox(width: 4),
-        ],
+        actions: const [CartButton(), SizedBox(width: 4)],
       ),
       body: SafeArea(
         top: false,
         child: RefreshIndicator(
           onRefresh: _refresh,
-          color: _orange,
+          color: AppColors.primary,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
             children: [
               Text(
                 'Explore por categoria',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
 
               const SizedBox(height: 5),
 
               Text(
                 'Escolha o tipo de parceiro e veja quem está disponível.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: context.mutedColor,
-                      height: 1.5,
-                    ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: context.mutedColor, height: 1.5),
               ),
 
               const SizedBox(height: 20),
@@ -135,34 +122,46 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                         );
                       }
 
-                      final establishments =
-                          establishmentsSnapshot.data ?? [];
+                      final establishments = establishmentsSnapshot.data ?? [];
 
                       if (categories.isEmpty) {
                         return const EmptyState(
                           icon: Icons.category_outlined,
                           title: 'Sem categorias',
-                          message:
-                              'Ainda não existem categorias configuradas.',
+                          message: 'Ainda não existem categorias configuradas.',
                         );
                       }
 
                       return LayoutBuilder(
                         builder: (context, constraints) {
-                          final columns =
-                              constraints.maxWidth >= 760 ? 4 : 2;
+                          final columns = constraints.maxWidth >= 760 ? 4 : 2;
 
                           const spacing = 12.0;
 
-                          final width = (constraints.maxWidth -
-                                  spacing * (columns - 1)) /
+                          final width =
+                              (constraints.maxWidth - spacing * (columns - 1)) /
                               columns;
+
+                          final visible = [
+                            for (final category in categories)
+                              if (category.establishmentCount > 0) category,
+                          ];
+
+                          if (visible.isEmpty) {
+                            return const EmptyState(
+                              icon: Icons.category_outlined,
+                              title: 'Sem categorias com parceiros',
+                              message:
+                                  'Ainda não há estabelecimentos disponíveis. '
+                                  'As categorias aparecem quando um parceiro é aprovado.',
+                            );
+                          }
 
                           return Wrap(
                             spacing: spacing,
                             runSpacing: spacing,
                             children: [
-                              for (final category in categories)
+                              for (final category in visible)
                                 SizedBox(
                                   width: width,
                                   child: _CategoryCard(
@@ -171,8 +170,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                       category,
                                       establishments,
                                     ),
-                                    selected:
-                                        _selectedSlug == category.slug,
+                                    selected: _selectedSlug == category.slug,
                                     onTap: () => _select(category),
                                   ),
                                 ),
@@ -194,8 +192,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       title: _selectedSlug == null
                           ? 'Todos os parceiros'
                           : 'Parceiros na categoria',
-                      subtitle:
-                          'Toque num estabelecimento para ver o menu',
+                      subtitle: 'Toque num estabelecimento para ver o menu',
                     ),
                   ),
                   if (_selectedSlug != null)
@@ -203,14 +200,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       onPressed: () {
                         setState(() {
                           _selectedSlug = null;
-                          _establishmentsFuture =
-                              AppScope.of(context).api.establishments();
+                          _establishmentsFuture = AppScope.of(context).api
+                              .establishments();
                         });
                       },
                       child: const Text(
                         'Limpar filtro',
                         style: TextStyle(
-                          color: _orange,
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -240,6 +237,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                           padding: const EdgeInsets.only(bottom: 10),
                           child: EstablishmentTile(
                             establishment: establishment,
+                            isFavorite: AppScope.of(context)
+                                .isFavoriteEstablishment(establishment.id),
+                            onFavoriteToggle: () =>
+                                toggleFavorite(context, establishment.id),
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => StoreScreen(
@@ -260,15 +261,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  String? _imageFor(
-    Category category,
-    List<Establishment> establishments,
-  ) {
+  String? _imageFor(Category category, List<Establishment> establishments) {
     if (category.imageUrl != null && category.imageUrl!.isNotEmpty) {
       return category.imageUrl;
     }
     for (final establishment in establishments) {
-      if (establishment.imageUrl != null &&
+      if (establishment.categorySlug == category.slug &&
+          establishment.imageUrl != null &&
           establishment.imageUrl!.isNotEmpty) {
         return establishment.imageUrl;
       }
@@ -295,8 +294,8 @@ class _CategoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       onTap: onTap,
-      color: selected ? _orangeLight : null,
-      borderColor: selected ? _orange : null,
+      color: selected ? AppColors.primarySoft : null,
+      borderColor: selected ? AppColors.primary : null,
       padding: const EdgeInsets.all(9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,10 +323,7 @@ class _CategoryCard extends StatelessWidget {
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
-                          colors: [
-                            Color(0x70000000),
-                            Colors.transparent,
-                          ],
+                          colors: [Color(0x70000000), Colors.transparent],
                         ),
                       ),
                     ),
@@ -348,9 +344,9 @@ class _CategoryCard extends StatelessWidget {
                         child: Text(
                           '${category.establishmentCount}',
                           style: const TextStyle(
-                            color: _orange,
+                            color: AppColors.primary,
                             fontSize: 10,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -363,7 +359,7 @@ class _CategoryCard extends StatelessWidget {
                       right: 7,
                       child: CircleAvatar(
                         radius: 12,
-                        backgroundColor: _orange,
+                        backgroundColor: AppColors.primary,
                         child: Icon(
                           Icons.check_rounded,
                           color: Colors.white,
@@ -383,19 +379,16 @@ class _CategoryCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: selected ? _orange : null,
-                ),
+              fontWeight: FontWeight.w700,
+              color: selected ? AppColors.primary : null,
+            ),
           ),
 
           const SizedBox(height: 3),
 
           Text(
             '${category.establishmentCount} parceiro(s)',
-            style: TextStyle(
-              color: context.mutedColor,
-              fontSize: 10,
-            ),
+            style: TextStyle(color: context.mutedColor, fontSize: 10),
           ),
         ],
       ),
@@ -404,12 +397,12 @@ class _CategoryCard extends StatelessWidget {
 
   Widget _imageFallback() {
     return ColoredBox(
-      color: _orangeLight,
+      color: AppColors.primarySoft,
       child: Center(
         child: Icon(
           categoryIconFor(category.icon),
           size: 36,
-          color: _orange,
+          color: AppColors.primary,
         ),
       ),
     );

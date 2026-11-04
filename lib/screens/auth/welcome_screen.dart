@@ -1,5 +1,7 @@
-
 import 'package:flutter/material.dart';
+
+import '../../theme/app_colors.dart';
+
 import 'package:flutter/services.dart';
 
 import '../../state/app_scope.dart';
@@ -16,9 +18,6 @@ class WelcomeScreen extends StatelessWidget {
   final VoidCallback onSignIn;
   final VoidCallback onGuest;
 
-  static const Color orange = Color(0xFFFF7900);
-  static const Color navy = Color(0xFF06264B);
-
   @override
   Widget build(BuildContext context) {
     final startupMessage = AppScope.of(context).startupMessage;
@@ -28,24 +27,25 @@ class WelcomeScreen extends StatelessWidget {
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
-        systemNavigationBarColor: navy,
+        systemNavigationBarColor: AppColors.deepNavy,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: navy,
+        backgroundColor: AppColors.deepNavy,
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Fotografia de Nacala-Porto em ecrã inteiro.
+            // Fotografia do motociclista.
             Image.asset(
-              'assets/images/login_bg.jpg',
+              'assets/images/login_bg.png',
               fit: BoxFit.cover,
               alignment: Alignment.center,
-              errorBuilder: (_, __, ___) =>
-                  const ColoredBox(color: navy),
+              errorBuilder: (context, error, stackTrace) {
+                return const ColoredBox(color: AppColors.deepNavy);
+              },
             ),
 
-            // Camada escura para garantir a leitura dos textos.
+            // Gradiente para melhorar a leitura dos elementos.
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -54,41 +54,37 @@ class WelcomeScreen extends StatelessWidget {
                   colors: [
                     Color(0x55001635),
                     Color(0x18001635),
-                    Color(0xAA001A38),
-                    Color(0xF0001835),
+                    Color(0x44001635),
+                    Color(0xBB001A38),
+                    Color(0xF5001835),
                   ],
-                  stops: [0.0, 0.30, 0.62, 1.0],
+                  stops: [0.0, 0.28, 0.52, 0.76, 1.0],
                 ),
               ),
             ),
 
             SafeArea(
-              top: false,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
                         minHeight: constraints.maxHeight,
                       ),
                       child: IntrinsicHeight(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            28, 65, 28, 24,
-                          ),
+                          padding: const EdgeInsets.fromLTRB(26, 24, 26, 12),
                           child: Column(
                             children: [
                               const Spacer(flex: 2),
 
-                              // Logótipo.
-                              const AppLogo(
-                                size: 104,
-                                onDark: true,
-                              ),
+                              // LOGÓTIPO.
+                              const AppLogo(size: 104, onDark: true),
 
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 12),
 
-                              // Nome da marca.
+                              // NOME DA MARCA.
                               RichText(
                                 textAlign: TextAlign.center,
                                 text: const TextSpan(
@@ -97,17 +93,17 @@ class WelcomeScreen extends StatelessWidget {
                                       text: 'Nacala',
                                       style: TextStyle(
                                         color: Colors.white,
-                                        fontSize: 36,
-                                        fontWeight: FontWeight.w800,
+                                        fontSize: 35,
+                                        fontWeight: FontWeight.w700,
                                         letterSpacing: -1.5,
                                       ),
                                     ),
                                     TextSpan(
                                       text: 'Delivery',
                                       style: TextStyle(
-                                        color: orange,
-                                        fontSize: 36,
-                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.primary,
+                                        fontSize: 35,
+                                        fontWeight: FontWeight.w700,
                                         letterSpacing: -1.5,
                                       ),
                                     ),
@@ -115,7 +111,7 @@ class WelcomeScreen extends StatelessWidget {
                                 ),
                               ),
 
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 7),
 
                               const Text(
                                 'Pedido feito. Entrega garantida!',
@@ -123,28 +119,32 @@ class WelcomeScreen extends StatelessWidget {
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: FontWeight.w500,
                                   letterSpacing: 0.2,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black54,
+                                      blurRadius: 8,
+                                    ),
+                                  ],
                                 ),
                               ),
 
-                              const Spacer(flex: 2),
+                              const Spacer(flex: 3),
 
-                              // Localização.
+                              // LOCALIZAÇÃO.
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 15,
+                                  horizontal: 17,
                                   vertical: 10,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(
-                                    alpha: 0.12,
+                                  color: AppColors.deepNavy.withValues(
+                                    alpha: 0.45,
                                   ),
                                   borderRadius: BorderRadius.circular(30),
                                   border: Border.all(
-                                    color: Colors.white.withValues(
-                                      alpha: 0.30,
-                                    ),
+                                    color: Colors.white.withValues(alpha: 0.35),
                                   ),
                                 ),
                                 child: const Row(
@@ -152,7 +152,7 @@ class WelcomeScreen extends StatelessWidget {
                                   children: [
                                     Icon(
                                       Icons.location_on,
-                                      color: orange,
+                                      color: AppColors.primary,
                                       size: 21,
                                     ),
                                     SizedBox(width: 7),
@@ -174,18 +174,19 @@ class WelcomeScreen extends StatelessWidget {
                                 ),
                               ),
 
-                              const SizedBox(height: 30),
+                              const SizedBox(height: 25),
 
-                              // Botão Entrar.
+                              // BOTÃO ENTRAR.
                               SizedBox(
                                 width: double.infinity,
-                                height: 56,
+                                height: 55,
                                 child: FilledButton(
                                   onPressed: onSignIn,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: orange,
+                                    backgroundColor: AppColors.primary,
                                     foregroundColor: Colors.white,
-                                    elevation: 4,
+                                    elevation: 5,
+                                    shadowColor: Colors.black45,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(32),
                                     ),
@@ -193,7 +194,7 @@ class WelcomeScreen extends StatelessWidget {
                                   child: const Text(
                                     'Entrar',
                                     style: TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 17,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -202,24 +203,23 @@ class WelcomeScreen extends StatelessWidget {
 
                               const SizedBox(height: 12),
 
-                              // Botão Criar Conta.
+                              // BOTÃO CRIAR CONTA.
                               SizedBox(
                                 width: double.infinity,
-                                height: 55,
+                                height: 54,
                                 child: OutlinedButton(
                                   onPressed: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute<void>(
-                                        builder: (_) =>
-                                            const RegisterScreen(),
+                                        builder: (_) => const RegisterScreen(),
                                       ),
                                     );
                                   },
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.white,
                                     side: const BorderSide(
-                                      color: orange,
-                                      width: 1.7,
+                                      color: AppColors.primary,
+                                      width: 1.8,
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(32),
@@ -228,28 +228,44 @@ class WelcomeScreen extends StatelessWidget {
                                   child: const Text(
                                     'Criar Conta',
                                     style: TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 17,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
                               ),
 
+                              // CONTINUAR COMO CONVIDADO.
+                              TextButton(
+                                onPressed: onGuest,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.white.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                  minimumSize: const Size.fromHeight(46),
+                                  textStyle: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                child: const Text('Explorar como convidado'),
+                              ),
+
+                              // MENSAGEM DE INICIALIZAÇÃO.
                               if (startupMessage != null) ...[
-                                const SizedBox(height: 15),
+                                const SizedBox(height: 13),
                                 Container(
+                                  width: double.infinity,
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withValues(
-                                      alpha: 0.45,
-                                    ),
+                                    color: Colors.black.withValues(alpha: 0.45),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Row(
                                     children: [
                                       const Icon(
                                         Icons.cloud_off_outlined,
-                                        color: Colors.orange,
+                                        color: AppColors.primary,
                                         size: 20,
                                       ),
                                       const SizedBox(width: 9),
@@ -267,46 +283,11 @@ class WelcomeScreen extends StatelessWidget {
                                 ),
                               ],
 
-                              const Spacer(flex: 1),
+                              const SizedBox(height: 10),
 
-                              // Acesso de convidado.
-                              TextButton(
-                                onPressed: onGuest,
-                                child: const Text(
-                                  'Explorar como convidado',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
+                              const SizedBox(height: 5),
 
-                              const SizedBox(height: 8),
-
-                              const Text(
-                                'Nacala-Porto mais perto de si!',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontStyle: FontStyle.italic,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.3,
-                                ),
-                              ),
-
-                              const SizedBox(height: 8),
-
-                              Container(
-                                width: 65,
-                                height: 3,
-                                decoration: BoxDecoration(
-                                  color: orange,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 15),
                             ],
                           ),
                         ),

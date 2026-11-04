@@ -19,6 +19,9 @@ class FakeApi implements NacalaApi {
   EstablishmentDetail? establishmentDetail;
   Object? loginError;
   Object? meError;
+  Object? favoritesError;
+  List<Establishment> favoritesResult = const [];
+  List<Order> ordersResult = const [];
 
   @override
   final ApiClient client = ApiClient();
@@ -77,7 +80,47 @@ class FakeApi implements NacalaApi {
   }) async => const [];
 
   @override
-  Future<List<Order>> orders({String? status}) async => const [];
+  Future<List<Order>> orders({String? status}) async => ordersResult;
+
+  @override
+  Future<List<Establishment>> favorites() async {
+    final error = favoritesError;
+    if (error != null) throw error;
+    return [...favoritesResult];
+  }
+
+  @override
+  Future<void> addFavorite(String establishmentId) async {
+    if (!favoritesResult.any((item) => item.id == establishmentId)) {
+      final found = const Establishment(
+        id: 'favorite-new',
+        name: 'Favorito',
+        slug: 'favorito',
+        description: '',
+        address: 'Nacala-Porto',
+        phone: '840000000',
+        deliveryFeeCents: 0,
+        prepMinutes: 30,
+        opensAt: '08:00',
+        closesAt: '22:00',
+        isOpen: true,
+        rating: 0,
+        reviewCount: 0,
+        productCount: 0,
+        categoryId: 'cat',
+        categoryName: 'Testes',
+        categorySlug: 'lojas',
+      );
+      favoritesResult = [...favoritesResult, found];
+    }
+  }
+
+  @override
+  Future<void> removeFavorite(String establishmentId) async {
+    favoritesResult = favoritesResult
+        .where((item) => item.id != establishmentId)
+        .toList();
+  }
 
   @override
   Future<AdminSummary> adminSummary() async {

@@ -48,6 +48,7 @@ class AppState extends ChangeNotifier {
   bool _busy = false;
 
   List<Address> _addresses = const [];
+  Set<String> _favoriteEstablishmentIds = {};
   List<CartLine> _cart = [];
   CartStore? _cartStore;
   int _couponDiscountCents = 0;
@@ -60,6 +61,13 @@ class AppState extends ChangeNotifier {
   bool get isBusy => _busy;
   String? get startupMessage => _startupMessage;
   List<Address> get addresses => List.unmodifiable(_addresses);
+
+  /// Identificadores dos estabelecimentos favoritos do utilizador.
+  Set<String> get favoriteEstablishmentIds =>
+      Set.unmodifiable(_favoriteEstablishmentIds);
+
+  bool isFavoriteEstablishment(String id) =>
+      _favoriteEstablishmentIds.contains(id);
   Address? get defaultAddress {
     if (_addresses.isEmpty) return null;
     for (final address in _addresses) {
@@ -80,7 +88,9 @@ class AppState extends ChangeNotifier {
 
   /// Restaura a sessão guardada e revalida-a junto da API.
   Future<void> bootstrap({
-    Duration serverTimeout = const Duration(seconds: 5),
+    /// Tempo máximo para a revalidação de sessão no arranque. O serviço
+    /// pode estar frio no arranque (Render free), por isso é generoso.
+    Duration serverTimeout = const Duration(seconds: 12),
   }) async {
     _restoreCart();
     final token = _prefs.getString(_tokenKey);
@@ -108,6 +118,7 @@ class AppState extends ChangeNotifier {
       final data = await _api.me().timeout(serverTimeout);
       _user = data.user;
       _addresses = data.addresses;
+      await refreshFavorites();
       _status = SessionStatus.signedIn;
       _startupMessage = null;
       await _persistSession();
@@ -132,6 +143,7 @@ class AppState extends ChangeNotifier {
       final result = await _api.login(identifier, password);
       await _applyAuth(result);
       await refreshAddresses();
+      await refreshFavorites();
       _startupMessage = null;
     } finally {
       _busy = false;
@@ -156,6 +168,7 @@ class AppState extends ChangeNotifier {
       );
       await _applyAuth(result);
       await refreshAddresses();
+      await refreshFavorites();
       _startupMessage = null;
     } finally {
       _busy = false;
@@ -221,9 +234,53 @@ class AppState extends ChangeNotifier {
     _user = null;
     _client.token = null;
     _addresses = const [];
+    _favoriteEstablishmentIds = {};
     _status = SessionStatus.signedOut;
     await _prefs.remove(_tokenKey);
     await _prefs.remove(_userKey);
+  }
+
+  /// Recarrega a lista de favoritos. Falhas de rede são ignoradas para
+  /// não bloquear o arranque — a lista local é preservada.
+  Future<void> refreshFavorites() async {
+    try {
+      final favorites = await _api.favorites();
+      _favoriteEstablishmentIds = {for (final item in favorites) item.id};
+    } catch (_) {
+      // Sem ligação: manter o estado local.
+    }
+  }
+
+  /// Alterna um estabelecimento nos favoritos com atualização otimista.
+  /// Faz rollback e devolve `null` (ou o erro) em caso de falha.
+  Future<bool> toggleFavoriteEstablishment(String id) async {
+    final had = _favoriteEstablishmentIds.contains(id);
+    final next = {..._favoriteEstablishmentIds};
+    if (had) {
+      next.remove(id);
+    } else {
+      next.add(id);
+    }
+    _favoriteEstablishmentIds = next;
+    notifyListeners();
+    try {
+      if (had) {
+        await _api.removeFavorite(id);
+      } else {
+        await _api.addFavorite(id);
+      }
+      return !had;
+    } catch (_) {
+      final rollback = {..._favoriteEstablishmentIds};
+      if (had) {
+        rollback.add(id);
+      } else {
+        rollback.remove(id);
+      }
+      _favoriteEstablishmentIds = rollback;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> refreshMe() async {
@@ -237,8 +294,18 @@ class AppState extends ChangeNotifier {
   Future<void> updateProfile({
     required String name,
     required String phone,
+    String? email,
   }) async {
-    _user = await _api.updateProfile(name: name, phone: phone);
+    _user = await _api.updateProfile(name: name, phone: phone, email: email);
+    await _persistSession();
+    notifyListeners();
+  }
+
+  Future<void> uploadAvatar({
+    required String mimeType,
+    required String dataBase64,
+  }) async {
+    _user = await _api.uploadAvatar(mimeType: mimeType, dataBase64: dataBase64);
     await _persistSession();
     notifyListeners();
   }
@@ -474,6 +541,13 @@ class AppState extends ChangeNotifier {
         _cart = [
           for (final line in lines)
             if (line is Map<String, dynamic>) CartLine.fromJson(line),
+        ];
+        // Descarta linhas de versões antigas ou dados danificados: um
+        // produto sem identificador ou com preço inválido não é adicionável
+        // e quebraria os totais do carrinho.
+        _cart = [
+          for (final line in _cart)
+            if (line.product.id.isNotEmpty && line.product.priceCents > 0) line,
         ];
       }
       if (_cart.isEmpty) _cartStore = null;

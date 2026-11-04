@@ -60,10 +60,27 @@ class NacalaApi {
   Future<UserAccount> updateProfile({
     required String name,
     required String phone,
+    String? email,
   }) async {
     final json = await client.patch(
       '/api/auth/profile',
-      body: {'name': name, 'phone': phone},
+      body: {
+        'name': name,
+        'phone': phone,
+        'email': ?email,
+      },
+    );
+    return UserAccount.fromJson(json['user'] as Map<String, dynamic>);
+  }
+
+  /// Envia a fotografia do utilizador e devolve o utilizador atualizado.
+  Future<UserAccount> uploadAvatar({
+    required String mimeType,
+    required String dataBase64,
+  }) async {
+    final json = await client.post(
+      '/api/auth/avatar',
+      body: {'mime_type': mimeType, 'data_base64': dataBase64},
     );
     return UserAccount.fromJson(json['user'] as Map<String, dynamic>);
   }
@@ -155,7 +172,22 @@ class NacalaApi {
     return SearchResult.fromJson(json);
   }
 
-  // ---------------------------------------------------------------- moradas
+  // ------------------------------------------------------ moradas e favoritos
+
+  /// Lista os favoritos do utilizador (estabelecimentos aprovados).
+  Future<List<Establishment>> favorites() async {
+    final json = await client.get('/api/favorites');
+    return [
+      for (final item in (json['establishments'] as List? ?? const []))
+        Establishment.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  Future<void> addFavorite(String establishmentId) =>
+      client.post('/api/favorites/$establishmentId');
+
+  Future<void> removeFavorite(String establishmentId) =>
+      client.delete('/api/favorites/$establishmentId');
 
   Future<List<Address>> addresses() async {
     final json = await client.get('/api/addresses');

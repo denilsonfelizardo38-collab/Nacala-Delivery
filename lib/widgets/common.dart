@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../state/app_scope.dart';
 import '../core/api_client.dart';
 import '../core/formatters.dart';
 import '../models/models.dart';
@@ -10,9 +11,13 @@ const pagePadding = EdgeInsets.symmetric(horizontal: 20, vertical: 16);
 
 IconData categoryIconFor(String icon) => switch (icon) {
   'restaurant' || 'restaurantes' => Icons.restaurant_rounded,
-  'basket' || 'mercados' => Icons.shopping_basket_rounded,
+  'basket' || 'mercados' || 'supermercados' => Icons.shopping_basket_rounded,
   'pharmacy' || 'farmacias' => Icons.local_pharmacy_rounded,
   'store' || 'lojas' => Icons.storefront_rounded,
+  'bakery' || 'padarias' => Icons.bakery_dining_rounded,
+  'drinks' || 'bebidas' => Icons.local_bar_rounded,
+  'butchery' || 'talhos' => Icons.kebab_dining_rounded,
+  'fish' || 'peixarias' => Icons.set_meal_rounded,
   _ => Icons.category_rounded,
 };
 
@@ -196,19 +201,103 @@ String messageForError(Object? error) {
   return 'Não foi possível carregar a informação. Tente novamente.';
 }
 
+/// Bloco de skeleton animado para estados de carregamento. Substitui
+/// indicadores vazios: pulsa suavemente e respeita o tema (claro/escuro).
+class Skeleton extends StatefulWidget {
+  const Skeleton({super.key, this.width, this.height = 16, this.radius = 8});
+
+  /// `null` ocupa toda a largura disponível.
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  State<Skeleton> createState() => _SkeletonState();
+}
+
+class _SkeletonState extends State<Skeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = context.isDarkMode
+        ? AppColors.darkElevated
+        : const Color(0xFFE9E9ED);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) =>
+          Opacity(opacity: 0.55 + (_controller.value * 0.35), child: child),
+      child: Container(
+        width: widget.width ?? double.infinity,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: base,
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      ),
+    );
+  }
+}
+
+/// Linha de skeleton com ícone/avatar + duas linhas de texto.
+class SkeletonListTile extends StatelessWidget {
+  const SkeletonListTile({super.key, this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: compact ? 4 : 6),
+      child: Row(
+        children: [
+          const Skeleton(width: 64, height: 64, radius: 16),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Skeleton(width: compact ? 120 : 170, height: 13, radius: 6),
+                const SizedBox(height: 8),
+                const Skeleton(height: 11, radius: 6),
+                if (!compact) ...[
+                  const SizedBox(height: 6),
+                  const Skeleton(width: 220, height: 11, radius: 6),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class LoadingBlock extends StatelessWidget {
   const LoadingBlock({super.key, this.height = 160});
   final double height;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: height,
-      child: const Center(
-        child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(strokeWidth: 2.4),
+    // Skeleton em vez de spinner: silencioso e consistente com o tema.
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: height * 0.55, maxHeight: height),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [SkeletonListTile(), SkeletonListTile()],
         ),
       ),
     );
@@ -783,10 +872,16 @@ class EstablishmentTile extends StatelessWidget {
     super.key,
     required this.establishment,
     required this.onTap,
+    this.isFavorite = false,
+    this.onFavoriteToggle,
   });
 
   final Establishment establishment;
   final VoidCallback onTap;
+  final bool isFavorite;
+
+  /// Quando definido, mostra um botão de favorito (coração).
+  final VoidCallback? onFavoriteToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -823,6 +918,13 @@ class EstablishmentTile extends StatelessWidget {
                       status: open ? 'accepted' : 'cancelled',
                       label: open ? 'Aberto' : 'Fechado',
                     ),
+                    if (onFavoriteToggle != null) ...[
+                      const SizedBox(width: 4),
+                      FavoriteIconButton(
+                        isFavorite: isFavorite,
+                        onPressed: onFavoriteToggle!,
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 3),
@@ -857,6 +959,60 @@ class EstablishmentTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Botão de favorito em forma de coração. [onDark] usa fundo branco
+/// translúcido para pousar sobre fotografias.
+class FavoriteIconButton extends StatelessWidget {
+  const FavoriteIconButton({
+    super.key,
+    required this.isFavorite,
+    required this.onPressed,
+    this.onDark = false,
+  });
+
+  final bool isFavorite;
+  final VoidCallback onPressed;
+  final bool onDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final heart = Icon(
+      isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+      color: isFavorite
+          ? AppColors.primary
+          : onDark
+          ? AppColors.ink
+          : context.mutedColor,
+      size: onDark ? 17 : 21,
+    );
+    if (!onDark) {
+      return IconButton(
+        tooltip: isFavorite ? 'Remover dos favoritos' : 'Guardar nos favoritos',
+        onPressed: onPressed,
+        icon: heart,
+        style: IconButton.styleFrom(
+          minimumSize: const Size(40, 40),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      );
+    }
+    return Material(
+      shape: const CircleBorder(),
+      color: Colors.white.withValues(alpha: 0.92),
+      elevation: 2,
+      child: IconButton(
+        tooltip: isFavorite ? 'Remover dos favoritos' : 'Guardar nos favoritos',
+        onPressed: onPressed,
+        icon: heart,
+        padding: EdgeInsets.zero,
+        style: IconButton.styleFrom(
+          minimumSize: const Size(34, 34),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
       ),
     );
   }
@@ -915,7 +1071,46 @@ class AppLogo extends StatelessWidget {
 }
 
 class UserAvatar extends StatelessWidget {
-  const UserAvatar({super.key, required this.name, this.size = 48});
+  const UserAvatar({
+    super.key,
+    required this.name,
+    this.size = 48,
+    this.avatarUrl,
+  });
+
+  final String name;
+  final double size;
+
+  /// URL absoluto (`/uploads/...`) ou completo. Se definido e a imagem
+  /// carregar, mostra a fotografia; caso contrário as iniciais.
+  final String? avatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = avatarUrl;
+    final fallback = _InitialsAvatar(name: name, size: size);
+    if (url == null || url.trim().isEmpty) return fallback;
+    // Resolve URLs relativas ao host da API corrente.
+    final resolved = url.startsWith('http')
+        ? url
+        : Uri.parse(AppScope.of(context).apiBaseUrl).resolve(url).toString();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.32),
+      child: Image.network(
+        resolved,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => fallback,
+        loadingBuilder: (context, child, progress) =>
+            progress == null ? child : fallback,
+      ),
+    );
+  }
+}
+
+class _InitialsAvatar extends StatelessWidget {
+  const _InitialsAvatar({required this.name, required this.size});
 
   final String name;
   final double size;
@@ -939,6 +1134,33 @@ class UserAvatar extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Alterna um estabelecimento nos favoritos com feedback de snackbar.
+/// Convidados são convidados a iniciar sessão.
+Future<void> toggleFavorite(BuildContext context, String id) async {
+  final state = AppScope.of(context);
+  if (state.isGuest || !state.isSignedIn) {
+    showAppSnack(context, 'Entra ou cria uma conta para guardar favoritos.');
+    return;
+  }
+  try {
+    final added = await state.toggleFavoriteEstablishment(id);
+    if (context.mounted) {
+      showAppSnack(
+        context,
+        added ? 'Adicionado aos favoritos.' : 'Removido dos favoritos.',
+      );
+    }
+  } catch (_) {
+    if (context.mounted) {
+      showAppSnack(
+        context,
+        'Não foi possível atualizar os favoritos.',
+        error: true,
+      );
+    }
   }
 }
 

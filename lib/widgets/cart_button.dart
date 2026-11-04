@@ -5,7 +5,12 @@ import '../state/app_scope.dart';
 
 /// Ícone de carrinho com contador, usado nos ecrãs do cliente.
 class CartButton extends StatelessWidget {
-  const CartButton({super.key});
+  const CartButton({super.key, this.color});
+
+  /// Cor do ícone; por omissão usa o `foregroundColor` do tema (o típico
+  /// cinza escuro em app bars claras). Passa `Colors.white` ao integrar em
+  /// superfícies laranja/escuras.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +23,7 @@ class CartButton extends StatelessWidget {
       icon: Badge.count(
         count: count,
         isLabelVisible: count > 0,
-        child: const Icon(Icons.shopping_bag_outlined),
+        child: Icon(Icons.shopping_bag_outlined, color: color),
       ),
     );
   }

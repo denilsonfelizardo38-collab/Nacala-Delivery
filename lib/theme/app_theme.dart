@@ -2,16 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
-/// Tema Material 3 da Nacala Entrega, claro e escuro — redesign global.
+/// Tema Material 3 da Nacala Delivery, claro e escuro.
 ///
-/// Identidade visual: azul vivo (#0755E9), fundos brancos e superfícies
-/// claras (#F5F8FC), tipografia Poppins (títulos SemiBold, subtítulos Medium,
-/// textos Regular, valores importantes SemiBold).
+/// Identidade visual: laranja `#FF7900` sobre fundo `#F7F7F8` e cartões
+/// brancos `#FFFFFF`, azul secundário `#1260D8`, texto `#15191F` e texto
+/// secundário cinzento equilibrado. Tipografia Inter com hierarquia
+/// consistente (títulos SemiBold/Bold, corpo Regular, subtítulos Medium).
 abstract final class AppTheme {
-  /// Stack tipográfico estilo iPhone (SF Pro / system).
-  static const String _iosFontStack =
-      '-apple-system, BlinkMacSystemFont, SF Pro Display, SF Pro Text, '
-      'Helvetica Neue, Arial, sans-serif';
+  static const String fontFamily = 'Inter';
 
   static ThemeData light() => _build(
     brightness: Brightness.light,
@@ -40,23 +38,24 @@ abstract final class AppTheme {
     required Color border,
   }) {
     final isDark = brightness == Brightness.dark;
-    final primary = isDark ? const Color(0xFF5AA0F5) : AppColors.primary;
+    final primary = isDark ? const Color(0xFFFF9E45) : AppColors.primary;
+    final secondary = isDark ? const Color(0xFF6FA8F2) : AppColors.secondary;
     final scheme = isDark
         ? const ColorScheme.dark(
-            primary: Color(0xFF5AA0F5),
-            onPrimary: Color(0xFF04152B),
-            secondary: Color(0xFF8FC0FA),
-            onSecondary: Color(0xFF04152B),
+            primary: Color(0xFFFF9E45),
+            onPrimary: Color(0xFF2B1500),
+            secondary: Color(0xFF6FA8F2),
+            onSecondary: Color(0xFF04182E),
             surface: AppColors.darkBg,
             onSurface: AppColors.darkInk,
-            error: Color(0xFFFF7A85),
+            error: Color(0xFFFF8A80),
             onError: Color(0xFF2B0509),
             outline: AppColors.darkBorder,
           )
         : const ColorScheme.light(
             primary: AppColors.primary,
             onPrimary: Colors.white,
-            secondary: AppColors.primaryLight,
+            secondary: AppColors.secondary,
             onSecondary: Colors.white,
             surface: AppColors.bg,
             onSurface: AppColors.ink,
@@ -83,47 +82,53 @@ abstract final class AppTheme {
     );
 
     final textTheme = base
-        .apply(fontFamily: _iosFontStack)
+        .apply(fontFamily: fontFamily)
         .copyWith(
           displaySmall: style(
             ink,
-            32,
-            fontWeight: FontWeight.w800,
-            height: 1.08,
-            letterSpacing: -0.8,
+            30,
+            fontWeight: FontWeight.w700,
+            height: 1.12,
+            letterSpacing: -0.6,
           ),
           headlineSmall: style(
             ink,
-            27,
-            fontWeight: FontWeight.w800,
-            height: 1.15,
-            letterSpacing: -0.5,
+            25,
+            fontWeight: FontWeight.w700,
+            height: 1.16,
+            letterSpacing: -0.4,
           ),
-          titleLarge: style(ink, 24, fontWeight: FontWeight.w800, height: 1.25, letterSpacing: -0.3),
+          titleLarge: style(
+            ink,
+            22,
+            fontWeight: FontWeight.w700,
+            height: 1.24,
+            letterSpacing: -0.3,
+          ),
           titleMedium: style(
             ink,
-            18,
-            fontWeight: FontWeight.w700,
-            height: 1.3,
+            17,
+            fontWeight: FontWeight.w600,
+            height: 1.32,
           ),
-          titleSmall: style(ink, 17, fontWeight: FontWeight.w700, height: 1.3),
+          titleSmall: style(ink, 15, fontWeight: FontWeight.w600, height: 1.35),
           bodyLarge: style(ink, 16, height: 1.5),
-          bodyMedium: style(ink, 15, height: 1.5),
+          bodyMedium: style(ink, 14, height: 1.5),
           bodySmall: style(muted, 13, height: 1.5),
-          labelLarge: style(ink, 14, fontWeight: FontWeight.w700, height: 1.35),
+          labelLarge: style(ink, 14, fontWeight: FontWeight.w600, height: 1.35),
           labelSmall: style(
             muted,
-            12,
+            11,
             fontWeight: FontWeight.w600,
             height: 1.35,
-            letterSpacing: 0.2,
+            letterSpacing: 0.3,
           ),
         );
 
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
-      fontFamily: _iosFontStack,
+      fontFamily: fontFamily,
       colorScheme: scheme,
       scaffoldBackgroundColor: surface,
       canvasColor: surface,
@@ -142,7 +147,7 @@ abstract final class AppTheme {
         titleSpacing: 20,
         titleTextStyle: style(
           ink,
-          22,
+          20,
           fontWeight: FontWeight.w600,
           height: 1.25,
           letterSpacing: -0.2,
@@ -191,6 +196,7 @@ abstract final class AppTheme {
           (states) => TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
+            fontFamily: fontFamily,
             color: states.contains(WidgetState.selected) ? primary : muted,
           ),
         ),
@@ -204,37 +210,50 @@ abstract final class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: isDark ? const Color(0xFF04152B) : Colors.white,
+          foregroundColor: Colors.white,
           disabledBackgroundColor: primary.withValues(alpha: 0.4),
+          disabledForegroundColor: Colors.white.withValues(alpha: 0.9),
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            fontFamily: fontFamily,
+          ),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: primary,
-        foregroundColor: isDark ? const Color(0xFF04152B) : Colors.white,
+        foregroundColor: Colors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: ink,
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size.fromHeight(52),
           side: BorderSide(color: border),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            fontFamily: fontFamily,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: primary,
+          foregroundColor: secondary,
           minimumSize: const Size(44, 44),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            fontFamily: fontFamily,
+          ),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -251,14 +270,19 @@ abstract final class AppTheme {
           color: ink,
           fontSize: 13,
           fontWeight: FontWeight.w500,
+          fontFamily: fontFamily,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isDark ? AppColors.darkElevated : AppColors.primary,
-        contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+        backgroundColor: isDark ? AppColors.darkElevated : AppColors.ink,
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontFamily: fontFamily,
+        ),
         actionTextColor: Colors.white,
         insetPadding: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -269,11 +293,17 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         titleTextStyle: TextStyle(
           color: ink,
-          fontSize: 22,
-          fontWeight: FontWeight.w600,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
+          fontFamily: fontFamily,
         ),
-        contentTextStyle: TextStyle(color: muted, fontSize: 14, height: 1.45),
+        contentTextStyle: TextStyle(
+          color: muted,
+          fontSize: 14,
+          height: 1.45,
+          fontFamily: fontFamily,
+        ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: card,
@@ -299,7 +329,7 @@ abstract final class AppTheme {
         thumbColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? Colors.white
-              : (isDark ? AppColors.darkMuted : AppColors.muted),
+              : (isDark ? AppColors.darkMuted : AppColors.mutedLight),
         ),
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected) ? primary : border,
@@ -329,11 +359,13 @@ extension AppThemeContext on BuildContext {
 
   Color get accentColor => Theme.of(this).colorScheme.primary;
 
+  Color get secondaryColor => Theme.of(this).colorScheme.secondary;
+
   Color get successColor =>
       isDarkMode ? const Color(0xFF4ED6A0) : AppColors.success;
 
   Color get dangerColor =>
-      isDarkMode ? const Color(0xFFFF7A85) : AppColors.danger;
+      isDarkMode ? const Color(0xFFFF8A80) : AppColors.danger;
 
   Color get warningColor =>
       isDarkMode ? const Color(0xFFFFC45C) : AppColors.warning;

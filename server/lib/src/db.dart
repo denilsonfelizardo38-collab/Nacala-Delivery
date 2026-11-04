@@ -262,6 +262,21 @@ const migrations = <Migration>[
   Migration(3, [
     'ALTER TABLE categories ADD COLUMN image_url TEXT',
   ]),
+  Migration(4, [
+    '''
+    CREATE TABLE IF NOT EXISTS favorites (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      establishment_id TEXT NOT NULL
+        REFERENCES establishments(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, establishment_id)
+    )
+    ''',
+    'CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)',
+  ]),
+  Migration(5, [
+    'ALTER TABLE users ADD COLUMN avatar_url TEXT',
+  ]),
 ];
 
 /// Gera identificadores opacos para as linhas.

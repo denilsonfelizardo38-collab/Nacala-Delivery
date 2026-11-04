@@ -10,9 +10,6 @@ import '../../widgets/common.dart';
 import 'checkout_screen.dart';
 import 'store_screen.dart';
 
-const _brandOrange = Color(0xFFFF7900);
-const _brandBlack = Color(0xFF151515);
-
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
 
@@ -94,9 +91,8 @@ class _CartScreenState extends State<CartScreen> {
       Navigator.of(context).pushNamed('/login');
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CheckoutScreen()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const CheckoutScreen()));
   }
 
   @override
@@ -105,9 +101,9 @@ class _CartScreenState extends State<CartScreen> {
     final empty = state.isCartEmpty;
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        backgroundColor: _brandBlack,
+        backgroundColor: AppColors.ink,
         foregroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 20,
@@ -116,15 +112,15 @@ class _CartScreenState extends State<CartScreen> {
           children: [
             Text(
               'O meu carrinho',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
             ),
             SizedBox(height: 2),
             Text(
               'NACALA DELIVERY',
               style: TextStyle(
-                color: _brandOrange,
+                color: AppColors.primary,
                 fontSize: 9,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 letterSpacing: 1.8,
               ),
             ),
@@ -155,12 +151,12 @@ class _CartScreenState extends State<CartScreen> {
                           width: 86,
                           height: 86,
                           decoration: BoxDecoration(
-                            color: _brandOrange.withValues(alpha: 0.12),
+                            color: AppColors.primary.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
                             Icons.shopping_bag_outlined,
-                            color: _brandOrange,
+                            color: AppColors.primary,
                             size: 42,
                           ),
                         ),
@@ -169,7 +165,7 @@ class _CartScreenState extends State<CartScreen> {
                           'O carrinho está vazio',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -190,7 +186,7 @@ class _CartScreenState extends State<CartScreen> {
                             icon: const Icon(Icons.storefront_rounded),
                             label: const Text('Ver estabelecimentos'),
                             style: FilledButton.styleFrom(
-                              backgroundColor: _brandOrange,
+                              backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(15),
@@ -234,8 +230,7 @@ class _CartScreenState extends State<CartScreen> {
                         onIncrement: () => state.increment(line.product.id),
                         onDecrement: () => state.decrement(line.product.id),
                         onRemove: () => state.removeLine(line.product.id),
-                        onEditNote: () =>
-                            _editNote(line.product.id, line.note),
+                        onEditNote: () => _editNote(line.product.id, line.note),
                       ),
                     ),
                   const SizedBox(height: 8),
@@ -344,7 +339,7 @@ class _CartScreenState extends State<CartScreen> {
                               style: TextStyle(
                                 color: context.mutedColor,
                                 fontSize: 9,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 letterSpacing: 1,
                               ),
                             ),
@@ -352,9 +347,9 @@ class _CartScreenState extends State<CartScreen> {
                             Text(
                               formatMoney(state.cartTotalCents),
                               style: const TextStyle(
-                                color: _brandOrange,
+                                color: AppColors.primary,
                                 fontSize: 19,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -366,7 +361,7 @@ class _CartScreenState extends State<CartScreen> {
                         child: FilledButton.icon(
                           onPressed: _continue,
                           style: FilledButton.styleFrom(
-                            backgroundColor: _brandOrange,
+                            backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             minimumSize: const Size.fromHeight(52),
                             shape: RoundedRectangleBorder(
@@ -382,7 +377,7 @@ class _CartScreenState extends State<CartScreen> {
                                 ? 'Entrar para pedir'
                                 : 'Finalizar pedido',
                             style: const TextStyle(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               fontSize: 12,
                             ),
                           ),
@@ -421,7 +416,7 @@ class _StoreCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: _brandOrange.withValues(alpha: 0.14),
+              color: AppColors.primary.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(16),
             ),
             child: NetworkThumb(
@@ -441,7 +436,7 @@ class _StoreCard extends StatelessWidget {
                   style: TextStyle(
                     color: context.mutedColor,
                     fontSize: 9,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: 1,
                   ),
                 ),
@@ -451,20 +446,17 @@ class _StoreCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   '$itemCount ${itemCount == 1 ? 'unidade' : 'unidades'}',
-                  style: TextStyle(
-                    color: context.mutedColor,
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: context.mutedColor, fontSize: 11),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, color: _brandOrange),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
         ],
       ),
     );
@@ -512,7 +504,7 @@ class _CartLineCard extends StatelessWidget {
                     Text(
                       line.product.name,
                       style: Theme.of(context).textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 5),
                     Text(
@@ -553,16 +545,13 @@ class _CartLineCard extends StatelessWidget {
                   const Icon(
                     Icons.edit_note_rounded,
                     size: 16,
-                    color: _brandOrange,
+                    color: AppColors.primary,
                   ),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Text(
                       note,
-                      style: TextStyle(
-                        color: context.mutedColor,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: context.mutedColor, fontSize: 12),
                     ),
                   ),
                 ],
@@ -580,7 +569,7 @@ class _CartLineCard extends StatelessWidget {
                 icon: const Icon(Icons.edit_note_rounded, size: 17),
                 label: Text(note == null ? 'Adicionar nota' : 'Editar nota'),
                 style: TextButton.styleFrom(
-                  foregroundColor: _brandOrange,
+                  foregroundColor: AppColors.primary,
                   minimumSize: const Size(0, 42),
                   padding: const EdgeInsets.symmetric(horizontal: 7),
                 ),
@@ -596,9 +585,9 @@ class _CartLineCard extends StatelessWidget {
                   formatMoney(line.totalCents),
                   textAlign: TextAlign.right,
                   style: const TextStyle(
-                    color: _brandBlack,
+                    color: AppColors.ink,
                     fontSize: 13,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -643,12 +632,12 @@ class _CouponCard extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: _brandOrange.withValues(alpha: 0.12),
+                  color: AppColors.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
                   Icons.local_offer_outlined,
-                  color: _brandOrange,
+                  color: AppColors.primary,
                   size: 18,
                 ),
               ),
@@ -656,7 +645,7 @@ class _CouponCard extends StatelessWidget {
               Text(
                 'Cupão de desconto',
                 style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -690,7 +679,7 @@ class _CouponCard extends StatelessWidget {
                             style: const TextStyle(
                               color: AppColors.greenInk,
                               fontSize: 12,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -727,9 +716,7 @@ class _CouponCard extends StatelessWidget {
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: context.lineColor,
-                        ),
+                        borderSide: BorderSide(color: context.lineColor),
                       ),
                     ),
                     onSubmitted: (_) => onApply(),
@@ -741,7 +728,7 @@ class _CouponCard extends StatelessWidget {
                   child: FilledButton(
                     onPressed: loading ? null : onApply,
                     style: FilledButton.styleFrom(
-                      backgroundColor: _brandBlack,
+                      backgroundColor: AppColors.ink,
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(50),
                       shape: RoundedRectangleBorder(
@@ -759,7 +746,7 @@ class _CouponCard extends StatelessWidget {
                           )
                         : const Text(
                             'Aplicar',
-                            style: TextStyle(fontWeight: FontWeight.w800),
+                            style: TextStyle(fontWeight: FontWeight.w700),
                           ),
                   ),
                 ),
@@ -769,10 +756,7 @@ class _CouponCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 error!,
-                style: const TextStyle(
-                  color: AppColors.danger,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: AppColors.danger, fontSize: 12),
               ),
             ],
           ],

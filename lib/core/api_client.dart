@@ -58,7 +58,7 @@ class ApiClient {
     try {
       final streamed = await _http
           .send(request)
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 30));
       response = await http.Response.fromStream(streamed);
     } on Exception {
       throw const ApiException(

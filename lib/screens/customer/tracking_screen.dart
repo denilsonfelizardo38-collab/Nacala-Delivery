@@ -254,7 +254,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
               title: 'Acompanhe no mapa',
               eyebrow: 'ENTREGA EM TEMPO REAL',
               icon: Icons.near_me_rounded,
-              child: order.addressLatitude != null &&
+              child:
+                  order.addressLatitude != null &&
                       order.addressLongitude != null
                   ? LiveDeliveryMap(
                       destination: LatLng(
@@ -412,7 +413,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                             style: const TextStyle(
                               color: AppColors.primary,
                               fontSize: 11,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -468,9 +469,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 Container(
                   padding: const EdgeInsets.only(top: 12),
                   decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(color: context.lineColor),
-                    ),
+                    border: Border(top: BorderSide(color: context.lineColor)),
                   ),
                   child: PriceLine(
                     label: 'Total',
@@ -627,7 +626,7 @@ class _OrderHero extends StatelessWidget {
           colors: [
             AppColors.primary,
             AppColors.primary.withValues(alpha: .82),
-            const Color(0xFFB94A0A),
+            AppColors.primaryPressed,
           ],
         ),
         borderRadius: BorderRadius.circular(22),
@@ -653,7 +652,7 @@ class _OrderHero extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: .78),
                         fontSize: 9,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 1.5,
                       ),
                     ),
@@ -663,7 +662,7 @@ class _OrderHero extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 23,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -.6,
                       ),
                     ),
@@ -676,9 +675,7 @@ class _OrderHero extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .16),
                   borderRadius: BorderRadius.circular(15),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: .2),
-                  ),
+                  border: Border.all(color: Colors.white.withValues(alpha: .2)),
                 ),
                 child: const Icon(
                   Icons.delivery_dining_rounded,
@@ -724,7 +721,7 @@ class _OrderHero extends StatelessWidget {
                     style: TextStyle(
                       color: accent,
                       fontSize: 10,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -824,16 +821,15 @@ class _TrackingSection extends StatelessWidget {
                       style: TextStyle(
                         color: AppColors.primary,
                         fontSize: 8,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 1.1,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                   ],
                 ),
@@ -927,10 +923,7 @@ class _TimelineStep extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     formatDateTime(date!),
-                    style: TextStyle(
-                      color: context.mutedColor,
-                      fontSize: 10,
-                    ),
+                    style: TextStyle(color: context.mutedColor, fontSize: 10),
                   ),
                 ],
               ],
@@ -950,7 +943,7 @@ class _TimelineStep extends StatelessWidget {
               style: TextStyle(
                 color: AppColors.primary,
                 fontSize: 8,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 letterSpacing: .7,
               ),
             ),
@@ -1001,16 +994,15 @@ class _RoutePoint extends StatelessWidget {
                 style: TextStyle(
                   color: isDestination ? AppColors.primary : context.mutedColor,
                   fontSize: 9,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: .7,
                 ),
               ),
               const SizedBox(height: 3),
               Text(
                 title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               if (subtitle.isNotEmpty) ...[
                 const SizedBox(height: 3),

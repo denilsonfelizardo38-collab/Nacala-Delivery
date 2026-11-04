@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
 import 'categories_screen.dart';
+import 'notifications_screen.dart';
 import 'store_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
@@ -126,6 +127,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
   }
 
+  void _openNotifications(AppState state) {
+    if (state.isGuest || !state.isSignedIn) {
+      showAppSnack(
+        context,
+        'Entra ou cria uma conta para ver as tuas notificações.',
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+    );
+  }
+
   void _openStore(String id) {
     Navigator.of(
       context,
@@ -136,7 +150,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.surface,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -162,7 +176,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       margin: const EdgeInsets.fromLTRB(0, 0, 0, 14),
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
       decoration: const BoxDecoration(
-        color: Color(0xFF151515),
+        color: AppColors.ink,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
       ),
       child: Column(
@@ -177,9 +191,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     const Text(
                       'NACALA DELIVERY',
                       style: TextStyle(
-                        color: Color(0xFFFF7900),
+                        color: AppColors.primary,
                         fontSize: 10,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 2.0,
                       ),
                     ),
@@ -191,7 +205,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 23,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -202,15 +216,34 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   ],
                 ),
               ),
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF7900),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                alignment: Alignment.center,
-                child: const CartButton(),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Material(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      tooltip: 'Notificações',
+                      onPressed: () => _openNotifications(state),
+                      icon: const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Colors.white,
+                        size: 21,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    alignment: Alignment.center,
+                    child: const CartButton(color: Colors.white),
+                  ),
+                ],
               ),
             ],
           ),
@@ -219,7 +252,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             children: [
               const Icon(
                 Icons.location_on_rounded,
-                color: Color(0xFFFF7900),
+                color: AppColors.primary,
                 size: 17,
               ),
               const SizedBox(width: 6),
@@ -284,18 +317,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             future: _categoriesFuture,
             loadingHeight: 48,
             onRetry: _refresh,
-            builder: (context, categories) =>
-                FutureBuilder<List<Establishment>>(
-                  future: _allEstablishmentsFuture,
-                  builder: (context, establishmentsSnapshot) => SizedBox(
-                    height: 80,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: categories.length + 1,
-                      separatorBuilder: (_, _) => const SizedBox(width: 8),
-                      itemBuilder: (context, index) {
-                        final isAll = index == 0;
-                        final category = isAll ? null : categories[index - 1];
+            builder: (context, categories) {
+              final visible = [
+                for (final category in categories)
+                  if (category.establishmentCount > 0) category,
+              ];
+              return FutureBuilder<List<Establishment>>(
+                future: _allEstablishmentsFuture,
+                builder: (context, establishmentsSnapshot) => SizedBox(
+                  height: 80,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: visible.length + 1,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final isAll = index == 0;
+                      final category = isAll ? null : visible[index - 1];
                         final selected = isAll
                             ? _selectedCategory == null
                             : _selectedCategory == category!.slug;
@@ -317,7 +354,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       },
                     ),
                   ),
-                ),
+                );
+            },
           ),
         ),
       ),
@@ -356,6 +394,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       child: _HomeStoreCard(
                         establishment: establishment,
                         onTap: () => _openStore(establishment.id),
+                        isFavorite: AppScope.of(context)
+                            .isFavoriteEstablishment(establishment.id),
+                        onFavoriteToggle: () =>
+                            toggleFavorite(context, establishment.id),
                       ),
                     ),
                 ],
@@ -451,6 +493,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         child: EstablishmentTile(
                           establishment: establishment,
                           onTap: () => _openStore(establishment.id),
+                          isFavorite: AppScope.of(context)
+                              .isFavoriteEstablishment(establishment.id),
+                          onFavoriteToggle: () =>
+                              toggleFavorite(context, establishment.id),
                         ),
                       ),
                   ],
@@ -508,7 +554,9 @@ class _CategoryChip extends StatelessWidget {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: selected ? const Color(0xFFFF7900) : const Color(0xFFFFE9D6),
+                  color: selected
+                      ? AppColors.primary
+                      : AppColors.primarySoftStrong,
                   shape: BoxShape.circle,
                 ),
                 child: imageUrl == null
@@ -536,7 +584,7 @@ class _CategoryChip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: selected ? const Color(0xFFFF7900) : context.inkColor,
+                  color: selected ? AppColors.primary : context.inkColor,
                   fontSize: 10,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
@@ -599,7 +647,7 @@ class _HomeHero extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -633,17 +681,24 @@ class _HomeHero extends StatelessWidget {
   }
 
   Widget _cityImage() => Image.asset(
-    'assets/images/login_bg.jpg',
+    'assets/images/login_bg.png',
     fit: BoxFit.cover,
     errorBuilder: (_, _, _) => const ColoredBox(color: AppColors.primary),
   );
 }
 
 class _HomeStoreCard extends StatelessWidget {
-  const _HomeStoreCard({required this.establishment, required this.onTap});
+  const _HomeStoreCard({
+    required this.establishment,
+    required this.onTap,
+    required this.isFavorite,
+    required this.onFavoriteToggle,
+  });
 
   final Establishment establishment;
   final VoidCallback onTap;
+  final bool isFavorite;
+  final VoidCallback onFavoriteToggle;
 
   @override
   Widget build(BuildContext context) {

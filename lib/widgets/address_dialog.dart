@@ -63,6 +63,13 @@ class _AddressDialogState extends State<_AddressDialog> {
     _isDefault = widget.initial?.isDefault ?? false;
     _latitude = widget.initial?.latitude;
     _longitude = widget.initial?.longitude;
+    // Numa morada nova, preenche-se automaticamente a partir da localização
+    // atual do telemóvel (o utilizador pode ajustar depois).
+    if (widget.initial == null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _useCurrentLocation(replaceExisting: false),
+      );
+    }
   }
 
   Future<void> _selectLocation() async {
@@ -79,7 +86,7 @@ class _AddressDialogState extends State<_AddressDialog> {
     await _applyLocation(location);
   }
 
-  Future<void> _useCurrentLocation() async {
+  Future<void> _useCurrentLocation({bool replaceExisting = true}) async {
     if (_locating) return;
     setState(() {
       _locating = true;
@@ -91,6 +98,7 @@ class _AddressDialogState extends State<_AddressDialog> {
       await _applyLocation(
         LatLng(position.latitude, position.longitude),
         alreadyLocating: true,
+        replaceExisting: replaceExisting,
       );
     } on LocationException catch (error) {
       if (mounted) setState(() => _locationError = error.message);
@@ -102,6 +110,7 @@ class _AddressDialogState extends State<_AddressDialog> {
   Future<void> _applyLocation(
     LatLng location, {
     bool alreadyLocating = false,
+    bool replaceExisting = true,
   }) async {
     setState(() {
       _latitude = location.latitude;
@@ -121,7 +130,11 @@ class _AddressDialogState extends State<_AddressDialog> {
         );
         return;
       }
-      _line.text = address;
+      // Não sobrescrever o que o utilizador já escreveu, a menos que o
+      // utilizador tenha pedido explicitamente (botão).
+      if (replaceExisting || _line.text.trim().isEmpty) {
+        _line.text = address;
+      }
     } on LocationException catch (error) {
       if (mounted) setState(() => _locationError = error.message);
     } finally {

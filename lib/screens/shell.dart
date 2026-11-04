@@ -146,32 +146,8 @@ class _AppShellState extends State<AppShell> {
         ),
       ];
     }
-    return const [
-      _Destination(
-        'Início',
-        Icons.home_outlined,
-        Icons.home_rounded,
-        CustomerHomeScreen(),
-      ),
-      _Destination(
-        'Categorias',
-        Icons.grid_view_outlined,
-        Icons.grid_view_rounded,
-        CategoriesScreen(),
-      ),
-      _Destination(
-        'Pedidos',
-        Icons.receipt_long_outlined,
-        Icons.receipt_long_rounded,
-        OrdersScreen(),
-      ),
-      _Destination(
-        'Conta',
-        Icons.person_outline_rounded,
-        Icons.person_rounded,
-        AccountScreen(),
-      ),
-    ];
+    // Clientes (e convidados) usam a navegação de cliente.
+    return _guestDestinations;
   }
 
   @override
@@ -403,9 +379,7 @@ class _Sidebar extends StatelessWidget {
                                   ? Theme.of(context).colorScheme.onPrimary
                                   : context.inkColor,
                               fontSize: 13,
-                              fontWeight: i == index
-                                  ? FontWeight.w600
-                                  : FontWeight.w600,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],

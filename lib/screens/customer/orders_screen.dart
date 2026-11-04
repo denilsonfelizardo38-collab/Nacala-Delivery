@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
+
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
 import 'tracking_screen.dart';
-
-const Color _ordersOrange = Color(0xFFF47721);
-const Color _ordersOrangeDark = Color(0xFFE76512);
-const Color _ordersOrangeSoft = Color(0xFFFFF1E7);
-const Color _ordersInk = Color(0xFF191715);
-const Color _ordersMuted = Color(0xFF817B75);
-const Color _ordersLine = Color(0xFFECE7E2);
-const Color _ordersCanvas = Color(0xFFFAF8F6);
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -72,9 +66,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget build(BuildContext context) {
     if (AppScope.of(context).isGuest) {
       return Scaffold(
-        backgroundColor: _ordersCanvas,
+        backgroundColor: AppColors.surface,
         appBar: AppBar(
-          backgroundColor: _ordersCanvas,
+          backgroundColor: AppColors.surface,
           title: const Text('Meus pedidos'),
         ),
         body: Center(
@@ -95,9 +89,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
 
     return Scaffold(
-      backgroundColor: _ordersCanvas,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        backgroundColor: _ordersCanvas,
+        backgroundColor: AppColors.surface,
         title: const Text('Meus pedidos'),
         actions: const [CartButton(), SizedBox(width: 8)],
       ),
@@ -109,7 +103,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             _buildFilters(),
             Expanded(
               child: RefreshIndicator(
-                color: _ordersOrange,
+                color: AppColors.primary,
                 onRefresh: () async => _reload(),
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -130,7 +124,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               child: Text(
                                 '${orders.length} ${orders.length == 1 ? 'pedido encontrado' : 'pedidos encontrados'}',
                                 style: const TextStyle(
-                                  color: _ordersMuted,
+                                  color: AppColors.muted,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.2,
@@ -169,12 +163,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [_ordersOrange, _ordersOrangeDark],
+            colors: [AppColors.primary, AppColors.primaryPressed],
           ),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: _ordersOrange.withValues(alpha: 0.18),
+              color: AppColors.primary.withValues(alpha: 0.18),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -191,7 +185,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 17,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.3,
                     ),
                   ),
@@ -199,7 +193,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   Text(
                     'Consulta o estado e acompanha cada entrega.',
                     style: TextStyle(
-                      color: Color(0xFFFFF4EC),
+                      color: AppColors.primarySoft,
                       fontSize: 11,
                       height: 1.45,
                     ),
@@ -214,9 +208,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.17),
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.22),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
               ),
               child: const Icon(
                 Icons.local_shipping_outlined,
@@ -259,7 +251,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _ordersLine),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         children: [
@@ -267,12 +259,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
             width: 72,
             height: 72,
             decoration: const BoxDecoration(
-              color: _ordersOrangeSoft,
+              color: AppColors.primarySoft,
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.receipt_long_outlined,
-              color: _ordersOrangeDark,
+              color: AppColors.primaryPressed,
               size: 32,
             ),
           ),
@@ -281,9 +273,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
             inProgress ? 'Ainda não tens pedidos em curso' : 'Nada por aqui',
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: _ordersInk,
+              color: AppColors.ink,
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
@@ -293,7 +285,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 : 'Os teus pedidos vão aparecer aqui assim que forem criados.',
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: _ordersMuted,
+              color: AppColors.muted,
               fontSize: 12,
               height: 1.55,
             ),
@@ -318,7 +310,7 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? _ordersInk : Colors.white,
+      color: selected ? AppColors.ink : Colors.white,
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         borderRadius: BorderRadius.circular(13),
@@ -329,7 +321,7 @@ class _FilterChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(13),
             border: Border.all(
-              color: selected ? _ordersInk : _ordersLine,
+              color: selected ? AppColors.ink : AppColors.border,
             ),
           ),
           child: Text(
@@ -337,9 +329,9 @@ class _FilterChip extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: selected ? Colors.white : _ordersMuted,
+              color: selected ? Colors.white : AppColors.muted,
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -366,10 +358,10 @@ class _OrderCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(19),
-            border: Border.all(color: _ordersLine),
+            border: Border.all(color: AppColors.border),
             boxShadow: [
               BoxShadow(
-                color: _ordersInk.withValues(alpha: 0.025),
+                color: AppColors.ink.withValues(alpha: 0.025),
                 blurRadius: 14,
                 offset: const Offset(0, 5),
               ),
@@ -384,12 +376,12 @@ class _OrderCard extends StatelessWidget {
                     width: 43,
                     height: 43,
                     decoration: BoxDecoration(
-                      color: _ordersOrangeSoft,
+                      color: AppColors.primarySoft,
                       borderRadius: BorderRadius.circular(13),
                     ),
                     child: const Icon(
                       Icons.receipt_long_rounded,
-                      color: _ordersOrangeDark,
+                      color: AppColors.primaryPressed,
                       size: 21,
                     ),
                   ),
@@ -403,9 +395,9 @@ class _OrderCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: _ordersInk,
+                            color: AppColors.ink,
                             fontSize: 14,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -414,7 +406,7 @@ class _OrderCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: _ordersMuted,
+                            color: AppColors.muted,
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
@@ -428,7 +420,7 @@ class _OrderCard extends StatelessWidget {
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 14),
-                child: Divider(height: 1, color: _ordersLine),
+                child: Divider(height: 1, color: AppColors.border),
               ),
               Row(
                 children: [
@@ -451,7 +443,7 @@ class _OrderCard extends StatelessWidget {
                   const Text(
                     'Total do pedido',
                     style: TextStyle(
-                      color: _ordersMuted,
+                      color: AppColors.muted,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -460,15 +452,15 @@ class _OrderCard extends StatelessWidget {
                   Text(
                     formatMoney(order.totalCents),
                     style: const TextStyle(
-                      color: _ordersInk,
+                      color: AppColors.ink,
                       fontSize: 16,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(width: 8),
                   const Icon(
                     Icons.arrow_forward_ios_rounded,
-                    color: _ordersOrangeDark,
+                    color: AppColors.primaryPressed,
                     size: 13,
                   ),
                 ],
@@ -492,7 +484,7 @@ class _OrderMeta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: _ordersOrangeDark),
+        Icon(icon, size: 14, color: AppColors.primaryPressed),
         const SizedBox(width: 5),
         Flexible(
           child: Text(
@@ -500,7 +492,7 @@ class _OrderMeta extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: _ordersMuted,
+              color: AppColors.muted,
               fontSize: 10,
               fontWeight: FontWeight.w600,
             ),

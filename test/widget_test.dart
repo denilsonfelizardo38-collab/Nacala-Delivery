@@ -39,7 +39,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: SplashScreen()));
     expect(find.text('Nacala\nEntrega'), findsOneWidget);
-    expect(find.text('A cidade à sua porta.'), findsOneWidget);
+    expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
   });
 
   testWidgets('a splash termina mesmo se a API demorar a restaurar sessão', (
@@ -52,7 +52,8 @@ void main() {
     await tester.pumpWidget(NacalaDeliveryApp(state: state));
     expect(find.byType(SplashScreen), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 5));
+    // O timeout por omissão da revalidação é 12 s (tolera cold start).
+    await tester.pump(const Duration(seconds: 12));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 

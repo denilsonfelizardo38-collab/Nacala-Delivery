@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/api_service.dart';
 import '../../core/api_client.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
@@ -40,7 +41,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     });
   }
 
-  Future<(AdminSummary, List<Category>)> _fetch(dynamic api) async {
+  Future<(AdminSummary, List<Category>)> _fetch(NacalaApi api) async {
     final results = await Future.wait<Object>([
       api.adminSummary() as Future<Object>,
       api.categories() as Future<Object>,

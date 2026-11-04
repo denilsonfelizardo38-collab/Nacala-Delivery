@@ -53,12 +53,16 @@ class Api {
     ..post('/api/auth/login', _login)
     ..get('/api/auth/me', _me)
     ..patch('/api/auth/profile', _updateProfile)
+    ..post('/api/auth/avatar', _uploadAvatar)
     ..post('/api/auth/change-password', _changePassword)
     ..post('/api/auth/logout', _logout)
     ..get('/api/addresses', _listAddresses)
     ..post('/api/addresses', _createAddress)
     ..patch('/api/addresses/<id>', _updateAddress)
     ..delete('/api/addresses/<id>', _deleteAddress)
+    ..get('/api/favorites', _listFavorites)
+    ..post('/api/favorites/<id>', _addFavorite)
+    ..delete('/api/favorites/<id>', _removeFavorite)
     ..post('/api/coupons/validate', _validateCoupon)
     ..post('/api/orders', _createOrder)
     ..get('/api/orders', _listOrders)
@@ -321,6 +325,7 @@ class Api {
         'name': row['name'],
         'email': row['email'],
         'phone': row['phone'],
+        'avatar_url': row['avatar_url'],
         'is_active': row['is_active'] == 1,
         'created_at': row['created_at'],
       };
@@ -749,11 +754,25 @@ class Api {
     if (taken.isNotEmpty) {
       throw ApiError(409, 'phone_taken', 'Este telemóvel já está em uso.');
     }
-    db.execute('UPDATE users SET name = ?, phone = ? WHERE id = ?', [
-      name,
-      phone,
-      user.id,
-    ]);
+    final email = (body['email'] as String?)?.trim() ?? '';
+    if (email.isNotEmpty) {
+      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+        throw ApiError(422, 'invalid_email', 'Indique um email válido.');
+      }
+      final owner = db.select(
+        'SELECT id FROM users WHERE email = ? AND id != ?',
+        [email, user.id],
+      );
+      if (owner.isNotEmpty) {
+        throw ApiError(409, 'email_taken', 'Este email já está em uso.');
+      }
+    }
+    db.execute(
+      email.isEmpty
+          ? 'UPDATE users SET name = ?, phone = ? WHERE id = ?'
+          : 'UPDATE users SET name = ?, phone = ?, email = ? WHERE id = ?',
+      email.isEmpty ? [name, phone, user.id] : [name, phone, email, user.id],
+    );
     final row = db.select('SELECT * FROM users WHERE id = ?', [user.id]).first;
     return jsonResponse({'user': userJson(row)});
   }
@@ -1107,6 +1126,50 @@ class Api {
       throw ApiError(404, 'not_found', 'Morada não encontrada.');
     }
     db.execute('DELETE FROM addresses WHERE id = ?', [id]);
+    return jsonResponse({'ok': true});
+  }
+
+  // -------------------------------------------------------------- favorites
+
+  Future<Response> _listFavorites(Request request) async {
+    final user = requireUser(request);
+    final rows = db.select(
+      '''
+      $_establishmentSelect
+      JOIN favorites f ON f.establishment_id = e.id
+      WHERE f.user_id = ? AND e.is_approved = 1
+      ORDER BY f.created_at DESC
+      ''',
+      [user.id],
+    );
+    return jsonResponse({
+      'establishments': [for (final row in rows) establishmentJson(row)],
+    });
+  }
+
+  Future<Response> _addFavorite(Request request, String id) async {
+    final user = requireUser(request);
+    final target = db.select(
+      'SELECT id FROM establishments WHERE id = ? AND is_approved = 1',
+      [id],
+    );
+    if (target.isEmpty) {
+      throw ApiError(404, 'not_found', 'Estabelecimento não encontrado.');
+    }
+    db.execute(
+      'INSERT OR IGNORE INTO favorites (user_id, establishment_id, created_at)'
+      ' VALUES (?, ?, ?)',
+      [user.id, id, nowIso()],
+    );
+    return jsonResponse({'ok': true}, status: 201);
+  }
+
+  Future<Response> _removeFavorite(Request request, String id) async {
+    final user = requireUser(request);
+    db.execute('DELETE FROM favorites WHERE user_id = ? AND establishment_id = ?', [
+      user.id,
+      id,
+    ]);
     return jsonResponse({'ok': true});
   }
 
@@ -1742,15 +1805,12 @@ class Api {
     });
   }
 
-  Future<Response> _partnerUploadProductImage(Request request) async {
-    final user = requireRole(request, ['partner']);
-    requirePartnerEstablishment(user);
-    final body = await _readBodyLimited(
-      request,
-      maxBytes: 7 * 1024 * 1024,
-    );
-    final mimeType = body['mime_type'];
-    final encoded = body['data_base64'];
+  /// Valida e guarda uma imagem codificada em base64 enviada por JSON.
+  /// Devolve o caminho público `/uploads/<ficheiro>`.
+  Future<String> _saveImageUpload({
+    required String? mimeType,
+    required String? encoded,
+  }) async {
     const maxImageBytes = 5 * 1024 * 1024;
     if (mimeType is! String ||
         !const {'image/jpeg', 'image/png', 'image/webp'}.contains(mimeType) ||
@@ -1797,8 +1857,46 @@ class Api {
       imageBytes,
       flush: true,
     );
-    audit(user.id, 'product.image_uploaded', 'product_image', id);
-    return jsonResponse({'image_url': '/uploads/$filename'}, status: 201);
+    return '/uploads/$filename';
+  }
+
+  Future<Response> _partnerUploadProductImage(Request request) async {
+    final user = requireRole(request, ['partner']);
+    requirePartnerEstablishment(user);
+    final body = await _readBodyLimited(
+      request,
+      maxBytes: 7 * 1024 * 1024,
+    );
+    final imageUrl = await _saveImageUpload(
+      mimeType: body['mime_type'] as String?,
+      encoded: body['data_base64'] as String?,
+    );
+    audit(user.id, 'product.image_uploaded', 'product_image', 'image');
+    return jsonResponse({'image_url': imageUrl}, status: 201);
+  }
+
+  /// Carrega a fotografia do utilizador autenticado (qualquer papel).
+  Future<Response> _uploadAvatar(Request request) async {
+    final user = requireUser(request);
+    final body = await _readBodyLimited(
+      request,
+      maxBytes: 7 * 1024 * 1024,
+    );
+    final imageUrl = await _saveImageUpload(
+      mimeType: body['mime_type'] as String?,
+      encoded: body['data_base64'] as String?,
+    );
+    db.execute('UPDATE users SET avatar_url = ? WHERE id = ?', [
+      imageUrl,
+      user.id,
+    ]);
+    audit(user.id, 'user.avatar_uploaded', 'user', user.id);
+    return jsonResponse({
+      'user': userJson(
+        db.select('SELECT * FROM users WHERE id = ?', [user.id]).first,
+      ),
+      'image_url': imageUrl,
+    }, status: 201);
   }
 
   bool _matchesImageSignature(Uint8List bytes, String mimeType) {

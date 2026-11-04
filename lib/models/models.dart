@@ -5,6 +5,8 @@ library;
 int _int(dynamic value) => value is int ? value : int.tryParse('$value') ?? 0;
 
 String _str(dynamic value) => value is String ? value : '';
+String? _strOrNull(dynamic value) =>
+    value is String && value.trim().isNotEmpty ? value : null;
 
 DateTime _date(dynamic value) =>
     DateTime.tryParse(_str(value)) ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -21,6 +23,7 @@ class UserAccount {
     required this.name,
     required this.email,
     required this.phone,
+    this.avatarUrl,
   });
 
   final String id;
@@ -28,6 +31,7 @@ class UserAccount {
   final String name;
   final String email;
   final String phone;
+  final String? avatarUrl;
 
   bool get isCustomer => role == 'customer';
   bool get isPartner => role == 'partner';
@@ -48,6 +52,7 @@ class UserAccount {
     name: _str(json['name']),
     email: _str(json['email']),
     phone: _str(json['phone']),
+    avatarUrl: _strOrNull(json['avatar_url']),
   );
 }
 

@@ -1,18 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
+
 import '../../core/api_client.dart';
 import '../../core/formatters.dart';
 import '../../state/app_scope.dart';
-
-const Color _registerOrange = Color(0xFFF47721);
-const Color _registerOrangeDark = Color(0xFFE76512);
-const Color _registerOrangeSoft = Color(0xFFFFF1E7);
-const Color _registerInk = Color(0xFF171717);
-const Color _registerMuted = Color(0xFF77736F);
-const Color _registerBorder = Color(0xFFEAE6E2);
-const Color _registerCanvas = Color(0xFFFAF8F6);
-const Color _registerDanger = Color(0xFFB42318);
-const Color _registerDangerSoft = Color(0xFFFFF0EF);
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -23,13 +15,15 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
 
-  bool _obscure = true;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
   bool _submitting = false;
   String? _error;
 
@@ -47,6 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     FocusScope.of(context).unfocus();
+
     setState(() {
       _submitting = true;
       _error = null;
@@ -59,269 +54,280 @@ class _RegisterScreenState extends State<RegisterScreen> {
         phone: digitsOnly(_phone.text),
         password: _password.text,
       );
+
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() => _error = error.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Não foi possível criar a conta. Tenta novamente.';
+        });
+      }
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
     }
   }
 
-  InputDecoration _inputDecoration({
-    required String label,
+  InputDecoration _decoration({
+    required String hint,
     required IconData icon,
-    String? hint,
-    String? helper,
     Widget? suffix,
   }) {
     return InputDecoration(
-      labelText: label,
       hintText: hint,
-      helperText: helper,
-      prefixIcon: Icon(icon, color: _registerMuted, size: 20),
+      prefixIcon: Icon(icon, color: AppColors.muted, size: 21),
       suffixIcon: suffix,
       filled: true,
-      fillColor: const Color(0xFFFFFEFD),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
-      labelStyle: const TextStyle(
-        color: _registerMuted,
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-      ),
-      hintStyle: const TextStyle(color: Color(0xFFB5AFA9), fontSize: 13),
-      helperStyle: const TextStyle(
-        color: _registerMuted,
-        fontSize: 11,
-        height: 1.35,
-      ),
+      fillColor: AppColors.surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      hintStyle: const TextStyle(color: AppColors.mutedLight, fontSize: 13),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: const BorderSide(color: _registerBorder),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: const BorderSide(color: _registerBorder),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: const BorderSide(color: _registerOrange, width: 1.5),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: const BorderSide(color: _registerDanger),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.dangerInk),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(15),
-        borderSide: const BorderSide(color: _registerDanger, width: 1.5),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.dangerInk, width: 1.5),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final isWide = width >= 760;
-
-    return Scaffold(
-      backgroundColor: _registerCanvas,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: isWide ? 32 : 22,
-              vertical: 22,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1040),
-              child: isWide ? _buildWideLayout(context) : _buildCompactLayout(context),
-            ),
-          ),
+  Widget _label(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.ink,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
         ),
       ),
     );
   }
 
-  Widget _buildCompactLayout(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildTopBar(context),
-        const SizedBox(height: 22),
-        _buildFormCard(context, wide: false),
-        const SizedBox(height: 22),
-        _buildFooter(context),
-      ],
-    );
-  }
-
-  Widget _buildWideLayout(BuildContext context) {
+  Widget _brand({bool light = false}) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          flex: 5,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 20, 42, 20),
-            child: _buildWelcomePanel(context),
-          ),
-        ),
-        Expanded(
-          flex: 6,
-          child: _buildFormCard(context, wide: true),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context) {
-    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 46,
-          height: 46,
+          width: 43,
+          height: 43,
           decoration: BoxDecoration(
-            color: _registerOrange,
-            borderRadius: BorderRadius.circular(15),
-            boxShadow: [
-              BoxShadow(
-                color: _registerOrange.withValues(alpha: 0.22),
-                blurRadius: 16,
-                offset: const Offset(0, 7),
-              ),
-            ],
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(14),
           ),
           child: const Icon(
             Icons.delivery_dining_rounded,
             color: Colors.white,
-            size: 29,
+            size: 28,
           ),
         ),
-        const SizedBox(width: 12),
-        const Column(
+        const SizedBox(width: 11),
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'NACALA',
               style: TextStyle(
-                color: _registerInk,
+                color: light ? Colors.white : AppColors.deepNavy,
                 fontSize: 16,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2.1,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2,
                 height: 1,
               ),
             ),
-            SizedBox(height: 4),
-            Text(
+            const SizedBox(height: 5),
+            const Text(
               'DELIVERY',
               style: TextStyle(
-                color: _registerOrangeDark,
+                color: AppColors.primary,
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 2.8,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 3,
               ),
             ),
           ],
         ),
-        const Spacer(),
-        TextButton.icon(
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_rounded, size: 17),
-          label: const Text('Voltar'),
-          style: TextButton.styleFrom(
-            foregroundColor: _registerInk,
-            textStyle: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
       ],
     );
   }
 
-  Widget _buildWelcomePanel(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildTopBar(context),
-        const SizedBox(height: 62),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-          decoration: BoxDecoration(
-            color: _registerOrangeSoft,
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.waving_hand_rounded, color: _registerOrangeDark, size: 16),
-              SizedBox(width: 7),
-              Text(
-                'BEM-VINDO À COMUNIDADE',
-                style: TextStyle(
-                  color: _registerOrangeDark,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.1,
+  Widget _heroPanel({required bool compact}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(compact ? 22 : 28),
+      child: SizedBox(
+        height: compact ? 225 : 590,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              'assets/images/login_bg.png',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.deepNavyLight, AppColors.deepNavy],
+                    ),
+                  ),
+                );
+              },
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.deepNavy.withValues(alpha: 0.48),
+                    AppColors.deepNavy.withValues(alpha: 0.72),
+                    AppColors.deepNavy.withValues(alpha: 0.94),
+                  ],
                 ),
               ),
-            ],
+            ),
+            Padding(
+              padding: EdgeInsets.all(compact ? 20 : 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _brand(light: true),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: const Text(
+                      'FAZ PARTE DA NOSSA COMUNIDADE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  Text(
+                    compact
+                        ? 'A tua cidade.\nAs tuas escolhas.'
+                        : 'Tudo o que precisas,\nà tua porta.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: compact ? 27 : 39,
+                      height: 1.12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Descobre restaurantes, lojas e serviços '
+                    'locais em Nacala-Porto.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.88),
+                      fontSize: compact ? 12 : 14,
+                      height: 1.6,
+                    ),
+                  ),
+                  if (!compact) ...[
+                    const SizedBox(height: 25),
+                    _benefit(
+                      Icons.restaurant_outlined,
+                      'Descobre opções perto de ti',
+                    ),
+                    const SizedBox(height: 14),
+                    _benefit(
+                      Icons.shopping_bag_outlined,
+                      'Faz os teus pedidos facilmente',
+                    ),
+                    const SizedBox(height: 14),
+                    _benefit(
+                      Icons.location_on_outlined,
+                      'Recebe onde estiveres',
+                    ),
+                  ],
+                  if (compact) const SizedBox(height: 5),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _benefit(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.primary, size: 21),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        const SizedBox(height: 22),
-        const Text(
-          'Tudo o que\\nprecisas, à tua\\nporta.',
-          style: TextStyle(
-            color: _registerInk,
-            fontSize: 43,
-            height: 1.08,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -1.7,
-          ),
-        ),
-        const SizedBox(height: 18),
-        const Text(
-          'Cria a tua conta e começa a descobrir restaurantes, lojas e serviços em Nacala-Porto.',
-          style: TextStyle(
-            color: _registerMuted,
-            fontSize: 15,
-            height: 1.65,
-          ),
-        ),
-        const SizedBox(height: 34),
-        _WelcomeBenefit(
-          icon: Icons.explore_outlined,
-          title: 'Descobre opções perto de ti',
-          description: 'Encontra lojas e restaurantes locais.',
-        ),
-        const SizedBox(height: 20),
-        _WelcomeBenefit(
-          icon: Icons.shopping_bag_outlined,
-          title: 'Pede de forma simples',
-          description: 'Acompanha os teus pedidos num só lugar.',
-        ),
-        const SizedBox(height: 20),
-        _WelcomeBenefit(
-          icon: Icons.location_on_outlined,
-          title: 'Recebe onde estiveres',
-          description: 'Indica o teu contacto e local de entrega.',
         ),
       ],
     );
   }
 
-  Widget _buildFormCard(BuildContext context, {required bool wide}) {
+  Widget _passwordSuffix(bool obscure, VoidCallback onPressed) {
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: obscure ? 'Mostrar palavra-passe' : 'Ocultar palavra-passe',
+      icon: Icon(
+        obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+        color: AppColors.muted,
+        size: 20,
+      ),
+    );
+  }
+
+  Widget _formCard({required bool wide}) {
     return Container(
-      padding: EdgeInsets.all(wide ? 30 : 22),
+      padding: EdgeInsets.all(wide ? 32 : 22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: _registerBorder),
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: _registerInk.withValues(alpha: 0.055),
+            color: AppColors.deepNavy.withValues(alpha: 0.055),
             blurRadius: 35,
-            offset: const Offset(0, 16),
+            offset: const Offset(0, 15),
           ),
         ],
       ),
@@ -330,10 +336,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!wide) ...[
-              _buildTopBar(context),
-              const SizedBox(height: 28),
-            ],
             Row(
               children: [
                 Expanded(
@@ -343,84 +345,81 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const Text(
                         'Criar conta',
                         style: TextStyle(
-                          color: _registerInk,
-                          fontSize: 25,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.7,
+                          color: AppColors.deepNavy,
+                          fontSize: 27,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.8,
                         ),
                       ),
                       const SizedBox(height: 7),
-                      Text(
+                      const Text(
                         'Preenche os teus dados para começar.',
-                        style: TextStyle(
-                          color: _registerMuted,
-                          fontSize: 13,
-                          height: 1.45,
-                        ),
+                        style: TextStyle(color: AppColors.muted, fontSize: 13),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 45,
+                  height: 45,
                   decoration: BoxDecoration(
-                    color: _registerOrangeSoft,
+                    color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(
                     Icons.person_add_alt_1_rounded,
-                    color: _registerOrangeDark,
-                    size: 22,
+                    color: AppColors.primaryPressed,
+                    size: 23,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 25),
-            _fieldLabel('Nome completo'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 27),
+
+            _label('NOME COMPLETO'),
             TextFormField(
               controller: _name,
               textCapitalization: TextCapitalization.words,
               textInputAction: TextInputAction.next,
-              decoration: _inputDecoration(
-                label: 'Como te chamas?',
+              decoration: _decoration(
+                hint: 'Como te chamas?',
                 icon: Icons.person_outline_rounded,
               ),
-              validator: (value) =>
-                  (value == null || value.trim().length < 2)
-                      ? 'Indique o seu nome.'
-                      : null,
+              validator: (value) {
+                if (value == null || value.trim().length < 2) {
+                  return 'Indica o teu nome.';
+                }
+                return null;
+              },
             ),
-            const SizedBox(height: 17),
-            _fieldLabel('Email'),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 19),
+            _label('EMAIL'),
             TextFormField(
               controller: _email,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               autocorrect: false,
-              decoration: _inputDecoration(
-                label: 'exemplo@email.com',
+              decoration: _decoration(
+                hint: 'exemplo@email.com',
                 icon: Icons.mail_outline_rounded,
               ),
               validator: (value) {
                 final text = value?.trim() ?? '';
                 if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)) {
-                  return 'Indique um email válido.';
+                  return 'Indica um email válido.';
                 }
                 return null;
               },
             ),
-            const SizedBox(height: 17),
-            _fieldLabel('Telemóvel'),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 19),
+            _label('TELEMÓVEL'),
             TextFormField(
               controller: _phone,
               keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.next,
-              decoration: _inputDecoration(
-                label: 'Número de Moçambique',
+              decoration: _decoration(
                 hint: '84 123 4567',
                 icon: Icons.phone_outlined,
               ),
@@ -432,31 +431,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 return null;
               },
             ),
-            const SizedBox(height: 17),
-            _fieldLabel('Palavra-passe'),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 19),
+            _label('PALAVRA-PASSE'),
             TextFormField(
               controller: _password,
-              obscureText: _obscure,
+              obscureText: _obscurePassword,
               textInputAction: TextInputAction.next,
               autocorrect: false,
               enableSuggestions: false,
-              decoration: _inputDecoration(
-                label: 'Cria uma palavra-passe',
+              decoration: _decoration(
+                hint: 'Cria uma palavra-passe',
                 icon: Icons.lock_outline_rounded,
-                helper: 'Mínimo 8 caracteres, com letras e números.',
-                suffix: IconButton(
-                  tooltip: _obscure
-                      ? 'Mostrar palavra-passe'
-                      : 'Ocultar palavra-passe',
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    color: _registerMuted,
-                    size: 20,
-                  ),
+                suffix: _passwordSuffix(
+                  _obscurePassword,
+                  () => setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  }),
                 ),
               ),
               validator: (value) {
@@ -464,83 +455,102 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 if (text.length < 8 ||
                     !RegExp(r'[A-Za-z]').hasMatch(text) ||
                     !RegExp(r'[0-9]').hasMatch(text)) {
-                  return 'Use pelo menos 8 caracteres com letras e números.';
+                  return 'Usa pelo menos 8 caracteres, com letras e números.';
                 }
                 return null;
               },
             ),
-            const SizedBox(height: 17),
-            _fieldLabel('Confirmar palavra-passe'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 7),
+            const Text(
+              'Mínimo de 8 caracteres, incluindo letras e números.',
+              style: TextStyle(color: AppColors.muted, fontSize: 11),
+            ),
+
+            const SizedBox(height: 19),
+            _label('CONFIRMAR PALAVRA-PASSE'),
             TextFormField(
               controller: _confirm,
-              obscureText: _obscure,
+              obscureText: _obscureConfirm,
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _submit(),
-              decoration: _inputDecoration(
-                label: 'Repete a palavra-passe',
+              decoration: _decoration(
+                hint: 'Repete a palavra-passe',
                 icon: Icons.lock_reset_rounded,
+                suffix: _passwordSuffix(
+                  _obscureConfirm,
+                  () => setState(() {
+                    _obscureConfirm = !_obscureConfirm;
+                  }),
+                ),
               ),
-              validator: (value) => value != _password.text
-                  ? 'As palavras-passe não coincidem.'
-                  : null,
+              validator: (value) {
+                if (value != _password.text) {
+                  return 'As palavras-passe não coincidem.';
+                }
+                return null;
+              },
             ),
+
             if (_error != null) ...[
-              const SizedBox(height: 17),
-              _ErrorBanner(message: _error!),
+              const SizedBox(height: 18),
+              _errorBanner(_error!),
             ],
-            const SizedBox(height: 23),
+
+            const SizedBox(height: 25),
             SizedBox(
               height: 56,
               child: FilledButton(
                 onPressed: _submitting ? null : _submit,
                 style: FilledButton.styleFrom(
-                  backgroundColor: _registerOrange,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: _registerOrange.withValues(alpha: 0.55),
+                  disabledBackgroundColor: AppColors.primary.withValues(
+                    alpha: 0.55,
+                  ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(15),
                   ),
                   textStyle: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 child: _submitting
                     ? const SizedBox(
-                        width: 21,
-                        height: 21,
+                        width: 22,
+                        height: 22,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
                           color: Colors.white,
+                          strokeWidth: 2.2,
                         ),
                       )
                     : const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text('Criar a minha conta'),
-                          SizedBox(width: 9),
+                          SizedBox(width: 10),
                           Icon(Icons.arrow_forward_rounded, size: 19),
                         ],
                       ),
               ),
             ),
-            const SizedBox(height: 19),
-            Text.rich(
+
+            const SizedBox(height: 18),
+            const Text.rich(
               TextSpan(
-                text: 'Ao criar conta aceitas os ',
-                style: const TextStyle(
-                  color: _registerMuted,
+                style: TextStyle(
+                  color: AppColors.muted,
                   fontSize: 11,
-                  height: 1.55,
+                  height: 1.6,
                 ),
-                children: const [
+                children: [
+                  TextSpan(text: 'Ao criar conta aceitas os '),
                   TextSpan(
                     text: 'termos e condições',
                     style: TextStyle(
-                      color: _registerOrangeDark,
-                      fontWeight: FontWeight.w800,
+                      color: AppColors.primaryPressed,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   TextSpan(text: ' e a política de privacidade.'),
@@ -548,20 +558,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
+
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Text(
                   'Já tens conta?',
-                  style: TextStyle(color: _registerMuted, fontSize: 13),
+                  style: TextStyle(color: AppColors.muted, fontSize: 13),
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).maybePop(),
                   style: TextButton.styleFrom(
-                    foregroundColor: _registerOrangeDark,
-                    textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                    foregroundColor: AppColors.primaryPressed,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   child: const Text('Entrar'),
                 ),
@@ -573,106 +583,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _fieldLabel(String label) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: _registerInk,
-        fontSize: 12,
-        fontWeight: FontWeight.w800,
-      ),
-    );
-  }
-
-  Widget _buildFooter(BuildContext context) {
-    return const Text(
-      'NACALA DELIVERY  •  FEITO PARA NACALA-PORTO',
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        color: Color(0xFFA49D96),
-        fontSize: 9,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-}
-
-class _WelcomeBenefit extends StatelessWidget {
-  const _WelcomeBenefit({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 43,
-          height: 43,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _registerBorder),
-          ),
-          child: Icon(icon, color: _registerOrangeDark, size: 21),
-        ),
-        const SizedBox(width: 13),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: _registerInk,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                description,
-                style: const TextStyle(
-                  color: _registerMuted,
-                  fontSize: 11,
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _errorBanner(String message) {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: _registerDangerSoft,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF5D0CC)),
+        color: AppColors.dangerSoft,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: AppColors.dangerBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(
             Icons.error_outline_rounded,
-            color: _registerDanger,
+            color: AppColors.dangerInk,
             size: 19,
           ),
           const SizedBox(width: 9),
@@ -680,14 +604,69 @@ class _ErrorBanner extends StatelessWidget {
             child: Text(
               message,
               style: const TextStyle(
-                color: _registerDanger,
+                color: AppColors.dangerInk,
                 fontSize: 12,
                 height: 1.45,
-                fontWeight: FontWeight.w500,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 850;
+
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(
+              horizontal: wide ? 30 : 18,
+              vertical: 22,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1120),
+              child: wide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 28),
+                            child: _heroPanel(compact: false),
+                          ),
+                        ),
+                        Expanded(flex: 6, child: _formCard(wide: true)),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _heroPanel(compact: true),
+                        const SizedBox(height: 20),
+                        _formCard(wide: false),
+                        const SizedBox(height: 22),
+                        const Text(
+                          'NACALA DELIVERY  •  FEITO PARA NACALA-PORTO',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.mutedLight,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
       ),
     );
   }

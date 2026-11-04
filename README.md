@@ -60,17 +60,17 @@ totais calculados no servidor.
 ### Transversal
 - Design system centralizado, tema claro fixo (o tema escuro existe em
   `AppTheme.dark()` mas não é aplicado automaticamente):
-  - tipografia Poppins incluída na aplicação, com pesos Regular, Medium,
+  - tipografia Inter incluída na aplicação, com pesos Regular, Medium,
     SemiBold e Bold;
-  - azul `#0755E9`, azul-claro `#3478F6`, superfícies `#FFFFFF` e `#F5F8FC`,
-    texto `#202124` e secundário `#929292`;
+  - laranja `#FF7900` (secundário `#FF9A3D`), azul secundário `#1260D8`,
+    superfícies `#FFFFFF` e `#F7F7F9`, texto `#17191F` e secundário
+    `#747982`;
   - cartões brancos com raio de 16–22 px, borda discreta e sombra suave;
-  - navegação ativa azul com indicador azul-claro, botões e campos com estados
-    consistentes;
+  - navegação ativa laranja, botões e campos com estados consistentes;
   - splash com fotografia noturna de Nacala, capas de estabelecimentos e
     fotografias reais dos produtos carregadas pelos parceiros.
 - Layout responsivo: navegação inferior para cliente/parceiro/estafeta, trilho
-  lateral azul para administração em mobile e *sidebar* em ecrãs largos.
+  lateral laranja para administração em mobile e *sidebar* em ecrãs largos.
 - Estados de carregamento, vazio e erro em todos os ecrãs com dados remotos.
 - Feedback em português; alvos de toque ≥44 px; *safe areas* respeitadas.
 - Sessão persistida e revalidada em `/api/auth/me`; `401` limpa a sessão.
@@ -170,19 +170,19 @@ flutter pub get
 flutter run
 ```
 
-O cliente acede por omissão a `http://127.0.0.1:8080`. Para um telemóvel
-Android ligado por USB:
+O cliente liga por omissão ao servidor publicado no Render
+(`https://nacala-delivery.onrender.com`). Para desenvolvimento local
+(apontando ao próprio computador):
 
 ```sh
-adb reverse tcp:8080 tcp:8080
-flutter run
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080
 ```
 
 Para outro endereço (emulador, LAN ou produção):
 
 ```sh
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080
-flutter build apk --release --dart-define=API_BASE_URL=https://api.exemplo.co.mz
+flutter build apk --release --dart-define=API_BASE_URL=https://<o-teu-host>
 ```
 
 O tráfego em texto simples só está autorizado para `127.0.0.1`, `localhost` e
