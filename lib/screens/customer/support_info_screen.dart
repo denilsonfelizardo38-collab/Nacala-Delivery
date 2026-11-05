@@ -34,6 +34,13 @@ class PaymentMethodsScreen extends StatelessWidget {
         ),
         SizedBox(height: 10),
         _OptionRow(
+          icon: Icons.smartphone_rounded,
+          title: 'mKesh',
+          subtitle: 'Preparado para integração · cobrança automática pendente',
+          tone: _RowTone.pending,
+        ),
+        SizedBox(height: 10),
+        _OptionRow(
           icon: Icons.payments_outlined,
           title: 'Dinheiro na entrega',
           subtitle: 'Ativo · pagas ao estafeta ao receber o pedido',
@@ -43,8 +50,8 @@ class PaymentMethodsScreen extends StatelessWidget {
         _InfoParagraph(
           title: 'Como fica um pedido suspenso na integração',
           body:
-              'Enquanto a cobrança automática M-Pesa/e-Mola não estiver '
-              'ativa, um pedido pago por telemóvel é registado com '
+              'Enquanto a cobrança automática M-Pesa, e-Mola e mKesh não '
+              'estiver ativa, um pedido pago por telemóvel é registado com '
               '"pagamento pendente de integração". O estabelecimento '
               'confirma o pedido e o pagamento é combinado na entrega. '
               'O app nunca marca um pedido como pago sem confirmação da '

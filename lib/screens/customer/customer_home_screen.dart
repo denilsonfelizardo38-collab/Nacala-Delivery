@@ -9,6 +9,7 @@ import '../../state/app_scope.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/address_dialog.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
 import 'categories_screen.dart';
@@ -146,6 +147,36 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     ).push(MaterialPageRoute(builder: (_) => StoreScreen(establishmentId: id)));
   }
 
+  /// A morada define a disponibilidade e a taxa antes do checkout, por isso
+  /// pede-se aqui, no início — não apenas no finalizar pedido.
+  Future<void> _setDeliveryLocation() async {
+    final state = AppScope.of(context);
+    if (state.isGuest || !state.isSignedIn) {
+      showAppSnack(
+        context,
+        'Entra ou cria uma conta para guardar a morada de entrega.',
+      );
+      return;
+    }
+    final input = await showAddressDialog(context);
+    if (input == null || !mounted) return;
+    try {
+      await state.addAddress(
+        label: input.label,
+        line: input.line,
+        reference: input.reference,
+        isDefault: input.isDefault,
+        latitude: input.latitude,
+        longitude: input.longitude,
+      );
+      if (!mounted) return;
+      setState(() {});
+      showAppSnack(context, 'Morada adicionada.');
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
@@ -248,24 +279,44 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ],
           ),
           const SizedBox(height: 17),
-          Row(
-            children: [
-              const Icon(
-                Icons.location_on_rounded,
-                color: AppColors.primary,
-                size: 17,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  state.defaultAddress?.fullLine ??
-                      'Defina a morada de entrega no checkout',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+          Material(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(13),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(13),
+              onTap: _setDeliveryLocation,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_rounded,
+                      color: AppColors.primary,
+                      size: 17,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        state.defaultAddress?.fullLine ??
+                            'Defina a morada de entrega',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 17),
           SearchField(
@@ -284,15 +335,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
           child: FutureBuilder<List<Establishment>>(
-            future: _establishmentsFuture,
+            future: _allEstablishmentsFuture,
             builder: (context, snapshot) {
-              final establishments = snapshot.data;
-              final featured = establishments == null || establishments.isEmpty
-                  ? null
-                  : establishments.first;
-              return _HomeHero(
-                establishment: featured,
-                onTap: featured == null ? null : () => _openStore(featured.id),
+              final establishments = snapshot.data ?? const <Establishment>[];
+              return _PromoCarousel(
+                establishments: establishments.take(3).toList(),
+                onOpenStore: _openStore,
               );
             },
           ),
@@ -361,38 +409,48 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ),
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-          child: const SectionTitle(
-            title: 'Mais bem avaliados',
-            subtitle: 'Populares entre os utilizadores · avaliações reais',
-          ),
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
           child: FutureBuilder<List<Establishment>>(
             future: _allEstablishmentsFuture,
             builder: (context, snapshot) {
+              // Exige pelo menos 5 avaliações: evitar que "5,0" com uma
+              // única avaliação apareça como "mais bem avaliado".
+              final all = snapshot.data ?? const <Establishment>[];
+              final promoIds = {
+                for (final e in all.take(3)) e.id,
+              };
               final rated = [
-                for (final e in (snapshot.data ?? const <Establishment>[]))
-                  if (e.rating > 0) e,
+                for (final e in all)
+                  if (e.rating > 0 &&
+                      e.reviewCount >= 5 &&
+                      !promoIds.contains(e.id))
+                    e,
               ]..sort((a, b) => b.rating.compareTo(a.rating));
               if (rated.isEmpty) {
                 return const SizedBox.shrink();
               }
-              return SizedBox(
-                height: 206,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.zero,
-                  itemCount: rated.length.clamp(0, 6),
-                  separatorBuilder: (_, _) => const SizedBox(width: 10),
-                  itemBuilder: (context, index) => _PopularCard(
-                    establishment: rated[index],
-                    onTap: () => _openStore(rated[index].id),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionTitle(
+                    title: 'Mais bem avaliados',
+                    subtitle: 'Ordenados pelas avaliações reais dos clientes',
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 206,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.zero,
+                      itemCount: rated.length.clamp(0, 6),
+                      separatorBuilder: (_, _) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) => _PopularCard(
+                        establishment: rated[index],
+                        onTap: () => _openStore(rated[index].id),
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -416,7 +474,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             future: _establishmentsFuture,
             onRetry: _refresh,
             builder: (context, establishments) {
-              if (establishments.isEmpty) {
+              // Sem categoria: os destaques do carrossel ficam por contas
+              // para evitar repetir a mesma loja em secções seguidas.
+              final promoOverlapping =
+                  _selectedCategory == null && establishments.length > 3;
+              final listed = promoOverlapping
+                  ? establishments.skip(3).toList()
+                  : establishments;
+              if (listed.isEmpty) {
                 return const EmptyState(
                   icon: Icons.storefront_outlined,
                   title: 'Ainda sem parceiros',
@@ -427,7 +492,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               }
               return Column(
                 children: [
-                  for (final establishment in establishments)
+                  for (final establishment in listed)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _HomeStoreCard(
@@ -489,7 +554,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
                 child: SectionTitle(
                   title: 'Produtos',
-                  subtitle: '${result.products.length} resultado(s)',
+                  subtitle:
+                      '${result.products.length} ${plural(result.products.length, 'resultado')}',
                 ),
               ),
             ),
@@ -517,7 +583,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
                 child: SectionTitle(
                   title: 'Estabelecimentos',
-                  subtitle: '${result.establishments.length} resultado(s)',
+                  subtitle:
+                      '${result.establishments.length} ${plural(result.establishments.length, 'estabelecimento')}',
                 ),
               ),
             ),
@@ -623,7 +690,7 @@ class _CategoryChip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: selected ? AppColors.primary : context.inkColor,
+                  color: selected ? AppColors.textOrange : context.inkColor,
                   fontSize: 10,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
@@ -636,94 +703,222 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-class _HomeHero extends StatelessWidget {
-  const _HomeHero({required this.establishment, required this.onTap});
+/// Carrossel de promoções e destaques da página inicial. O primeiro painel
+/// é a marca; seguem-se até três parceiros em destaque (em vez de fixar um
+/// único restaurante numa entrada estática).
+class _PromoCarousel extends StatefulWidget {
+  const _PromoCarousel({
+    required this.establishments,
+    required this.onOpenStore,
+  });
+
+  final List<Establishment> establishments;
+  final void Function(String establishmentId) onOpenStore;
+
+  @override
+  State<_PromoCarousel> createState() => _PromoCarouselState();
+}
+
+class _PromoCarouselState extends State<_PromoCarousel> {
+  final _controller = PageController();
+  int _page = 0;
+
+  @override
+  void didUpdateWidget(covariant _PromoCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_page >= widget.establishments.length + 1) {
+      _page = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final slides = <_PromoSlide>[
+      const _PromoSlide.brand(),
+      for (final establishment in widget.establishments)
+        _PromoSlide(establishment: establishment),
+    ];
+    return Column(
+      children: [
+        ClipRect(
+          child: SizedBox(
+            height: 184,
+            child: PageView.builder(
+              controller: _controller,
+              itemCount: slides.length,
+              onPageChanged: (index) => setState(() => _page = index),
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              itemBuilder: (context, index) {
+                final slide = slides[index];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 0),
+                  child: _PromoCard(
+                    slide: slide,
+                    onTap: slide.establishment == null
+                        ? null
+                        : () => widget.onOpenStore(slide.establishment!.id),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (slides.length > 1) ...[
+          const SizedBox(height: 7),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (
+                var index = 0;
+                index < slides.length;
+                index++
+              )
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: index == _page ? 16 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: index == _page
+                        ? AppColors.primary
+                        : AppColors.primary.withValues(alpha: 0.28),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PromoSlide {
+  const _PromoSlide({this.establishment});
+
+  /// Painel da marca, sem parceiro associado.
+  const _PromoSlide.brand() : establishment = null;
 
   final Establishment? establishment;
+
+  bool get isBrand => establishment == null;
+}
+
+class _PromoCard extends StatelessWidget {
+  const _PromoCard({required this.slide, required this.onTap});
+
+  final _PromoSlide slide;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final establishment = slide.establishment;
+    final name = establishment?.name ?? 'A cidade à sua porta.';
+    final subtitle = establishment == null
+        ? 'Descubra os parceiros de Nacala-Porto'
+        : '${establishment.categoryName} · ${establishment.prepMinutes} min';
     final imageUrl = establishment?.imageUrl;
-    return AppCard(
-      padding: EdgeInsets.zero,
-      radius: 22,
-      onTap: onTap,
-      child: SizedBox(
-        height: 184,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (imageUrl != null && imageUrl.isNotEmpty)
-                Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => _cityImage(),
-                )
-              else
-                _cityImage(),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [Color(0xE6000000), Color(0x663F1B00)],
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+      child: AppCard(
+        padding: EdgeInsets.zero,
+        radius: 22,
+        onTap: onTap,
+        child: SizedBox(
+          height: 184,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (establishment == null)
+                  // Painel da marca: a fotografia da cidade com selo claro.
+                  Image.asset(
+                    'assets/images/login_bg.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const ColoredBox(color: AppColors.ink),
+                  )
+                else if (imageUrl != null && imageUrl.isNotEmpty)
+                  Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    cacheWidth: imageCacheWidthFor(context, 360),
+                    errorBuilder: (_, _, _) => BrandedCover(
+                      categorySlug: establishment.categorySlug,
+                      iconSize: 38,
+                    ),
+                  )
+                else
+                  BrandedCover(
+                    categorySlug: establishment.categorySlug,
+                    iconSize: 38,
+                  ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0x80002244),
+                        Color(0x22002244),
+                        Color(0xE6051C36),
+                      ],
+                      stops: [0, 0.45, 1],
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      establishment?.name ?? 'A cidade à sua porta.',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        establishment == null ? 'Destaques de Nacala' : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      establishment == null
-                          ? 'Descubra os parceiros de Nacala-Porto'
-                          : '${establishment!.categoryName} · '
-                                '${establishment!.prepMinutes} min',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
-                    ),
-                    const SizedBox(height: 10),
-                    if (establishment != null)
-                      const Text(
-                        'Ver menu  ›',
-                        style: TextStyle(
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        establishment == null ? 'Explorar parceiros ›' : 'Ver menu  ›',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-
-  Widget _cityImage() => Image.asset(
-    'assets/images/login_bg.png',
-    fit: BoxFit.cover,
-    errorBuilder: (_, _, _) => const ColoredBox(color: AppColors.primary),
-  );
 }
 
 class _HomeStoreCard extends StatelessWidget {
@@ -750,7 +945,7 @@ class _HomeStoreCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            height: 158,
+            height: 140,
             width: double.infinity,
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(
@@ -773,20 +968,25 @@ class _HomeStoreCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(15, 13, 15, 15),
+            padding: const EdgeInsets.fromLTRB(15, 12, 15, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
                         establishment.name,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(height: 1.25),
                       ),
                     ),
+                    const SizedBox(width: 8),
                     StatusBadge(
                       status: establishment.isOpen ? 'accepted' : 'cancelled',
                       label: establishment.isOpen ? 'Aberto' : 'Fechado',
@@ -805,7 +1005,7 @@ class _HomeStoreCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.mutedColor,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -819,8 +1019,8 @@ class _HomeStoreCard extends StatelessWidget {
                       count: establishment.reviewCount,
                     ),
                     Text(
-                      '${formatMoney(establishment.deliveryFeeCents)} '
-                      '· ${establishment.prepMinutes} min',
+                      'Entrega ${formatMoneyCompact(establishment.deliveryFeeCents)}'
+                      ' · ${establishment.prepMinutes} min',
                       style: TextStyle(color: context.mutedColor, fontSize: 11),
                     ),
                   ],
@@ -876,11 +1076,11 @@ class _ProductResultTile extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Text(
-            formatMoney(product.priceCents),
+            formatMoneyCompact(product.priceCents),
             style: TextStyle(
               color: context.accentColor,
               fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -953,18 +1153,20 @@ class _PopularCard extends StatelessWidget {
                     establishment.categoryName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: context.mutedColor, fontSize: 9),
+                    style: TextStyle(color: context.mutedColor, fontSize: 10),
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      StarRating(rating: establishment.rating),
+                      StarRating(rating: establishment.rating, size: 12),
                       const Spacer(),
                       Text(
-                        formatMoney(establishment.deliveryFeeCents),
+                        'Entrega ${formatMoneyCompact(establishment.deliveryFeeCents)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.mutedColor,
-                          fontSize: 9,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

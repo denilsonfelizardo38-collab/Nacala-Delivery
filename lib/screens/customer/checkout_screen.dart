@@ -161,13 +161,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final paymentLabel = switch (_payment) {
       'mpesa' => 'M-Pesa',
       'emola' => 'e-Mola',
+      'mkesh' => 'mKesh',
       _ => 'Dinheiro na entrega',
     };
     final confirmed = await showConfirmDialog(
       context,
       title: 'Confirmar pedido',
       message:
-          '${state.cartItemCount} item(ns) · '
+          '${state.cartItemCount} ${plural(state.cartItemCount, 'item')} · '
           '${formatMoney(state.cartTotalCents)} · $paymentLabel.\n\n'
           'Ao confirmar, o pedido é enviado ao estabelecimento.',
       confirmLabel: 'Confirmar pedido',
@@ -270,7 +271,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ),
                         Text(
                           '${state.cartItemCount} '
-                          '${state.cartItemCount == 1 ? 'unidade' : 'unidades'}'
+                          '${plural(state.cartItemCount, 'unidade')}'
                           ' · entrega em Nacala-Porto',
                           style: TextStyle(
                             color: context.mutedColor,
@@ -283,8 +284,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(width: 8),
                   Text(
                     formatMoney(state.cartTotalCents),
-                    style: const TextStyle(
-                      color: AppColors.primary,
+                    style: TextStyle(
+                      color: context.accentColor,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -349,7 +350,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 onPressed: _addAddress,
                 icon: const Icon(Icons.add_location_alt_outlined, size: 18),
                 label: const Text('Adicionar outra morada'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+                style: TextButton.styleFrom(
+                  foregroundColor: context.accentColor,
+                ),
               ),
             ],
             const SizedBox(height: 20),
@@ -484,6 +487,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 8),
             _PaymentOption(
+              value: 'mkesh',
+              selected: _payment == 'mkesh',
+              icon: Icons.smartphone_rounded,
+              title: 'mKesh',
+              subtitle: 'Pagamento móvel · integração pendente',
+              onTap: () => setState(() => _payment = 'mkesh'),
+            ),
+            const SizedBox(height: 8),
+            _PaymentOption(
               value: 'cash',
               selected: _payment == 'cash',
               icon: Icons.payments_outlined,
@@ -510,11 +522,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'A cobrança automática M-Pesa/e-Mola ainda não está '
-                        'ativa. O pedido será registado com pagamento pendente '
-                        'de integração; não será cobrado automaticamente.',
+                        'A cobrança automática M-Pesa, e-Mola e mKesh ainda '
+                        'não está ativa. O pedido será registado com '
+                        'pagamento pendente de integração; não será cobrado '
+                        'automaticamente.',
                         style: TextStyle(
-                          color: AppColors.primaryPressed,
+                          color: AppColors.textOrange,
                           fontSize: 11,
                           height: 1.45,
                         ),

@@ -363,23 +363,37 @@ class _TrackingScreenState extends State<TrackingScreen> {
                         ),
                       ),
                       if (order.delivery!.courierPhone != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            order.delivery!.courierPhone!,
-                            style: const TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Ligar ao estafeta',
+                              onPressed: () => launchCall(
+                                context,
+                                phone: order.delivery!.courierPhone!,
+                              ),
+                              icon: const Icon(
+                                Icons.call_rounded,
+                                color: AppColors.success,
+                                size: 22,
+                              ),
                             ),
-                          ),
+                            IconButton(
+                              tooltip: 'Falar por WhatsApp',
+                              onPressed: () => launchWhatsApp(
+                                context,
+                                phone: order.delivery!.courierPhone!,
+                                message:
+                                    'Olá! Falo sobre a entrega do pedido '
+                                    '${order.number}.',
+                              ),
+                              icon: const Icon(
+                                Icons.chat_rounded,
+                                color: AppColors.success,
+                                size: 22,
+                              ),
+                            ),
+                          ],
                         ),
                     ],
                   ),
@@ -545,8 +559,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
         label: const Text('Repetir pedido'),
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, 50),
-          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.55)),
-          foregroundColor: AppColors.primary,
+          side: BorderSide(color: context.accentColor.withValues(alpha: 0.55)),
+          foregroundColor: context.accentColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),

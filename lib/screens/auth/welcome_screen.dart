@@ -5,7 +5,6 @@ import '../../theme/app_colors.dart';
 import 'package:flutter/services.dart';
 
 import '../../state/app_scope.dart';
-import '../../widgets/common.dart';
 import 'register_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -45,20 +44,21 @@ class WelcomeScreen extends StatelessWidget {
               },
             ),
 
-            // Gradiente para melhorar a leitura dos elementos.
+            // Gradiente para melhorar a leitura dos elementos: mais
+            // escuro no topo, onde a marca se apoia sobre o pôr do sol.
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0x55001635),
-                    Color(0x18001635),
-                    Color(0x44001635),
-                    Color(0xBB001A38),
+                    Color(0x8F001635),
+                    Color(0x40001635),
+                    Color(0x6B001E3F),
+                    Color(0xC0001A38),
                     Color(0xF5001835),
                   ],
-                  stops: [0.0, 0.28, 0.52, 0.76, 1.0],
+                  stops: [0.0, 0.3, 0.54, 0.78, 1.0],
                 ),
               ),
             ),
@@ -79,12 +79,8 @@ class WelcomeScreen extends StatelessWidget {
                             children: [
                               const Spacer(flex: 2),
 
-                              // LOGÓTIPO.
-                              const AppLogo(size: 104, onDark: true),
-
-                              const SizedBox(height: 12),
-
-                              // NOME DA MARCA.
+                              // NOME DA MARCA — inteiro em branco para
+                              // se ler sobre a fotografia do pôr do sol.
                               RichText(
                                 textAlign: TextAlign.center,
                                 text: const TextSpan(
@@ -96,15 +92,29 @@ class WelcomeScreen extends StatelessWidget {
                                         fontSize: 35,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: -1.5,
+                                        shadows: [
+                                          Shadow(
+                                            color: Color(0x66000000),
+                                            blurRadius: 14,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     TextSpan(
                                       text: 'Delivery',
                                       style: TextStyle(
-                                        color: AppColors.primary,
+                                        color: Colors.white,
                                         fontSize: 35,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: -1.5,
+                                        shadows: [
+                                          Shadow(
+                                            color: Color(0x66000000),
+                                            blurRadius: 14,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -183,7 +193,7 @@ class WelcomeScreen extends StatelessWidget {
                                 child: FilledButton(
                                   onPressed: onSignIn,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
+                                    backgroundColor: AppColors.textOrange,
                                     foregroundColor: Colors.white,
                                     elevation: 5,
                                     shadowColor: Colors.black45,
@@ -235,17 +245,18 @@ class WelcomeScreen extends StatelessWidget {
                                 ),
                               ),
 
-                              // CONTINUAR COMO CONVIDADO.
+                              // CONTINUAR COMO CONVIDADO — alvo de toque
+                              // confortável (mínimo recomendado: 48 px).
                               TextButton(
                                 onPressed: onGuest,
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.white.withValues(
-                                    alpha: 0.9,
+                                    alpha: 0.92,
                                   ),
-                                  minimumSize: const Size.fromHeight(46),
+                                  minimumSize: const Size.fromHeight(48),
                                   textStyle: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 child: const Text('Explorar como convidado'),

@@ -3,17 +3,23 @@ import 'package:flutter/material.dart';
 /// Paleta oficial da Nacala Delivery.
 ///
 /// Identidade visual única em toda a aplicação:
-/// laranja principal `#FF7900`, laranja secundário `#FF9A3D`, azul secundário
-/// `#1260D8`, texto `#17191F`, fundo `#F7F7F9`, cartões `#FFFFFF` e texto
-/// secundário `#747982`. Estados usam cores semânticas (#16A36A, #E53935)
+/// laranja vivo `#FF7900` para ícones e destaques, laranja de leitura
+/// `#D95F00` para texto e botões sobre fundo claro (contraste AA), texto
+/// `#17191F`, fundo `#F7F7F9`, cartões `#FFFFFF` e texto secundário
+/// `#747982`. Estados usam cores semânticas (#16A36A, #E53935)
 /// harmonizadas com a identidade.
 abstract final class AppColors {
   // ---------------------------------------------------------------
   // Identidade principal — laranja Nacala.
   // ---------------------------------------------------------------
-  static const primary = Color(0xFFFF7900); // #FF7900
+  static const primary = Color(0xFFFF7900); // #FF7900 — ícones e destaques
   static const primarySecondary = Color(0xFFFF9A3D); // #FF9A3D
   static const primaryPressed = Color(0xFFE85D00); // #E85D00
+
+  /// Laranja de leitura: texto e botões sobre fundos claros. O laranja vivo
+  /// (#FF7900) tem ~3:1 sobre branco, abaixo de 4.5:1 (AA); #D95F00 garante
+  /// contraste suficiente sem perder a identidade.
+  static const textOrange = Color(0xFFD95F00); // #D95F00
   static const primarySoft = Color(0xFFFFF0E5); // fundo suave de destaque
   static const primarySoftStrong = Color(0xFFFFE3CF); // chips / selecções
 
@@ -88,4 +94,5 @@ abstract final class AppColors {
   static const darkSurface = darkBg;
   static const darkLine = darkBorder;
   static const primaryLight = primaryPressed;
+  static const primaryText = textOrange;
 }

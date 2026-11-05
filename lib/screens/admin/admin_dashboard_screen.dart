@@ -290,7 +290,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           title: 'Aprovações pendentes',
           subtitle: summary.pendingEstablishments.isEmpty
               ? 'Nenhum parceiro à espera de aprovação'
-              : '${summary.pendingEstablishments.length} parceiro(s) por aprovar',
+              : '${summary.pendingEstablishments.length} '
+                  '${plural(summary.pendingEstablishments.length, 'parceiro')} '
+                  'por aprovar',
           actionLabel: 'Ver parceiros',
           onAction: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const AdminPartnersScreen()),
@@ -375,7 +377,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     style: const TextStyle(fontSize: 13),
                   ),
                   subtitle: Text(
-                    '${categories[i].establishmentCount} parceiro(s)',
+                    '${categories[i].establishmentCount} '
+                    '${plural(categories[i].establishmentCount, 'parceiro')}',
                     style: TextStyle(color: context.mutedColor, fontSize: 11),
                   ),
                   trailing: IconButton(

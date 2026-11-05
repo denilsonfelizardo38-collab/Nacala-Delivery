@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/formatters.dart';
 import '../../theme/app_colors.dart';
 
 import '../../models/models.dart';
@@ -380,15 +381,16 @@ class _CategoryCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
-              color: selected ? AppColors.primary : null,
+              color: selected ? AppColors.textOrange : null,
             ),
           ),
 
           const SizedBox(height: 3),
 
           Text(
-            '${category.establishmentCount} parceiro(s)',
-            style: TextStyle(color: context.mutedColor, fontSize: 10),
+            '${category.establishmentCount} '
+            '${plural(category.establishmentCount, 'parceiro')}',
+            style: TextStyle(color: context.mutedColor, fontSize: 11),
           ),
         ],
       ),

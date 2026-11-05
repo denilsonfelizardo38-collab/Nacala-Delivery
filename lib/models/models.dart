@@ -526,6 +526,7 @@ class Order {
   String get paymentLabel => switch (paymentMethod) {
     'mpesa' => 'M-Pesa',
     'emola' => 'e-Mola',
+    'mkesh' => 'mKesh',
     'cash' => 'Dinheiro na entrega',
     _ => paymentMethod,
   };

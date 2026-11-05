@@ -1262,7 +1262,7 @@ class Api {
       throw ApiError(422, 'invalid_phone', 'Número de telemóvel inválido.');
     }
     final payment = requiredString(body, 'payment_method', max: 20);
-    if (!['mpesa', 'emola', 'cash'].contains(payment)) {
+    if (!['mpesa', 'emola', 'mkesh', 'cash'].contains(payment)) {
       throw ApiError(422, 'invalid_payment', 'Método de pagamento inválido.');
     }
     final note = (body['note'] as String?)?.trim();

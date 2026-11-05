@@ -34,6 +34,41 @@ String formatMoney(int cents) {
   return buffer.toString();
 }
 
+/// Formato compacto para cartões e chips: 45000 -> "450 MT",
+/// 4550 -> "45,50 MT". Omite os centavos quando são zero (preços de
+/// menu raramente têm decimais) e mantém separador de milhares.
+String formatMoneyCompact(int cents) {
+  final negative = cents < 0;
+  final absolute = cents.abs();
+  final units = absolute ~/ 100;
+  final decimals = absolute % 100;
+  final digits = units.toString();
+  final buffer = StringBuffer(negative ? '-' : '');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+    buffer.write(digits[i]);
+  }
+  if (decimals > 0) {
+    buffer
+      ..write(',')
+      ..write(decimals.toString().padLeft(2, '0'));
+  }
+  buffer.write(' MT');
+  return buffer.toString();
+}
+
+/// Escolhe entre singular e plural: plural(count, 'parceiro') ->
+/// "1 parceiro" / "3 parceiros"; plural(count, 'avaliação') ->
+/// "2 avaliações" (troca `ão` -> `ões` por omissão).
+String plural(int count, String singular, [String? pluralForm]) {
+  if (count == 1) return singular;
+  final form = pluralForm ??
+      (singular.endsWith('ão')
+          ? '${singular.substring(0, singular.length - 2)}ões'
+          : '${singular}s');
+  return form;
+}
+
 /// 45000 -> "450,00" (sem moeda, para campos de formulário)
 String formatMoneyPlain(int cents) {
   final negative = cents < 0;

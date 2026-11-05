@@ -17,6 +17,38 @@ void main() {
     });
   });
 
+  group('formatMoneyCompact', () {
+    test('omite centavos quando são zero', () {
+      expect(formatMoneyCompact(0), '0 MT');
+      expect(formatMoneyCompact(8000), '80 MT');
+      expect(formatMoneyCompact(45000), '450 MT');
+    });
+
+    test('mantém centavos e milhares quando existem', () {
+      expect(formatMoneyCompact(4550), '45,50 MT');
+      expect(formatMoneyCompact(845000), '8.450 MT');
+      expect(formatMoneyCompact(-550), '-5,50 MT');
+    });
+  });
+
+  group('plural', () {
+    test('singular com 1', () {
+      expect(plural(1, 'parceiro'), 'parceiro');
+      expect(plural(1, 'avaliação'), 'avaliação');
+      expect(plural(1, 'item'), 'item');
+    });
+
+    test('plural derivado', () {
+      expect(plural(3, 'parceiro'), 'parceiros');
+      expect(plural(2, 'avaliação'), 'avaliações');
+      expect(plural(0, 'unidade'), 'unidades');
+    });
+
+    test('plural explícito', () {
+      expect(plural(2, 'item', 'itens'), 'itens');
+    });
+  });
+
   group('parseMoneyToCents', () {
     test('interpreta formatos usados em Moçambique', () {
       expect(parseMoneyToCents('450'), 45000);

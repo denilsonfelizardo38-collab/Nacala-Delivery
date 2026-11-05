@@ -219,7 +219,9 @@ class _CartScreenState extends State<CartScreen> {
                   const SizedBox(height: 24),
                   SectionTitle(
                     title: 'Os teus artigos',
-                    subtitle: '${state.cartItemCount} unidade(s) no carrinho',
+                    subtitle:
+                        '${state.cartItemCount} '
+                        '${plural(state.cartItemCount, 'unidade')} no carrinho',
                   ),
                   const SizedBox(height: 12),
                   for (final line in state.cart)

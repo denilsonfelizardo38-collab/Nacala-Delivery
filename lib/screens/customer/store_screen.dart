@@ -397,6 +397,7 @@ class _StoreHeader extends StatelessWidget {
                 Image.network(
                   establishment.imageUrl!,
                   fit: BoxFit.cover,
+                  cacheWidth: imageCacheWidthFor(context, 360),
                   errorBuilder: (_, _, _) => _storeImageFallback(),
                 )
               else
@@ -424,10 +425,12 @@ class _StoreHeader extends StatelessWidget {
                     vertical: 7,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
+                    // Selo da avaliação sobre a fotografia: fundo escuro
+                    // sólido para o branco continuar legível.
+                    color: Colors.black.withValues(alpha: 0.58),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: Colors.white.withValues(alpha: 0.25),
                     ),
                   ),
                   child: Row(
@@ -440,7 +443,7 @@ class _StoreHeader extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        establishment.rating.toStringAsFixed(1),
+                        formatRating(establishment.rating),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -450,10 +453,11 @@ class _StoreHeader extends StatelessWidget {
                       if (establishment.reviewCount > 0) ...[
                         const SizedBox(width: 4),
                         Text(
-                          '· ${establishment.reviewCount} avaliações',
+                          '· ${establishment.reviewCount} '
+                          '${plural(establishment.reviewCount, 'avaliação')}',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -468,6 +472,9 @@ class _StoreHeader extends StatelessWidget {
                 child: StatusBadge(
                   status: establishment.isOpen ? 'accepted' : 'cancelled',
                   label: establishment.isOpen ? 'Aberto agora' : 'Fechado',
+                  // Sobre a fotografia usa-se fundo sólido: "Aberto agora"
+                  // em verde translúcido quase não se lê.
+                  solid: true,
                 ),
               ),
               Positioned(
@@ -525,7 +532,9 @@ class _StoreHeader extends StatelessWidget {
                     child: _HeaderMeta(
                       icon: Icons.delivery_dining_rounded,
                       label: 'Entrega',
-                      value: formatMoney(establishment.deliveryFeeCents),
+                      value: formatMoneyCompact(
+                        establishment.deliveryFeeCents,
+                      ),
                     ),
                   ),
                   Container(width: 1, height: 32, color: AppColors.border),
@@ -562,6 +571,40 @@ class _StoreHeader extends StatelessWidget {
                 text: establishment.address,
               ),
               InfoRow(icon: Icons.phone_outlined, text: establishment.phone),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          launchCall(context, phone: establishment.phone),
+                      icon: const Icon(Icons.call_outlined, size: 18),
+                      label: const Text('Ligar'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 46),
+                        foregroundColor: AppColors.textOrange,
+                        side: const BorderSide(color: AppColors.border),
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          openStoreMap(context, address: establishment.address),
+                      icon: const Icon(Icons.map_outlined, size: 18),
+                      label: const Text('Ver no mapa'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 46),
+                        foregroundColor: AppColors.textOrange,
+                        side: const BorderSide(color: AppColors.border),
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -600,7 +643,7 @@ class _HeaderMeta extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.muted,
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -614,7 +657,7 @@ class _HeaderMeta extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: AppColors.ink,
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -764,7 +807,7 @@ class _ProductCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.muted,
-                      fontSize: 10,
+                      fontSize: 11,
                       height: 1.45,
                     ),
                   ),
@@ -774,12 +817,12 @@ class _ProductCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        formatMoney(product.priceCents),
+                        formatMoneyCompact(product.priceCents),
                         maxLines: 1,
                         softWrap: false,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: AppColors.primaryPressed,
+                          color: AppColors.textOrange,
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                         ),
@@ -972,6 +1015,40 @@ class _AboutCard extends StatelessWidget {
             icon: Icons.schedule_rounded,
             title: 'Horário de funcionamento',
             value: '${establishment.opensAt}–${establishment.closesAt}',
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      launchCall(context, phone: establishment.phone),
+                  icon: const Icon(Icons.call_outlined, size: 18),
+                  label: const Text('Ligar'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 46),
+                    foregroundColor: AppColors.textOrange,
+                    side: const BorderSide(color: AppColors.border),
+                    textStyle: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      openStoreMap(context, address: establishment.address),
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text('Ver no mapa'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 46),
+                    foregroundColor: AppColors.textOrange,
+                    side: const BorderSide(color: AppColors.border),
+                    textStyle: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

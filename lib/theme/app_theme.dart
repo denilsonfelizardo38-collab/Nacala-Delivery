@@ -4,10 +4,11 @@ import 'app_colors.dart';
 
 /// Tema Material 3 da Nacala Delivery, claro e escuro.
 ///
-/// Identidade visual: laranja `#FF7900` sobre fundo `#F7F7F8` e cartões
-/// brancos `#FFFFFF`, azul secundário `#1260D8`, texto `#15191F` e texto
-/// secundário cinzento equilibrado. Tipografia Inter com hierarquia
-/// consistente (títulos SemiBold/Bold, corpo Regular, subtítulos Medium).
+/// Identidade visual: laranja vivo `#FF7900` para ícones e destaques,
+/// laranja de leitura `#D95F00` para texto e botões em fundo claro
+/// (contraste AA), fundo `#F7F7F9` e cartões brancos. Tipografia Inter
+/// com hierarquia consistente
+/// (títulos SemiBold/Bold, corpo Regular, subtítulos Medium).
 abstract final class AppTheme {
   static const String fontFamily = 'Inter';
 
@@ -38,8 +39,7 @@ abstract final class AppTheme {
     required Color border,
   }) {
     final isDark = brightness == Brightness.dark;
-    final primary = isDark ? const Color(0xFFFF9E45) : AppColors.primary;
-    final secondary = isDark ? const Color(0xFF6FA8F2) : AppColors.secondary;
+    final primary = isDark ? const Color(0xFFFF9E45) : AppColors.textOrange;
     final scheme = isDark
         ? const ColorScheme.dark(
             primary: Color(0xFFFF9E45),
@@ -53,7 +53,10 @@ abstract final class AppTheme {
             outline: AppColors.darkBorder,
           )
         : const ColorScheme.light(
-            primary: AppColors.primary,
+            // O laranja de leitura (#D95F00) garante contraste de texto
+            // e botões sobre fundos claros; o laranja vivo (#FF7900)
+            // fica reservado a ícones e destaque.
+            primary: AppColors.textOrange,
             onPrimary: Colors.white,
             secondary: AppColors.secondary,
             onSecondary: Colors.white,
@@ -247,8 +250,10 @@ abstract final class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: secondary,
-          minimumSize: const Size(44, 44),
+          // O esquema de cores resolve: laranja de leitura em claro,
+          // laranja claro em escuro — nunca o azul, fora da identidade.
+          foregroundColor: primary,
+          minimumSize: const Size(44, 48),
           textStyle: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,

@@ -76,7 +76,12 @@ void main() {
     await tester.tap(find.text('Menu'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Adicionar'));
+    final addButton = find.widgetWithText(FilledButton, 'Adicionar');
+    // Os botões de contacto (Ligar / Ver no mapa) acrescentam altura ao
+    // cabeçalho da loja; garante-se que o cartão fica visível antes de tocar.
+    await tester.ensureVisible(addButton);
+    await tester.pumpAndSettle();
+    await tester.tap(addButton);
     await tester.pumpAndSettle();
     expect(
       find.text('Frango grelhado adicionado ao carrinho.'),

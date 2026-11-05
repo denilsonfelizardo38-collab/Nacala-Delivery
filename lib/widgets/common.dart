@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../state/app_scope.dart';
 import '../core/api_client.dart';
@@ -20,6 +21,74 @@ IconData categoryIconFor(String icon) => switch (icon) {
   'fish' || 'peixarias' => Icons.set_meal_rounded,
   _ => Icons.category_rounded,
 };
+
+/// Abre a marcação `tel:` (usa o disco do sistema).
+Future<void> launchCall(
+  BuildContext context, {
+  required String phone,
+}) async {
+  final url = Uri(scheme: 'tel', path: digitsOnly(phone));
+  try {
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else if (context.mounted) {
+      showAppSnack(context, 'Não foi possível iniciar a chamada.');
+    }
+  } on Exception {
+    if (context.mounted) {
+      showAppSnack(context, 'Não foi possível iniciar a chamada.', error: true);
+    }
+  }
+}
+
+/// Abre o WhatsApp para conversar com um número (usado com o estafeta).
+/// Números moçambicanos são normalizados para +258.
+Future<void> launchWhatsApp(
+  BuildContext context, {
+  required String phone,
+  String? message,
+}) async {
+  final digits = digitsOnly(phone);
+  final international = digits.startsWith('258') ? digits : '258$digits';
+  final query = message == null || message.isEmpty
+      ? ''
+      : '?text=${Uri.encodeComponent(message)}';
+  final url = Uri.parse('https://wa.me/$international$query');
+  try {
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else if (context.mounted) {
+      showAppSnack(context, 'Nenhuma aplicação para abrir o WhatsApp.');
+    }
+  } on Exception {
+    if (context.mounted) {
+      showAppSnack(
+        context,
+        'Não foi possível abrir o WhatsApp.',
+        error: true,
+      );
+    }
+  }
+}
+
+/// Abre o mapa externo do telemóvel à procura de uma morada.
+Future<void> openStoreMap(
+  BuildContext context, {
+  required String address,
+}) async {
+  final url = Uri.parse('geo:0,0?q=${Uri.encodeComponent(address)}');
+  try {
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else if (context.mounted) {
+      showAppSnack(context, 'Nenhuma aplicação de mapas disponível.');
+    }
+  } on Exception {
+    if (context.mounted) {
+      showAppSnack(context, 'Não foi possível abrir o mapa.', error: true);
+    }
+  }
+}
 
 /// Cartão base do sistema de design.
 class AppCard extends StatelessWidget {
@@ -604,10 +673,14 @@ class BrandedCover extends StatelessWidget {
 }
 
 class StatusBadge extends StatelessWidget {
-  const StatusBadge({super.key, required this.status, this.label});
+  const StatusBadge({super.key, required this.status, this.label, this.solid});
 
   final String status;
   final String? label;
+
+  /// Fundo sólido branco com tinta escura: para selos pousados sobre
+  /// fotografias, onde os tons translúcidos perdem contraste.
+  final bool? solid;
 
   static (Color, Color) colorsFor(String status, BuildContext context) {
     switch (status) {
@@ -634,6 +707,26 @@ class StatusBadge extends StatelessWidget {
     }
   }
 
+  /// Cores "sólidas": fundo branco puro e tinta escura equivalente.
+  static (Color, Color) solidColorsFor(String status) {
+    switch (status) {
+      case 'delivered':
+      case 'completed':
+      case 'accepted':
+        return (Colors.white, AppColors.greenInk);
+      case 'cancelled':
+      case 'rejected':
+      case 'declined':
+        return (Colors.white, AppColors.dangerInk);
+      case 'pending':
+      case 'preparing':
+      case 'available':
+        return (Colors.white, AppColors.amberInk);
+      default:
+        return (Colors.white, AppColors.ink);
+    }
+  }
+
   static String labelFor(String status) => switch (status) {
     'pending' => 'Pendente',
     'confirmed' => 'Confirmado',
@@ -652,19 +745,30 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (background, foreground) = colorsFor(status, context);
+    final (background, foreground) = solid == true
+        ? solidColorsFor(status)
+        : colorsFor(status, context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(999),
+        boxShadow: solid == true
+            ? [
+                const BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: Text(
         label ?? labelFor(status),
         style: TextStyle(
           color: foreground,
           fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontWeight: solid == true ? FontWeight.w700 : FontWeight.w600,
           letterSpacing: 0.2,
         ),
       ),
@@ -1036,9 +1140,12 @@ class EstablishmentTile extends StatelessWidget {
                     Expanded(
                       child: Text(
                         establishment.name,
-                        maxLines: 1,
+                        maxLines: 2, // nomes longos não são cortados
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(height: 1.2),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1047,7 +1154,7 @@ class EstablishmentTile extends StatelessWidget {
                       label: open ? 'Aberto' : 'Fechado',
                     ),
                     if (onFavoriteToggle != null) ...[
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 2),
                       FavoriteIconButton(
                         isFavorite: isFavorite,
                         onPressed: onFavoriteToggle!,
@@ -1075,7 +1182,8 @@ class EstablishmentTile extends StatelessWidget {
                     ),
                     _Meta(
                       icon: Icons.delivery_dining_rounded,
-                      text: formatMoney(establishment.deliveryFeeCents),
+                      text:
+                          'Entrega ${formatMoneyCompact(establishment.deliveryFeeCents)}',
                     ),
                     _Meta(
                       icon: Icons.schedule_rounded,

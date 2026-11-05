@@ -83,7 +83,9 @@ void main() {
     expect(find.text('Entrar'), findsOneWidget);
     expect(find.text('Criar Conta'), findsOneWidget);
     expect(find.text('Email ou telefone'), findsNothing);
-    expect(tester.getSize(find.byType(AppLogo)), const Size(104, 104));
+    // A marca apresenta-se apenas pelo wordmark (sem ícone em caixa),
+    // em branco, sobre o gradiente escuro.
+    expect(find.byType(AppLogo), findsNothing);
 
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
