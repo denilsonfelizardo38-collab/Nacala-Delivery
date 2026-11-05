@@ -100,7 +100,9 @@ class Api {
     ..get('/api/admin/audit', _adminAudit)
     ..post('/api/admin/categories', _adminCreateCategory)
     ..patch('/api/admin/categories/<id>', _adminUpdateCategory)
-    ..delete('/api/admin/categories/<id>', _adminDeleteCategory);
+    ..delete('/api/admin/categories/<id>', _adminDeleteCategory)
+    ..delete('/api/admin/establishments/<id>', _adminDeleteEstablishment)
+    ..delete('/api/admin/users/<id>', _adminDeleteUser);
 
   // ---------------------------------------------------------------- middleware
 
@@ -2959,6 +2961,86 @@ class Api {
     }
     db.execute('DELETE FROM categories WHERE id = ?', [id]);
     audit(user.id, 'category.deleted', 'category', id);
+    return jsonResponse({'ok': true});
+  }
+
+  /// Elimina um estabelecimento, os seus produtos, favoritos, avaliações
+  /// e as encomendas feitas a essa loja. Pensado para limpar dados de
+  /// demonstração semeados no servidor; não toca em nenhum utilizador.
+  Future<Response> _adminDeleteEstablishment(Request request, String id) async {
+    final user = requireRole(request, ['admin']);
+    final rows = db.select(
+      'SELECT id, name FROM establishments WHERE id = ?',
+      [id],
+    );
+    if (rows.isEmpty) {
+      throw ApiError(404, 'not_found', 'Estabelecimento não encontrado.');
+    }
+    final name = rows.first['name'] as String;
+    final deletedOrders = db.select(
+      'SELECT COUNT(*) AS n FROM orders WHERE establishment_id = ?',
+      [id],
+    ).first['n'] as int;
+
+    db.execute('BEGIN');
+    try {
+      // Encomendas primeiro: a FK orders→establishments não apaga em
+      // cascata; os itens, eventos, atribuições e avaliações ligados à
+      // encomenda são removidos automaticamente.
+      db.execute('DELETE FROM orders WHERE establishment_id = ?', [id]);
+      // Produtos, favoritos e avaliações caem em cascata com a loja.
+      db.execute('DELETE FROM establishments WHERE id = ?', [id]);
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+    audit(user.id, 'establishment.deleted', 'establishment', id, {
+      'name': name,
+      'removed_orders': deletedOrders,
+    });
+    return jsonResponse({'ok': true, 'removed_orders': deletedOrders});
+  }
+
+  /// Elimina uma conta (por exemplo, contas de demonstração semeadas).
+  /// Contas de administração ficam protegidas; clientes com encomendas
+  /// no histórico exigem que a loja correspondente seja eliminada antes.
+  Future<Response> _adminDeleteUser(Request request, String id) async {
+    final user = requireRole(request, ['admin']);
+    if (id == user.id) {
+      throw ApiError(409, 'self_delete', 'Não podes eliminar a tua conta.');
+    }
+    final rows = db.select(
+      'SELECT id, role, name FROM users WHERE id = ?',
+      [id],
+    );
+    if (rows.isEmpty) {
+      throw ApiError(404, 'not_found', 'Utilizador não encontrado.');
+    }
+    if (rows.first['role'] == 'admin') {
+      throw ApiError(
+        403,
+        'admin_protected',
+        'As contas de administração não podem ser eliminadas.',
+      );
+    }
+    final hasOrders = db.select(
+      'SELECT 1 FROM orders WHERE customer_id = ? LIMIT 1',
+      [id],
+    );
+    if (hasOrders.isNotEmpty) {
+      throw ApiError(
+        409,
+        'user_has_orders',
+        'Esta conta tem encomendas no histórico. Elimina primeiro o '
+            'estabelecimento dessas encomendas.',
+      );
+    }
+    db.execute('DELETE FROM users WHERE id = ?', [id]);
+    audit(user.id, 'user.deleted', 'user', id, {
+      'name': rows.first['name'],
+      'role': rows.first['role'],
+    });
     return jsonResponse({'ok': true});
   }
 }

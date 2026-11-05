@@ -696,4 +696,63 @@ void main() {
     final (meStatus, _) = await call('GET', '/api/auth/me', token: token);
     expect(meStatus, 401);
   });
+
+  test('administrador elimina estabelecimento e conteúdo associado', () async {
+    final admin = await login('admin@nacala.co.mz', 'Admin@1234');
+
+    final (_, list) = await call('GET', '/api/establishments');
+    final establishments = list['establishments'] as List;
+    expect(establishments, isNotEmpty);
+    final targetId = establishments.first['id'] as String;
+    final categorySlug = establishments.first['category_slug'] as String;
+
+    final (_, products) = await call('GET', '/api/establishments/$targetId/products');
+    expect(products['products'], isNotEmpty);
+
+    final (status, json) =
+        await call('DELETE', '/api/admin/establishments/$targetId', token: admin);
+    expect(status, 200, reason: '$json');
+    expect(json['ok'], true);
+    expect(json['removed_orders'], isA<int>());
+
+    final (goneStatus, _) = await call('GET', '/api/establishments/$targetId');
+    expect(goneStatus, 404);
+
+    final (_, after) =
+        await call('GET', '/api/establishments?category=$categorySlug');
+    expect(
+      (after['establishments'] as List).any((e) => e['id'] == targetId),
+      isFalse,
+    );
+  });
+
+  test('eliminação de utilizador protege o próprio admin', () async {
+    final admin = await login('admin@nacala.co.mz', 'Admin@1234');
+    final (_, me) = await call('GET', '/api/auth/me', token: admin);
+    final adminId = me['user']['id'] as String;
+
+    final (selfStatus, self) =
+        await call('DELETE', '/api/admin/users/$adminId', token: admin);
+    expect(selfStatus, 409);
+    expect(self['error']['code'], 'self_delete');
+  });
+
+  test('administrador pode eliminar conta de parceiro sem encomendas',
+      () async {
+    final admin = await login('admin@nacala.co.mz', 'Admin@1234');
+    final (_, users) = await call('GET', '/api/admin/users', token: admin);
+    final partner = (users['users'] as List)
+        .singleWhere((u) => u['email'] == 'cantinho@nacala.co.mz');
+
+    final (status, json) =
+        await call('DELETE', '/api/admin/users/${partner['id']}', token: admin);
+    expect(status, 200, reason: '$json');
+    expect(json['ok'], true);
+
+    final (_, after) = await call('GET', '/api/admin/users', token: admin);
+    expect(
+      (after['users'] as List).any((u) => u['email'] == 'cantinho@nacala.co.mz'),
+      isFalse,
+    );
+  });
 }
