@@ -232,7 +232,9 @@ qualquer host que suporte Docker (Render, Fly.io, Railway, Koyeb, etc.).
 3. Configura: **Runtime = Docker**, **Dockerfile path = `server/Dockerfile`**.
 4. Instance type: **Free**.
 5. Define as variáveis de ambiente (`PORT=8080`, `DB_PATH=/data`,
-   `UPLOADS_DIR=/data/uploads`, `JWT_SECRET=<segredo>`, `SEED=1`, `SEED_DEMO=1`).
+   `UPLOADS_DIR=/data/uploads`, `JWT_SECRET=<segredo>`, `SEED=1`).
+   **Não definas `SEED_DEMO`** — em produção ele enche o catálogo com lojas,
+   contas e pedidos de demonstração.
 6. Publica e guarda a URL gerada (ex.: `https://<nome>.onrender.com`).
 
 ### Opção 2 — Fly.io
