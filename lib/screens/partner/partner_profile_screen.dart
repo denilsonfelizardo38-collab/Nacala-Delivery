@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
+import '../../core/api_config.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
@@ -215,14 +216,14 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
               AppCard(
                 padding: EdgeInsets.zero,
                 child: ListTile(
-                  leading: const Icon(Icons.dns_outlined, size: 20),
+                  leading: const Icon(Icons.info_outline_rounded, size: 20),
                   title: const Text(
-                    'Servidor da API',
+                    'Versão da aplicação',
                     style: TextStyle(fontSize: 13),
                   ),
-                  subtitle: Text(
-                    state.apiBaseUrl,
-                    style: TextStyle(color: context.mutedColor, fontSize: 11),
+                  subtitle: const Text(
+                    appVersion,
+                    style: TextStyle(fontSize: 11),
                   ),
                 ),
               ),
