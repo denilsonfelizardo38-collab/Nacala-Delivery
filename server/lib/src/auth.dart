@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -7,6 +8,16 @@ import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 /// Número de iterações do PBKDF2-HMAC-SHA256.
 const _iterations = 120000;
+
+/// Executa o PBKDF2 num isolate de trabalho. As 120.000 iterações levam
+/// dezenas de ms a segundos em CPU modesta; de forma síncrona bloqueiam o
+/// event loop e paralisariam *todos* os pedidos, incluindo apenas 1 login
+/// a decorrer.
+Future<PasswordDigest> hashPasswordAsync(String password, {String? salt}) =>
+    Isolate.run(() => hashPassword(password, salt: salt));
+
+Future<bool> verifyPasswordAsync(String password, String hash, String salt) =>
+    Isolate.run(() => verifyPassword(password, hash, salt));
 
 class PasswordDigest {
   const PasswordDigest(this.hash, this.salt);

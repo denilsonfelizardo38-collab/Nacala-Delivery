@@ -47,6 +47,9 @@ void _migrate(Database db) {
 
   for (final migration in migrations) {
     if (applied.contains(migration.version)) continue;
+    if (migration.disableForeignKeys) {
+      db.execute('PRAGMA foreign_keys = OFF');
+    }
     db.execute('BEGIN');
     try {
       for (final statement in migration.statements) {
@@ -59,15 +62,36 @@ void _migrate(Database db) {
       db.execute('COMMIT');
     } catch (_) {
       db.execute('ROLLBACK');
+      if (migration.disableForeignKeys) db.execute('PRAGMA foreign_keys = ON');
       rethrow;
+    }
+    if (migration.disableForeignKeys) {
+      final violations = db.select('PRAGMA foreign_key_check');
+      db.execute('PRAGMA foreign_keys = ON');
+      if (violations.isNotEmpty) {
+        throw StateError(
+          'Migração deixou inconsistências de chave estrangeira.',
+        );
+      }
     }
   }
 }
 
 class Migration {
-  const Migration(this.version, this.statements);
+  const Migration(
+    this.version,
+    this.statements, {
+    this.disableForeignKeys = false,
+  }) : assert(version > 0);
+
   final int version;
   final List<String> statements;
+
+  /// Reconstruções de tabelas (CREATE + INSERT + DROP + RENAME) exigem
+  /// `PRAGMA foreign_keys = OFF`, que o SQLite ignora dentro de uma
+  /// transação. O corredor desliga antes do BEGIN e religa no fim,
+  /// verificando a integridade referencial antes de avançar.
+  final bool disableForeignKeys;
 }
 
 const migrations = <Migration>[
@@ -277,6 +301,69 @@ const migrations = <Migration>[
   Migration(5, [
     'ALTER TABLE users ADD COLUMN avatar_url TEXT',
   ]),
+  // Reconstrói `orders`: o SQLite não permite alterar um CHECK com ALTER
+  // TABLE, e o `payment_method` da migração 1 só aceitava mpesa/emola/cash —
+  // pedidos pagos por mKesh (oferecidos pela app) falhavam com um 500.
+  Migration(6, [
+    '''
+    CREATE TABLE orders_new (
+      id TEXT PRIMARY KEY,
+      number TEXT NOT NULL UNIQUE,
+      customer_id TEXT NOT NULL REFERENCES users(id),
+      establishment_id TEXT NOT NULL REFERENCES establishments(id),
+      address_label TEXT NOT NULL DEFAULT 'Entrega',
+      address_line TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      note TEXT,
+      payment_method TEXT NOT NULL
+        CHECK (payment_method IN ('mpesa','emola','mkesh','cash')),
+      payment_status TEXT NOT NULL
+        CHECK (payment_status IN ('pending_integration','cash_on_delivery')),
+      status TEXT NOT NULL CHECK (status IN
+        ('pending','confirmed','preparing','ready','on_the_way',
+         'delivered','cancelled','rejected')),
+      subtotal_cents INTEGER NOT NULL CHECK (subtotal_cents >= 0),
+      delivery_fee_cents INTEGER NOT NULL CHECK (delivery_fee_cents >= 0),
+      discount_cents INTEGER NOT NULL DEFAULT 0 CHECK (discount_cents >= 0),
+      total_cents INTEGER NOT NULL CHECK (total_cents >= 0),
+      currency TEXT NOT NULL DEFAULT 'MZN',
+      coupon_code TEXT,
+      rejection_reason TEXT,
+      cancellation_reason TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      address_latitude REAL,
+      address_longitude REAL
+    )
+    ''',
+    '''
+    INSERT INTO orders_new (
+      id, number, customer_id, establishment_id, address_label, address_line,
+      phone, note, payment_method, payment_status, status, subtotal_cents,
+      delivery_fee_cents, discount_cents, total_cents, currency, coupon_code,
+      rejection_reason, cancellation_reason, created_at, updated_at,
+      address_latitude, address_longitude)
+    SELECT
+      id, number, customer_id, establishment_id, address_label, address_line,
+      phone, note, payment_method, payment_status, status, subtotal_cents,
+      delivery_fee_cents, discount_cents, total_cents, currency, coupon_code,
+      rejection_reason, cancellation_reason, created_at, updated_at,
+      address_latitude, address_longitude
+    FROM orders
+    ''',
+    'DROP TABLE orders',
+    'ALTER TABLE orders_new RENAME TO orders',
+    'CREATE INDEX idx_orders_customer ON orders(customer_id)',
+    'CREATE INDEX idx_orders_establishment ON orders(establishment_id)',
+    'CREATE INDEX idx_orders_status ON orders(status)',
+    // Hot paths das listagens e estatísticas.
+    'CREATE INDEX idx_orders_created ON orders(created_at)',
+    'CREATE INDEX idx_order_items_order ON order_items(order_id)',
+    'CREATE INDEX idx_order_events_order ON order_events(order_id)',
+    'CREATE INDEX idx_reviews_establishment ON reviews(establishment_id)',
+    'CREATE INDEX idx_establishments_category ON establishments(category_id)',
+    'CREATE INDEX idx_audit_created ON audit_logs(created_at)',
+  ], disableForeignKeys: true),
 ];
 
 /// Gera identificadores opacos para as linhas.

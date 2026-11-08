@@ -1,7 +1,52 @@
+import 'dart:io';
+import 'dart:math';
+
 import 'package:sqlite3/sqlite3.dart';
 
 import 'auth.dart';
 import 'db.dart';
+
+/// Resolve a palavra-passe inicial da conta de administração.
+///
+/// * Semente de demonstração (testes/`SEED_DEMO=1`): mantém `Admin@1234`,
+///   determinística para poder ser usada pelos testes.
+/// * Semente de produção: usa `ADMIN_PASSWORD` se definida (mínimo 8
+///   caracteres com letras e números) ou gera uma palavra-passe aleatória
+///   impressa **uma vez** no stderr do servidor. A `Admin@1234` pública do
+///   README nunca nasce num deployment real.
+String _resolveAdminPassword({required bool demo}) {
+  const demoPassword = 'Admin@1234';
+  if (demo) return demoPassword;
+
+  final provided = Platform.environment['ADMIN_PASSWORD'];
+  if (provided != null &&
+      provided.length >= 8 &&
+      RegExp(r'[A-Za-z]').hasMatch(provided) &&
+      RegExp(r'[0-9]').hasMatch(provided)) {
+    return provided;
+  }
+  if (provided != null) {
+    throw ArgumentError(
+      'ADMIN_PASSWORD não é segura: precisa de pelo menos 8 caracteres '
+      'com letras e números.',
+    );
+  }
+
+  const alphabet =
+      'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  final random = Random.secure();
+  final password = List.generate(
+    16,
+    (_) => alphabet[random.nextInt(alphabet.length)],
+  ).join();
+
+  stderr.writeln('──────────────────────────────────────────────────');
+  stderr.writeln('Conta de administração criada: admin@nacala.co.mz');
+  stderr.writeln('Palavra-passe inicial: $password');
+  stderr.writeln('Guarde-a agora — não será mostrada novamente.');
+  stderr.writeln('──────────────────────────────────────────────────');
+  return password;
+}
 
 /// Cria a estrutura mínima da plataforma: conta de administração e as
 /// categorias do catálogo.
@@ -14,6 +59,7 @@ void seedDatabase(Database db, {bool demo = false}) {
   if (count > 0) return;
 
   final now = nowIso();
+  final adminPassword = _resolveAdminPassword(demo: demo);
 
   void user(
     String id,
@@ -36,7 +82,7 @@ void seedDatabase(Database db, {bool demo = false}) {
 
   const adminId = 'usr_admin';
   user(adminId, 'admin', 'Administração Nacala', 'admin@nacala.co.mz',
-      '840000001', 'Admin@1234');
+      '840000001', adminPassword);
 
   const categories = [
     ('cat_restaurantes', 'Restaurantes', 'restaurantes', 'restaurant', 1),

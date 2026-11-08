@@ -212,6 +212,92 @@ void main() {
     );
   });
 
+  test('mKesh é aceite como método de pagamento e não devolve 500', () async {
+    final token = await login('cliente@nacala.co.mz', 'Cliente@1234');
+    final (status, json) = await call(
+      'POST',
+      '/api/orders',
+      token: token,
+      body: {
+        'establishment_id': 'est_cantinho',
+        'address_line': 'Bairro Central, Rua 12, casa 34',
+        'phone': '841111111',
+        'payment_method': 'mkesh',
+        'items': [
+          {'product_id': 'prd_cb_frango', 'quantity': 1},
+        ],
+      },
+    );
+    expect(status, 201, reason: '$json');
+    final order = json['order'] as Map<String, dynamic>;
+    expect(order['payment_method'], 'mkesh');
+    expect(order['payment_status'], 'pending_integration');
+  });
+
+  test('JSON malformado devolve 400 e não 500', () async {
+    final request = Request(
+      'POST',
+      Uri.parse('http://localhost/api/auth/login'),
+      headers: {'content-type': 'application/json'},
+      body: '{"identifier": "cliente@nacala.co.mz", "password": "quebrado',
+    );
+    final response = await api.handler(request);
+    expect(response.statusCode, 400);
+    final json = jsonDecode(await response.readAsString());
+    expect(json['error']['code'], 'invalid_body');
+  });
+
+  test('corpo de JSON excessivo devolve 413', () async {
+    final request = Request(
+      'POST',
+      Uri.parse('http://localhost/api/auth/login'),
+      headers: {'content-type': 'application/json'},
+      body: '{"pad": "${'x' * (1024 * 1024 + 1024)}"}',
+    );
+    final response = await api.handler(request);
+    expect(response.statusCode, 413);
+    final json = jsonDecode(await response.readAsString());
+    expect(json['error']['code'], 'body_too_large');
+  });
+
+  test('login trava força-bruta: 10 falhas de login devolvem 429', () async {
+    // Instância dedicada: os buckets de limitação pertencem ao objeto Api.
+    final limitedApi = Api(
+      db: db,
+      jwt: JwtService('test-secret'),
+      imageDirectory: imageDirectory,
+    );
+    Future<(int, Map<String, dynamic>)> attempt() async {
+      final request = Request(
+        'POST',
+        Uri.parse('http://localhost/api/auth/login'),
+        headers: {'content-type': 'application/json'},
+        body: jsonEncode(
+          {'identifier': 'cliente@nacala.co.mz', 'password': 'Errada123'},
+        ),
+      );
+      final response = await limitedApi.handler(request);
+      return (
+        response.statusCode,
+        jsonDecode(await response.readAsString()) as Map<String, dynamic>,
+      );
+    }
+
+    for (var i = 0; i < 10; i++) {
+      final (status, _) = await attempt();
+      expect(status, 401, reason: 'tentativa $i deveria falhar com 401');
+    }
+    final (blocked, json) = await attempt();
+    expect(blocked, 429, reason: '$json');
+    expect(json['error']['code'], 'rate_limited');
+  });
+
+  test('saúde /health responde ok com a base de dados viva', () async {
+    final (status, json) = await call('GET', '/health');
+    expect(status, 200);
+    expect(json['status'], 'ok');
+  });
+
   test('cupão aplica desconto validado', () async {
     final token = await login('cliente@nacala.co.mz', 'Cliente@1234');
     final (status, json) = await call(

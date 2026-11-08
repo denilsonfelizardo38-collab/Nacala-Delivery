@@ -29,19 +29,25 @@ class Api {
     required this.db,
     required this.jwt,
     Directory? imageDirectory,
+    this.allowedOrigin = '*',
   }) : imageDirectory = imageDirectory ?? Directory('data/uploads');
 
   final Database db;
   final JwtService jwt;
   final Directory imageDirectory;
 
+  /// Origem(es) permitidas para CORS. `*` por omissão; em produção defina
+  /// `CORS_ORIGIN` (ex.: `https://app.nacala.co.mz`) para restringir.
+  final String allowedOrigin;
+
   Handler get handler => const Pipeline()
       .addMiddleware(_cors())
       .addMiddleware(_errors())
+      .addMiddleware(_requestLogger())
       .addHandler(_router.call);
 
   late final Router _router = Router()
-    ..get('/health', (Request _) => jsonResponse({'status': 'ok'}))
+    ..get('/health', _health)
     ..get('/uploads/<filename>', _productImage)
     ..get('/api/categories', _categories)
     ..get('/api/establishments', _establishments)
@@ -114,11 +120,23 @@ class Api {
         return response.change(headers: {...response.headers, ..._corsHeaders});
       };
 
-  static const _corsHeaders = {
-    'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-    'access-control-allow-headers': 'content-type,authorization',
-  };
+  Map<String, String> get _corsHeaders => {
+        'access-control-allow-origin': allowedOrigin,
+        'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+        'access-control-allow-headers': 'content-type,authorization',
+      };
+
+  Middleware _requestLogger() => (inner) => (request) async {
+        final watch = Stopwatch()..start();
+        final response = await inner(request);
+        watch.stop();
+        // ignore: avoid_print
+        print(
+          '${request.method} ${request.url.path} -> ${response.statusCode} '
+          '(${watch.elapsedMilliseconds} ms)',
+        );
+        return response;
+      };
 
   Middleware _errors() => (inner) => (request) async {
         try {
@@ -158,26 +176,92 @@ class Api {
 
   // ------------------------------------------------------------------- helpers
 
-  Map<String, dynamic> _body(Map<String, dynamic> body) => body;
-
-  Future<Map<String, dynamic>> readBody(Request request) async {
-    final raw = await request.readAsString();
-    if (raw.trim().isEmpty) return <String, dynamic>{};
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
-      throw ApiError(400, 'invalid_body', 'Corpo do pedido inválido.');
+  /// Verifica a saúde do serviço tocando efectivamente na base de dados —
+  /// um SQLite feito falhar deixa de reportar "ok" por engano.
+  Future<Response> _health(Request _) async {
+    try {
+      db.select('SELECT 1');
+      return jsonResponse({'status': 'ok'});
+    } catch (error) {
+      return jsonResponse(
+        {
+          'status': 'degraded',
+          'detail': '$error',
+        },
+        status: 503,
+      );
     }
-    return _body(decoded);
   }
+
+  /// IP do cliente: directo no shelf_io, ou o primeiro valor de
+  /// `x-forwarded-for` quando atrás de um proxy (Render, nginx, etc.).
+  static String _clientIp(Request request) {
+    final forwarded = request.headers['x-forwarded-for'];
+    if (forwarded != null && forwarded.isNotEmpty) {
+      return forwarded.split(',').first.trim();
+    }
+    final info = request.context['shelf.io.connection_info'];
+    if (info is HttpConnectionInfo) return info.remoteAddress.address;
+    return 'unknown';
+  }
+
+  /// Registro em memória de tentativas por bucket. Suficiente para uma
+  /// única instância SQLite; altamente específico para login/registo.
+  final Map<String, List<DateTime>> _attempts = {};
+
+  void _checkRateLimit(
+    Request request, {
+    required String bucket,
+    required int maxAttempts,
+    required Duration window,
+  }) {
+    final key = '$bucket|${_clientIp(request)}';
+    final cutoff = DateTime.now().subtract(window);
+    final hits = _attempts.putIfAbsent(key, () => <DateTime>[])
+      ..removeWhere((hit) => hit.isBefore(cutoff));
+    if (hits.length >= maxAttempts) {
+      throw ApiError(
+        429,
+        'rate_limited',
+        'Demasiadas tentativas. Aguarde um momento e tente novamente.',
+      );
+    }
+  }
+
+  /// Registra uma tentativa repórter (falha de credenciais, requisição de
+  /// registo). Chamado *após* a verificação, o que deixa os logins legítimos
+  /// contínuos sem acumular, ao mesmo tempo que bloqueia força-bruta pelas
+  /// falhas repetidas.
+  void _recordRateLimitHit(
+    Request request, {
+    required String bucket,
+    required Duration window,
+  }) {
+    final key = '$bucket|${_clientIp(request)}';
+    final cutoff = DateTime.now().subtract(window);
+    _attempts
+        .putIfAbsent(key, () => <DateTime>[])
+        ..removeWhere((hit) => hit.isBefore(cutoff))
+        ..add(DateTime.now());
+  }
+
+  Future<Map<String, dynamic>> readBody(Request request) =>
+      _readBodyLimited(
+        request,
+        maxBytes: 1024 * 1024,
+        tooLargeCode: 'body_too_large',
+        tooLargeMessage: 'O corpo do pedido é demasiado grande.',
+      );
 
   Future<Map<String, dynamic>> _readBodyLimited(
     Request request, {
     required int maxBytes,
+    String tooLargeCode = 'image_too_large',
+    String tooLargeMessage = 'A imagem excede o tamanho máximo.',
   }) async {
     final contentLength = int.tryParse(request.headers['content-length'] ?? '');
     if (contentLength != null && contentLength > maxBytes) {
-      throw ApiError(
-          413, 'image_too_large', 'A imagem excede o tamanho máximo.');
+      throw ApiError(413, tooLargeCode, tooLargeMessage);
     }
 
     final bytes = BytesBuilder(copy: false);
@@ -185,11 +269,7 @@ class Api {
     await for (final chunk in request.read()) {
       totalBytes += chunk.length;
       if (totalBytes > maxBytes) {
-        throw ApiError(
-          413,
-          'image_too_large',
-          'A imagem excede o tamanho máximo.',
-        );
+        throw ApiError(413, tooLargeCode, tooLargeMessage);
       }
       bytes.add(chunk);
     }
@@ -436,8 +516,8 @@ class Api {
       [order['id']],
     );
     final events = db.select(
-      'SELECT status, note, created_at FROM order_events WHERE order_id = ? '
-      'ORDER BY created_at',
+      'SELECT order_id, status, note, created_at FROM order_events '
+      'WHERE order_id = ? ORDER BY created_at',
       [order['id']],
     );
     final assignments = db.select(
@@ -454,91 +534,212 @@ class Api {
       [order['establishment_id']],
     ).first;
     final customer = db.select(
-      'SELECT name, phone FROM users WHERE id = ?',
+      'SELECT id, name, phone FROM users WHERE id = ?',
       [order['customer_id']],
     ).first;
+    return _orderJson(
+      [order],
+      items: items,
+      events: events,
+      assignments: assignments,
+      establishments: [establishment],
+      customers: [customer],
+      includeCustomer: includeCustomer,
+      includeCourier: includeCourier,
+      includeTracking: includeTracking,
+    ).first;
+  }
 
-    return {
-      'id': order['id'],
-      'number': order['number'],
-      'status': order['status'],
-      'payment_method': order['payment_method'],
-      'payment_status': order['payment_status'],
-      'currency': order['currency'],
-      'subtotal_cents': order['subtotal_cents'],
-      'delivery_fee_cents': order['delivery_fee_cents'],
-      'discount_cents': order['discount_cents'],
-      'total_cents': order['total_cents'],
-      'coupon_code': order['coupon_code'],
-      'address_label': order['address_label'],
-      'address_line': order['address_line'],
-      if (includeTracking &&
-          order['status'] == 'on_the_way' &&
-          order['address_latitude'] != null &&
-          order['address_longitude'] != null) ...{
-        'address_latitude': order['address_latitude'],
-        'address_longitude': order['address_longitude'],
-      },
-      'phone': order['phone'],
-      'note': order['note'],
-      'rejection_reason': order['rejection_reason'],
-      'cancellation_reason': order['cancellation_reason'],
-      'created_at': order['created_at'],
-      'updated_at': order['updated_at'],
-      'establishment': {
-        'id': establishment['id'],
-        'name': establishment['name'],
-        'slug': establishment['slug'],
-        'address': establishment['address'],
-        'phone': establishment['phone'],
-        'category_id': establishment['category_id'],
-        'delivery_fee_cents': establishment['delivery_fee_cents'],
-      },
-      'customer': {
-        'name': customer['name'],
-        'phone': includeCustomer ? customer['phone'] : null,
-      },
-      'items': [
-        for (final item in items)
-          {
-            'id': item['id'],
-            'product_id': item['product_id'],
-            'name': item['name_snapshot'],
-            'unit_price_cents': item['unit_price_cents'],
-            'quantity': item['quantity'],
-            'line_total_cents': item['line_total_cents'],
-            'note': item['note'],
-          },
-      ],
-      'events': [
-        for (final event in events)
-          {
-            'status': event['status'],
-            'note': event['note'],
-            'created_at': event['created_at'],
-          },
-      ],
-      'delivery': assignments.isEmpty
-          ? null
-          : {
-              'id': assignments.first['id'],
-              'status': assignments.first['status'],
-              'courier_name': assignments.first['courier_name'],
-              'courier_phone':
-                  includeCourier ? assignments.first['courier_phone'] : null,
-              'accepted_at': assignments.first['accepted_at'],
-              'departed_at': assignments.first['departed_at'],
-              'completed_at': assignments.first['completed_at'],
-              if (includeTracking &&
-                  order['status'] == 'on_the_way' &&
-                  assignments.first['latitude'] != null &&
-                  assignments.first['longitude'] != null) ...{
-                'latitude': assignments.first['latitude'],
-                'longitude': assignments.first['longitude'],
-                'location_updated_at': assignments.first['location_updated_at'],
-              },
-            },
+  /// Serializa uma *lista* de pedidos com consultas em lote: em vez das
+  /// 5 consultas por pedido do N+1 (até ~1.000 consultas por request em
+  /// /api/admin/orders), faz 5 consultas por listagem inteira.
+  List<Map<String, dynamic>> ordersJson(
+    List<Map<String, dynamic>> orders, {
+    bool includeCustomer = false,
+    bool includeCourier = false,
+    bool includeTracking = false,
+  }) {
+    if (orders.isEmpty) return const [];
+    final ids = orders.map((o) => o['id'] as String).toList();
+    final marks = List.filled(ids.length, '?').join(',');
+
+    final items = db.select(
+      'SELECT * FROM order_items WHERE order_id IN ($marks) ORDER BY rowid',
+      ids,
+    );
+    final events = db.select(
+      'SELECT order_id, status, note, created_at FROM order_events '
+      'WHERE order_id IN ($marks) ORDER BY order_id, created_at',
+      ids,
+    );
+    final assignments = db.select(
+      '''
+      SELECT d.*, u.name AS courier_name, u.phone AS courier_phone
+      FROM delivery_assignments d
+      LEFT JOIN users u ON u.id = d.courier_id
+      WHERE d.order_id IN ($marks)
+      ''',
+      ids,
+    );
+    final establishmentIds = {
+      for (final order in orders) order['establishment_id'] as String,
     };
+    final establishments = db.select(
+      'SELECT * FROM establishments WHERE id IN '
+      '(${List.filled(establishmentIds.length, '?').join(',')})',
+      establishmentIds.toList(),
+    );
+    final customerIds = {
+      for (final order in orders) order['customer_id'] as String,
+    };
+    final customers = db.select(
+      'SELECT id, name, phone FROM users WHERE id IN '
+      '(${List.filled(customerIds.length, '?').join(',')})',
+      customerIds.toList(),
+    );
+    return _orderJson(
+      orders,
+      items: items,
+      events: events,
+      assignments: assignments,
+      establishments: establishments,
+      customers: customers,
+      includeCustomer: includeCustomer,
+      includeCourier: includeCourier,
+      includeTracking: includeTracking,
+    );
+  }
+
+  Map<String, List<Row>> _groupBy(
+    List<Row> rows,
+    String Function(Row) keyOf,
+  ) {
+    final result = <String, List<Row>>{};
+    for (final row in rows) {
+      result.putIfAbsent(keyOf(row), () => []).add(row);
+    }
+    return result;
+  }
+
+  Object? _col(Row? row, String key) => row == null ? null : row[key];
+
+  List<Map<String, dynamic>> _orderJson(
+    List<Map<String, dynamic>> orders, {
+    required List<Row> items,
+    required List<Row> events,
+    required List<Row> assignments,
+    required List<Row> establishments,
+    required List<Row> customers,
+    required bool includeCustomer,
+    required bool includeCourier,
+    required bool includeTracking,
+  }) {
+    final itemsByOrder = _groupBy(items, (row) => row['order_id'] as String);
+    final eventsByOrder = _groupBy(events, (row) => row['order_id'] as String);
+    final assignmentsByOrder =
+        _groupBy(assignments, (row) => row['order_id'] as String);
+    final establishmentById = {
+      for (final row in establishments) row['id'] as String: row,
+    };
+    final customerById = {
+      for (final row in customers) row['id'] as String: row,
+    };
+
+    return [
+      for (final order in orders)
+        () {
+          final establishment = establishmentById[order['establishment_id']];
+          final customer = customerById[order['customer_id']];
+          final orderItems = itemsByOrder[order['id']] ?? const <Row>[];
+          final orderEvents = eventsByOrder[order['id']] ?? const <Row>[];
+          final orderAssignments =
+              assignmentsByOrder[order['id']] ?? const <Row>[];
+          return <String, dynamic>{
+            'id': order['id'],
+            'number': order['number'],
+            'status': order['status'],
+            'payment_method': order['payment_method'],
+            'payment_status': order['payment_status'],
+            'currency': order['currency'],
+            'subtotal_cents': order['subtotal_cents'],
+            'delivery_fee_cents': order['delivery_fee_cents'],
+            'discount_cents': order['discount_cents'],
+            'total_cents': order['total_cents'],
+            'coupon_code': order['coupon_code'],
+            'address_label': order['address_label'],
+            'address_line': order['address_line'],
+            if (includeTracking &&
+                order['status'] == 'on_the_way' &&
+                order['address_latitude'] != null &&
+                order['address_longitude'] != null) ...{
+              'address_latitude': order['address_latitude'],
+              'address_longitude': order['address_longitude'],
+            },
+            'phone': order['phone'],
+            'note': order['note'],
+            'rejection_reason': order['rejection_reason'],
+            'cancellation_reason': order['cancellation_reason'],
+            'created_at': order['created_at'],
+            'updated_at': order['updated_at'],
+            'establishment': {
+              'id': _col(establishment, 'id'),
+              'name': _col(establishment, 'name'),
+              'slug': _col(establishment, 'slug'),
+              'address': _col(establishment, 'address'),
+              'phone': _col(establishment, 'phone'),
+              'category_id': _col(establishment, 'category_id'),
+              'delivery_fee_cents':
+                  _col(establishment, 'delivery_fee_cents'),
+            },
+            'customer': {
+              'name': _col(customer, 'name'),
+              'phone': includeCustomer ? _col(customer, 'phone') : null,
+            },
+            'items': [
+              for (final item in orderItems)
+                {
+                  'id': item['id'],
+                  'product_id': item['product_id'],
+                  'name': item['name_snapshot'],
+                  'unit_price_cents': item['unit_price_cents'],
+                  'quantity': item['quantity'],
+                  'line_total_cents': item['line_total_cents'],
+                  'note': item['note'],
+                },
+            ],
+            'events': [
+              for (final event in orderEvents)
+                {
+                  'status': event['status'],
+                  'note': event['note'],
+                  'created_at': event['created_at'],
+                },
+            ],
+            'delivery': orderAssignments.isEmpty
+                ? null
+                : {
+                    'id': orderAssignments.first['id'],
+                    'status': orderAssignments.first['status'],
+                    'courier_name': orderAssignments.first['courier_name'],
+                    'courier_phone': includeCourier
+                        ? orderAssignments.first['courier_phone']
+                        : null,
+                    'accepted_at': orderAssignments.first['accepted_at'],
+                    'departed_at': orderAssignments.first['departed_at'],
+                    'completed_at': orderAssignments.first['completed_at'],
+                    if (includeTracking &&
+                        order['status'] == 'on_the_way' &&
+                        orderAssignments.first['latitude'] != null &&
+                        orderAssignments.first['longitude'] != null) ...{
+                      'latitude': orderAssignments.first['latitude'],
+                      'longitude': orderAssignments.first['longitude'],
+                      'location_updated_at':
+                          orderAssignments.first['location_updated_at'],
+                    },
+                  },
+          };
+        }(),
+    ];
   }
 
   Map<String, dynamic> loadOrder(String id) {
@@ -614,6 +815,14 @@ class Api {
   // --------------------------------------------------------------------- auth
 
   Future<Response> _register(Request request) async {
+    const window = Duration(minutes: 10);
+    _checkRateLimit(
+      request,
+      bucket: 'register',
+      maxAttempts: 5,
+      window: window,
+    );
+    _recordRateLimitHit(request, bucket: 'register', window: window);
     final body = await readBody(request);
     final name = requiredString(body, 'name', min: 2, max: 80, label: 'nome');
     final email = requiredString(
@@ -669,7 +878,7 @@ class Api {
       );
     }
 
-    final digest = hashPassword(password);
+    final digest = await hashPasswordAsync(password);
     final id = newId();
     db.execute(
       '''
@@ -684,6 +893,12 @@ class Api {
   }
 
   Future<Response> _login(Request request) async {
+    _checkRateLimit(
+      request,
+      bucket: 'login',
+      maxAttempts: 10,
+      window: const Duration(minutes: 1),
+    );
     final body = await readBody(request);
     final identifier = requiredString(
       body,
@@ -703,12 +918,25 @@ class Api {
       'SELECT * FROM users WHERE lower(email) = ? OR phone = ?',
       [cleaned, identifier.replaceAll(RegExp(r'[^0-9]'), '')],
     );
-    if (rows.isEmpty ||
-        !verifyPassword(
+    final valid = rows.isNotEmpty &&
+        await verifyPasswordAsync(
           password,
           rows.first['password_hash'] as String,
           rows.first['password_salt'] as String,
-        )) {
+        );
+    if (!valid) {
+      _recordRateLimitHit(
+        request,
+        bucket: 'login',
+        window: const Duration(minutes: 1),
+      );
+      audit(
+        null,
+        'login_failed',
+        'auth',
+        cleaned,
+        {'ip': _clientIp(request)},
+      );
       throw ApiError(
         401,
         'invalid_credentials',
@@ -796,7 +1024,7 @@ class Api {
       label: 'nova palavra-passe',
     );
     final row = db.select('SELECT * FROM users WHERE id = ?', [user.id]).first;
-    if (!verifyPassword(
+    if (!await verifyPasswordAsync(
       current,
       row['password_hash'] as String,
       row['password_salt'] as String,
@@ -804,7 +1032,7 @@ class Api {
       throw ApiError(
           422, 'wrong_password', 'A palavra-passe atual não confere.');
     }
-    final digest = hashPassword(next);
+    final digest = await hashPasswordAsync(next);
     db.execute(
       'UPDATE users SET password_hash = ?, password_salt = ?, '
       'token_version = token_version + 1 WHERE id = ?',
@@ -886,12 +1114,19 @@ class Api {
       'rating' => 'rating DESC',
       _ => 'e.name ASC',
     };
+    final (limit, offset) = _pagination(request, defaultLimit: 200);
     final rows = db.select(
-      '$_establishmentSelect WHERE ${where.join(' AND ')} ORDER BY $sort',
-      args,
+      '$_establishmentSelect WHERE ${where.join(' AND ')} '
+      'ORDER BY $sort LIMIT ? OFFSET ?',
+      [...args, limit + 1, offset],
     );
+    final hasMore = rows.length > limit;
+    final pageRows = hasMore ? rows.take(limit).toList() : rows;
     return jsonResponse({
-      'establishments': [for (final row in rows) establishmentJson(row)],
+      'establishments': [
+        for (final row in pageRows) establishmentJson(row)
+      ],
+      'has_more': hasMore,
     });
   }
 
@@ -1500,18 +1735,38 @@ class Api {
     }
     final sql = 'SELECT * FROM orders '
         '${where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}'} '
-        'ORDER BY created_at DESC LIMIT 100';
-    final rows = db.select(sql, args);
+        'ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    final (limit, offset) = _pagination(request, defaultLimit: 100);
+    final rows = db.select(sql, [...args, limit + 1, offset]);
+    final hasMore = rows.length > limit;
     return jsonResponse({
-      'orders': [
-        for (final row in rows)
-          orderJson(
-            Map<String, dynamic>.from(row),
-            includeCustomer: !user.isCustomer,
-            includeCourier: user.isCustomer || user.isAdmin,
-          ),
-      ],
+      'orders': ordersJson(
+        [
+          for (final row in hasMore ? rows.take(limit) : rows)
+            Map<String, dynamic>.from(row)
+        ],
+        includeCustomer: !user.isCustomer,
+        includeCourier: user.isCustomer || user.isAdmin,
+      ),
+      'has_more': hasMore,
     });
+  }
+
+  /// Lê `limit` e `offset` do query string, com teto de segurança —
+  /// paginação semi-fincada nas listagens sem quebrar clientes antigos,
+  /// que continuam a receber o comportamento por omissão.
+  (int, int) _pagination(
+    Request request, {
+    required int defaultLimit,
+    int maxLimit = 500,
+  }) {
+    final params = request.url.queryParameters;
+    final limit = (int.tryParse(params['limit'] ?? '') ?? defaultLimit)
+        .clamp(1, maxLimit)
+        .toInt();
+    final offset =
+        (int.tryParse(params['offset'] ?? '') ?? 0).clamp(0, 100000).toInt();
+    return (limit, offset);
   }
 
   Future<Response> _order(Request request, String id) async {
@@ -1661,10 +1916,10 @@ class Api {
         'rating': rating['rating'],
         'review_count': rating['count'],
       },
-      'recent_orders': [
-        for (final row in recent)
-          orderJson(Map<String, dynamic>.from(row), includeCustomer: true),
-      ],
+      'recent_orders': ordersJson(
+        [for (final row in recent) Map<String, dynamic>.from(row)],
+        includeCustomer: true,
+      ),
     });
   }
 
@@ -1686,16 +1941,20 @@ class Api {
         args.add(status);
       }
     }
+    final (limit, offset) = _pagination(request, defaultLimit: 100);
     final rows = db.select(
       'SELECT * FROM orders WHERE ${where.join(' AND ')} '
-      'ORDER BY created_at DESC LIMIT 100',
-      args,
+      'ORDER BY created_at DESC LIMIT ? OFFSET ?',
+      [...args, limit, offset],
     );
+    final hasMore = rows.length > limit;
+    final pageRows = hasMore ? rows.take(limit).toList() : rows;
     return jsonResponse({
-      'orders': [
-        for (final row in rows)
-          orderJson(Map<String, dynamic>.from(row), includeCustomer: true),
-      ],
+      'orders': ordersJson(
+        [for (final row in pageRows) Map<String, dynamic>.from(row)],
+        includeCustomer: true,
+      ),
+      'has_more': hasMore,
     });
   }
 
@@ -2531,10 +2790,10 @@ class Api {
         'sales_today_cents': stats['sales_today_cents'],
         'orders_today': stats['orders_today'],
       },
-      'recent_orders': [
-        for (final row in recent)
-          orderJson(Map<String, dynamic>.from(row), includeCustomer: true),
-      ],
+      'recent_orders': ordersJson(
+        [for (final row in recent) Map<String, dynamic>.from(row)],
+        includeCustomer: true,
+      ),
       'pending_partners': [
         for (final row in pending) establishmentJson(row),
       ],
@@ -2768,14 +3027,22 @@ class Api {
   Future<Response> _adminUsers(Request request) async {
     requireRole(request, ['admin']);
     final role = request.url.queryParameters['role'];
+    final (limit, offset) = _pagination(request, defaultLimit: 200);
     final rows = role == null || role.isEmpty
-        ? db.select('SELECT * FROM users ORDER BY created_at DESC')
+        ? db.select(
+            'SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?',
+            [limit + 1, offset],
+          )
         : db.select(
-            'SELECT * FROM users WHERE role = ? ORDER BY created_at DESC',
-            [role],
+            'SELECT * FROM users WHERE role = ? '
+            'ORDER BY created_at DESC LIMIT ? OFFSET ?',
+            [role, limit + 1, offset],
           );
+    final hasMore = rows.length > limit;
+    final pageRows = hasMore ? rows.take(limit).toList() : rows;
     return jsonResponse({
-      'users': [for (final row in rows) userJson(row)],
+      'users': [for (final row in pageRows) userJson(row)],
+      'has_more': hasMore,
     });
   }
 
@@ -2829,18 +3096,25 @@ class Api {
   Future<Response> _adminOrders(Request request) async {
     requireRole(request, ['admin']);
     final status = request.url.queryParameters['status'];
+    final (limit, offset) = _pagination(request, defaultLimit: 200);
     final rows = status == null || status.isEmpty || status == 'all'
-        ? db.select('SELECT * FROM orders ORDER BY created_at DESC LIMIT 200')
+        ? db.select(
+            'SELECT * FROM orders ORDER BY created_at DESC LIMIT ? OFFSET ?',
+            [limit + 1, offset],
+          )
         : db.select(
-            'SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC '
-            'LIMIT 200',
-            [status],
+            'SELECT * FROM orders WHERE status = ? '
+            'ORDER BY created_at DESC LIMIT ? OFFSET ?',
+            [status, limit + 1, offset],
           );
+    final hasMore = rows.length > limit;
+    final pageRows = hasMore ? rows.take(limit).toList() : rows;
     return jsonResponse({
-      'orders': [
-        for (final row in rows)
-          orderJson(Map<String, dynamic>.from(row), includeCustomer: true),
-      ],
+      'orders': ordersJson(
+        [for (final row in pageRows) Map<String, dynamic>.from(row)],
+        includeCustomer: true,
+      ),
+      'has_more': hasMore,
     });
   }
 
