@@ -8,7 +8,6 @@ import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
-import 'cart_screen.dart';
 
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key, required this.establishmentId});
@@ -106,8 +105,7 @@ class _StoreScreenState extends State<StoreScreen> {
           ? _CartBar(
               itemCount: state.cartItemCount,
               totalCents: state.cartTotalCents,
-              onTap: () => Navigator.of(context)
-                  .push(MaterialPageRoute(builder: (_) => const CartScreen())),
+              onTap: () => Navigator.of(context).pushNamed('/cart'),
             )
           : null,
     );

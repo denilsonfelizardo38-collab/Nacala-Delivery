@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../screens/customer/cart_screen.dart';
 import '../state/app_scope.dart';
 
 /// Ícone de carrinho com contador, usado nos ecrãs do cliente.
@@ -17,9 +16,7 @@ class CartButton extends StatelessWidget {
     final count = AppScope.of(context).cartItemCount;
     return IconButton(
       tooltip: 'Carrinho',
-      onPressed: () =>
-          Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const CartScreen())),
+      onPressed: () => Navigator.of(context).pushNamed('/cart'),
       icon: Badge.count(
         count: count,
         isLabelVisible: count > 0,

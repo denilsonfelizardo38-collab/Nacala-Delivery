@@ -8,7 +8,6 @@ import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
-import 'tracking_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -57,9 +56,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Future<void> _open(Order order) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => TrackingScreen(orderId: order.id)),
-    );
+    await Navigator.of(context).pushNamed('/tracking', arguments: order.id);
     if (mounted) _reload();
   }
 

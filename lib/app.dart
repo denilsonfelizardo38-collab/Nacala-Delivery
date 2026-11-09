@@ -15,6 +15,7 @@ import 'screens/customer/categories_screen.dart';
 import 'screens/customer/checkout_screen.dart';
 import 'screens/customer/customer_home_screen.dart';
 import 'screens/customer/orders_screen.dart';
+import 'screens/customer/notifications_screen.dart';
 import 'screens/customer/store_screen.dart';
 import 'screens/customer/tracking_screen.dart';
 import 'screens/delivery/delivery_screen.dart';
@@ -28,6 +29,7 @@ import 'state/app_scope.dart';
 import 'state/app_state.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
+import 'widgets/common.dart';
 
 class NacalaDeliveryApp extends StatefulWidget {
   const NacalaDeliveryApp({super.key, required this.state});
@@ -119,9 +121,12 @@ class _NacalaDeliveryAppState extends State<NacalaDeliveryApp> {
           },
           home: _RootGate(ready: _ready),
           onGenerateRoute: _generateRoute,
-          onUnknownRoute: (settings) => MaterialPageRoute(
-            settings: settings,
-            builder: (_) => const SplashScreen(),
+          // Rota desconhecida ou sem argumentos: nunca um beco sem saída
+          // (antes caía no SplashScreen sem forma de voltar).
+          onUnknownRoute: (settings) => _routeError(
+            settings,
+            'O ecrã pedido não existe ou não tem os '
+            'dados necessários.',
           ),
         ),
       ),
@@ -187,15 +192,24 @@ Route<dynamic>? _generateRoute(RouteSettings settings) {
       final id = settings.arguments;
       if (id is String && id.isNotEmpty) {
         page = StoreScreen(establishmentId: id);
+      } else {
+        return _routeError(
+          settings,
+          'Falta o identificador do estabelecimento.',
+        );
       }
     case '/cart':
       page = const CartScreen();
+    case '/notifications':
+      page = const NotificationsScreen();
     case '/checkout':
       page = const CheckoutScreen();
     case '/tracking':
       final id = settings.arguments;
       if (id is String && id.isNotEmpty) {
         page = TrackingScreen(orderId: id);
+      } else {
+        return _routeError(settings, 'Falta o identificador do pedido.');
       }
     case '/orders':
       page = const OrdersScreen();
@@ -224,4 +238,39 @@ Route<dynamic>? _generateRoute(RouteSettings settings) {
   }
   if (page == null) return null;
   return MaterialPageRoute(settings: settings, builder: (_) => page!);
+}
+
+/// Ecrã de erro para rotas desconhecidas ou argumentos inválidos: explica o
+/// problema e oferece saída (voltar ou início), em vez de prender o utilizador.
+Route<dynamic> _routeError(RouteSettings settings, String message) {
+  return MaterialPageRoute<void>(
+    settings: settings,
+    builder: (context) => Scaffold(
+      appBar: AppBar(title: const Text('Ecrã indisponível')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ErrorState(message: message),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: () {
+                  final navigator = Navigator.of(context);
+                  if (navigator.canPop()) {
+                    navigator.pop();
+                  } else {
+                    navigator.pushNamedAndRemoveUntil('/home', (_) => false);
+                  }
+                },
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text('Voltar'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }

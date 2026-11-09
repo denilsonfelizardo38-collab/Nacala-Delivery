@@ -13,7 +13,6 @@ import '../../theme/app_theme.dart';
 import '../../widgets/address_dialog.dart';
 import '../../widgets/common.dart';
 import '../../widgets/location_picker.dart';
-import 'tracking_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -186,9 +185,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       );
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => TrackingScreen(orderId: order.id)),
-      );
+      Navigator.of(context)
+          .pushReplacementNamed('/tracking', arguments: order.id);
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {

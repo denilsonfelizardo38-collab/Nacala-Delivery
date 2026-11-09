@@ -7,7 +7,6 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
-import 'partner_orders_screen.dart';
 
 class PartnerDashboardScreen extends StatefulWidget {
   const PartnerDashboardScreen({super.key});
@@ -255,9 +254,7 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
           title: 'Pedidos recentes',
           subtitle: 'Últimos pedidos recebidos neste estabelecimento',
           actionLabel: 'Ver todos',
-          onAction: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PartnerOrdersScreen()),
-          ),
+          onAction: () => Navigator.of(context).pushNamed('/partner/orders'),
         ),
         const SizedBox(height: 10),
         if (data.recentOrders.isEmpty)
@@ -275,9 +272,7 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
             ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PartnerOrdersScreen()),
-          ),
+          onPressed: () => Navigator.of(context).pushNamed('/partner/orders'),
           icon: const Icon(Icons.receipt_long_rounded, size: 18),
           label: const Text('Gerir pedidos'),
         ),

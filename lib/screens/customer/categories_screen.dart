@@ -8,7 +8,6 @@ import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
-import 'store_screen.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -242,13 +241,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                 .isFavoriteEstablishment(establishment.id),
                             onFavoriteToggle: () =>
                                 toggleFavorite(context, establishment.id),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => StoreScreen(
-                                  establishmentId: establishment.id,
-                                ),
-                              ),
-                            ),
+                            onTap: () => Navigator.of(
+                              context,
+                            ).pushNamed('/store', arguments: establishment.id),
                           ),
                         ),
                     ],

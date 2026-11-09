@@ -12,9 +12,6 @@ import '../../theme/app_theme.dart';
 import '../../widgets/address_dialog.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
-import 'categories_screen.dart';
-import 'notifications_screen.dart';
-import 'store_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -136,15 +133,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
-    );
+    Navigator.of(context).pushNamed('/notifications');
   }
 
   void _openStore(String id) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => StoreScreen(establishmentId: id)));
+    Navigator.of(context).pushNamed('/store', arguments: id);
   }
 
   /// A morada define a disponibilidade e a taxa antes do checkout, por isso
@@ -355,9 +348,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           child: SectionTitle(
             title: 'Categorias',
             actionLabel: 'Ver todas',
-            onAction: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const CategoriesScreen())),
+            onAction: () => Navigator.of(context).pushNamed('/categories'),
           ),
         ),
       ),

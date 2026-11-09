@@ -9,10 +9,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/password_dialog.dart';
-import 'admin_audit_screen.dart';
-import 'admin_orders_screen.dart';
-import 'admin_partners_screen.dart';
-import 'admin_users_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -294,9 +290,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     '${plural(summary.pendingEstablishments.length, 'parceiro')} '
                     'por aprovar',
           actionLabel: 'Ver parceiros',
-          onAction: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AdminPartnersScreen()),
-          ),
+          onAction: () => Navigator.of(context).pushNamed('/admin/partners'),
         ),
         const SizedBox(height: 10),
         if (summary.pendingEstablishments.isEmpty)
@@ -334,9 +328,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           title: 'Pedidos recentes',
           subtitle: 'Últimos 10 pedidos da plataforma',
           actionLabel: 'Ver todos',
-          onAction: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const AdminOrdersScreen())),
+          onAction: () => Navigator.of(context).pushNamed('/admin/orders'),
         ),
         const SizedBox(height: 10),
         if (summary.recentOrders.isEmpty)
@@ -398,9 +390,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AdminUsersScreen()),
-                ),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/admin/users'),
                 icon: const Icon(Icons.people_outline_rounded, size: 18),
                 label: const Text('Utilizadores'),
               ),
@@ -408,9 +399,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AdminAuditScreen()),
-                ),
+                onPressed: () =>
+                    Navigator.of(context).pushNamed('/admin/audit'),
                 icon: const Icon(Icons.history_rounded, size: 18),
                 label: const Text('Auditoria'),
               ),

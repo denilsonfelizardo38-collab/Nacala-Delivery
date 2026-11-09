@@ -7,8 +7,6 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
-import 'checkout_screen.dart';
-import 'store_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -91,8 +89,7 @@ class _CartScreenState extends State<CartScreen> {
       Navigator.of(context).pushNamed('/login');
       return;
     }
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const CheckoutScreen()));
+    Navigator.of(context).pushNamed('/checkout');
   }
 
   @override
@@ -205,11 +202,7 @@ class _CartScreenState extends State<CartScreen> {
                     onTap: () {
                       final id = state.cartStore?.id;
                       if (id == null) return;
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => StoreScreen(establishmentId: id),
-                        ),
-                      );
+                      Navigator.of(context).pushNamed('/store', arguments: id);
                     },
                   ),
                   const SizedBox(height: 24),
