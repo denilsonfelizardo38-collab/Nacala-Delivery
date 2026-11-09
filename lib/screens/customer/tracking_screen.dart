@@ -131,16 +131,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
     final state = AppScope.of(context);
     setState(() => _actionLoading = true);
     try {
-      final detail = await state.api.establishment(order.establishment.id);
-      if (!mounted) return;
-      final store = CartStore(
-        id: detail.establishment.id,
-        name: detail.establishment.name,
-        deliveryFeeCents: detail.establishment.deliveryFeeCents,
-        imageUrl: detail.establishment.imageUrl,
-      );
-      if (!state.cartBelongsTo(store.id) && !state.isCartEmpty) {
-        final replace = await showConfirmDialog(
+      final result = await state.reorder(
+        order,
+        confirmReplace: (store) => showConfirmDialog(
           context,
           title: 'Substituir carrinho',
           message:
@@ -148,26 +141,10 @@ class _TrackingScreenState extends State<TrackingScreen> {
               'Substituir por ${store.name}?',
           confirmLabel: 'Substituir',
           destructive: true,
-        );
-        if (!replace || !mounted) {
-          setState(() => _actionLoading = false);
-          return;
-        }
-      }
-      final available = {for (final item in detail.products) item.id: item};
-      final unavailable = <String>[];
-      var added = 0;
-      for (final item in order.items) {
-        final product = available[item.productId];
-        if (product == null || !product.isAvailable) {
-          unavailable.add(item.name);
-          continue;
-        }
-        state.addToCart(product, store, quantity: item.quantity);
-        added++;
-      }
-      if (!mounted) return;
-      if (added == 0) {
+        ),
+      );
+      if (!mounted || result.cancelled) return;
+      if (result.added == 0) {
         showAppSnack(
           context,
           'Nenhum dos produtos deste pedido está disponível.',
@@ -175,13 +152,13 @@ class _TrackingScreenState extends State<TrackingScreen> {
         );
         return;
       }
-      if (unavailable.isEmpty) {
+      if (result.unavailable.isEmpty) {
         showAppSnack(context, 'Pedido adicionado ao carrinho.');
       } else {
         showAppSnack(
           context,
-          'Adicionados $added produto(s). Indisponível: '
-          '${unavailable.join(', ')}.',
+          'Adicionados ${result.added} produto(s). Indisponível: '
+          '${result.unavailable.join(', ')}.',
         );
       }
       Navigator.of(context).pushNamed('/cart');

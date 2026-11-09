@@ -513,6 +513,43 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Repõe os itens de [order] num novo carrinho. Devolve o resultado para o
+  /// ecrã mostrar o *snack* e navegar; a confirmação de substituição de
+  /// carrinho é feita pelo chamador via [confirmReplace].
+  Future<ReorderOutcome> reorder(
+    Order order, {
+    Future<bool> Function(CartStore store)? confirmReplace,
+  }) async {
+    final detail = await api.establishment(order.establishment.id);
+    final store = CartStore(
+      id: detail.establishment.id,
+      name: detail.establishment.name,
+      deliveryFeeCents: detail.establishment.deliveryFeeCents,
+      imageUrl: detail.establishment.imageUrl,
+    );
+    if (!cartBelongsTo(store.id) && !isCartEmpty) {
+      final confirmed = await confirmReplace?.call(store) ?? false;
+      if (!confirmed) return const ReorderOutcome.cancelled();
+    }
+    final available = {for (final item in detail.products) item.id: item};
+    final unavailable = <String>[];
+    var added = 0;
+    for (final item in order.items) {
+      final product = available[item.productId];
+      if (product == null || !product.isAvailable) {
+        unavailable.add(item.name);
+        continue;
+      }
+      addToCart(product, store, quantity: item.quantity);
+      added++;
+    }
+    return ReorderOutcome(
+      added: added,
+      unavailable: unavailable,
+      storeName: store.name,
+    );
+  }
+
   Future<Order> placeOrder({
     required Address address,
     required String phone,
@@ -579,4 +616,29 @@ class AppState extends ChangeNotifier {
       _cartStore = null;
     }
   }
+}
+
+/// Resultado de [AppState.reorder].
+class ReorderOutcome {
+  const ReorderOutcome({
+    required this.added,
+    required this.unavailable,
+    required this.storeName,
+  }) : cancelled = false;
+
+  /// Utilizador cancelou a substituição do carrinho.
+  const ReorderOutcome.cancelled()
+      : added = 0,
+        unavailable = const [],
+        storeName = '',
+        cancelled = true;
+
+  /// Nº de itens do pedido que entraram no carrinho.
+  final int added;
+
+  /// Nomes dos itens que já não existem ou estão indisponíveis.
+  final List<String> unavailable;
+
+  final String storeName;
+  final bool cancelled;
 }
