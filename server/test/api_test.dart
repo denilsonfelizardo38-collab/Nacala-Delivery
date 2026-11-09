@@ -755,9 +755,30 @@ void main() {
     final token = await login('cliente@nacala.co.mz', 'Cliente@1234');
     // PNG mínimo válido (apenas assinatura + alguns bytes).
     final png = base64Encode([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-      0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a,
+      0x00,
+      0x00,
+      0x00,
+      0x0d,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
     ]);
 
     final (status, json) = await call(
@@ -792,11 +813,13 @@ void main() {
     final targetId = establishments.first['id'] as String;
     final categorySlug = establishments.first['category_slug'] as String;
 
-    final (_, products) = await call('GET', '/api/establishments/$targetId/products');
+    final (_, products) =
+        await call('GET', '/api/establishments/$targetId/products');
     expect(products['products'], isNotEmpty);
 
-    final (status, json) =
-        await call('DELETE', '/api/admin/establishments/$targetId', token: admin);
+    final (status, json) = await call(
+        'DELETE', '/api/admin/establishments/$targetId',
+        token: admin);
     expect(status, 200, reason: '$json');
     expect(json['ok'], true);
     expect(json['removed_orders'], isA<int>());
@@ -837,7 +860,8 @@ void main() {
 
     final (_, after) = await call('GET', '/api/admin/users', token: admin);
     expect(
-      (after['users'] as List).any((u) => u['email'] == 'cantinho@nacala.co.mz'),
+      (after['users'] as List)
+          .any((u) => u['email'] == 'cantinho@nacala.co.mz'),
       isFalse,
     );
   });

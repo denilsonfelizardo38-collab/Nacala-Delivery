@@ -32,8 +32,7 @@ String _resolveAdminPassword({required bool demo}) {
     );
   }
 
-  const alphabet =
-      'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   final random = Random.secure();
   final password = List.generate(
     16,

@@ -8,8 +8,8 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 Future<void> main(List<String> args) async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
   final dbPath = Platform.environment['DB_PATH'] ?? 'data';
-  final secret =
-      Platform.environment['JWT_SECRET'] ?? 'dev-only-secret-change-me-before-deploying';
+  final secret = Platform.environment['JWT_SECRET'] ??
+      'dev-only-secret-change-me-before-deploying';
   final allowDevSecret = Platform.environment['ALLOW_DEV_JWT_SECRET'] == '1';
   final seed = Platform.environment['SEED'] != '0';
   final demoSeed = Platform.environment['SEED_DEMO'] == '1';

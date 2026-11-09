@@ -18,3 +18,18 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib test
       - run: dart analyze lib test
       - run: flutter test --reporter expanded
+
+  server-analyze-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - run: dart pub get
+      - run: dart format --output=none --set-exit-if-changed lib bin test
+      - run: dart analyze lib bin test
+      - run: dart test --reporter expanded

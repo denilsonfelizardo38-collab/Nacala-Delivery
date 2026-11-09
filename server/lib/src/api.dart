@@ -239,14 +239,12 @@ class Api {
   }) {
     final key = '$bucket|${_clientIp(request)}';
     final cutoff = DateTime.now().subtract(window);
-    _attempts
-        .putIfAbsent(key, () => <DateTime>[])
-        ..removeWhere((hit) => hit.isBefore(cutoff))
-        ..add(DateTime.now());
+    _attempts.putIfAbsent(key, () => <DateTime>[])
+      ..removeWhere((hit) => hit.isBefore(cutoff))
+      ..add(DateTime.now());
   }
 
-  Future<Map<String, dynamic>> readBody(Request request) =>
-      _readBodyLimited(
+  Future<Map<String, dynamic>> readBody(Request request) => _readBodyLimited(
         request,
         maxBytes: 1024 * 1024,
         tooLargeCode: 'body_too_large',
@@ -688,8 +686,7 @@ class Api {
               'address': _col(establishment, 'address'),
               'phone': _col(establishment, 'phone'),
               'category_id': _col(establishment, 'category_id'),
-              'delivery_fee_cents':
-                  _col(establishment, 'delivery_fee_cents'),
+              'delivery_fee_cents': _col(establishment, 'delivery_fee_cents'),
             },
             'customer': {
               'name': _col(customer, 'name'),
@@ -1123,9 +1120,7 @@ class Api {
     final hasMore = rows.length > limit;
     final pageRows = hasMore ? rows.take(limit).toList() : rows;
     return jsonResponse({
-      'establishments': [
-        for (final row in pageRows) establishmentJson(row)
-      ],
+      'establishments': [for (final row in pageRows) establishmentJson(row)],
       'has_more': hasMore,
     });
   }
@@ -1403,7 +1398,8 @@ class Api {
 
   Future<Response> _removeFavorite(Request request, String id) async {
     final user = requireUser(request);
-    db.execute('DELETE FROM favorites WHERE user_id = ? AND establishment_id = ?', [
+    db.execute(
+        'DELETE FROM favorites WHERE user_id = ? AND establishment_id = ?', [
       user.id,
       id,
     ]);

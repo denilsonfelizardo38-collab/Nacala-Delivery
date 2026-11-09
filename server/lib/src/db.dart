@@ -304,8 +304,10 @@ const migrations = <Migration>[
   // Reconstrói `orders`: o SQLite não permite alterar um CHECK com ALTER
   // TABLE, e o `payment_method` da migração 1 só aceitava mpesa/emola/cash —
   // pedidos pagos por mKesh (oferecidos pela app) falhavam com um 500.
-  Migration(6, [
-    '''
+  Migration(
+      6,
+      [
+        '''
     CREATE TABLE orders_new (
       id TEXT PRIMARY KEY,
       number TEXT NOT NULL UNIQUE,
@@ -336,7 +338,7 @@ const migrations = <Migration>[
       address_longitude REAL
     )
     ''',
-    '''
+        '''
     INSERT INTO orders_new (
       id, number, customer_id, establishment_id, address_label, address_line,
       phone, note, payment_method, payment_status, status, subtotal_cents,
@@ -351,19 +353,20 @@ const migrations = <Migration>[
       address_latitude, address_longitude
     FROM orders
     ''',
-    'DROP TABLE orders',
-    'ALTER TABLE orders_new RENAME TO orders',
-    'CREATE INDEX idx_orders_customer ON orders(customer_id)',
-    'CREATE INDEX idx_orders_establishment ON orders(establishment_id)',
-    'CREATE INDEX idx_orders_status ON orders(status)',
-    // Hot paths das listagens e estatísticas.
-    'CREATE INDEX idx_orders_created ON orders(created_at)',
-    'CREATE INDEX idx_order_items_order ON order_items(order_id)',
-    'CREATE INDEX idx_order_events_order ON order_events(order_id)',
-    'CREATE INDEX idx_reviews_establishment ON reviews(establishment_id)',
-    'CREATE INDEX idx_establishments_category ON establishments(category_id)',
-    'CREATE INDEX idx_audit_created ON audit_logs(created_at)',
-  ], disableForeignKeys: true),
+        'DROP TABLE orders',
+        'ALTER TABLE orders_new RENAME TO orders',
+        'CREATE INDEX idx_orders_customer ON orders(customer_id)',
+        'CREATE INDEX idx_orders_establishment ON orders(establishment_id)',
+        'CREATE INDEX idx_orders_status ON orders(status)',
+        // Hot paths das listagens e estatísticas.
+        'CREATE INDEX idx_orders_created ON orders(created_at)',
+        'CREATE INDEX idx_order_items_order ON order_items(order_id)',
+        'CREATE INDEX idx_order_events_order ON order_events(order_id)',
+        'CREATE INDEX idx_reviews_establishment ON reviews(establishment_id)',
+        'CREATE INDEX idx_establishments_category ON establishments(category_id)',
+        'CREATE INDEX idx_audit_created ON audit_logs(created_at)',
+      ],
+      disableForeignKeys: true),
 ];
 
 /// Gera identificadores opacos para as linhas.
