@@ -309,14 +309,11 @@ class _CategoryCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (imageUrl != null)
-                    Image.network(
-                      imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _imageFallback(),
-                    )
-                  else
-                    _imageFallback(),
+                  CoverImage(
+                    imageUrl: imageUrl,
+                    logicalWidth: 340,
+                    fallback: _imageFallback(),
+                  ),
 
                   if (imageUrl != null)
                     const DecoratedBox(

@@ -4,7 +4,6 @@ import '../../core/api_client.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 
@@ -229,41 +228,10 @@ class _PartnerOrderCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.receipt_long_outlined,
-                  color: AppColors.primary,
-                  size: 21,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.number,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      formatDateTime(order.createdAt),
-                      style: TextStyle(color: context.mutedColor, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              StatusBadge(status: order.status),
-            ],
+          OrderCardHeader(
+            title: order.number,
+            subtitle: formatDateTime(order.createdAt),
+            status: order.status,
           ),
           const Divider(height: 20),
           if (order.customerName != null)

@@ -136,9 +136,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                   itemBuilder: (context, index) {
                     final entry = _roles[index];
                     final selected = _role == entry.$1;
-                    return _RoleChip(
+                    return FilterChipPill(
                       label: entry.$2,
                       selected: selected,
+                      selectedColor: AppColors.primary,
                       onTap: () => _selectRole(entry.$1),
                     );
                   },
@@ -198,48 +199,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                 },
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoleChip extends StatelessWidget {
-  const _RoleChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.primary : context.cardColor,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? AppColors.primary : context.lineColor,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : context.inkColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ),
       ),

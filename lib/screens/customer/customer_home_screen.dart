@@ -846,11 +846,10 @@ class _PromoCard extends StatelessWidget {
                         const ColoredBox(color: AppColors.ink),
                   )
                 else if (imageUrl != null && imageUrl.isNotEmpty)
-                  Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    cacheWidth: imageCacheWidthFor(context, 360),
-                    errorBuilder: (_, _, _) => BrandedCover(
+                  CoverImage(
+                    imageUrl: imageUrl,
+                    logicalWidth: 360,
+                    fallback: BrandedCover(
                       categorySlug: establishment.categorySlug,
                       iconSize: 38,
                     ),
@@ -958,11 +957,10 @@ class _HomeStoreCard extends StatelessWidget {
                       categorySlug: establishment.categorySlug,
                       iconSize: 42,
                     )
-                  : Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      cacheWidth: imageCacheWidthFor(context, 320),
-                      errorBuilder: (_, _, _) => BrandedCover(
+                  : CoverImage(
+                      imageUrl: imageUrl,
+                      logicalWidth: 320,
+                      fallback: BrandedCover(
                         categorySlug: establishment.categorySlug,
                         iconSize: 42,
                       ),
@@ -1122,11 +1120,10 @@ class _PopularCard extends StatelessWidget {
                         categorySlug: establishment.categorySlug,
                         iconSize: 34,
                       )
-                    : Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        cacheWidth: imageCacheWidthFor(context, 196),
-                        errorBuilder: (_, _, _) => BrandedCover(
+                    : CoverImage(
+                        imageUrl: imageUrl,
+                        logicalWidth: 196,
+                        fallback: BrandedCover(
                           categorySlug: establishment.categorySlug,
                           iconSize: 34,
                         ),

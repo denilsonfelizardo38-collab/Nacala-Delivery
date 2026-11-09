@@ -208,9 +208,10 @@ class _StoreScreenState extends State<StoreScreen> {
                       final selected = isAll
                           ? _menuCategory == null
                           : _menuCategory == category;
-                      return _MenuChip(
+                      return FilterChipPill(
                         label: isAll ? 'Todos' : category!,
                         selected: selected,
+                        selectedColor: AppColors.primary,
                         onTap: () => setState(
                           () => _menuCategory = isAll ? null : category,
                         ),
@@ -401,11 +402,10 @@ class _StoreHeader extends StatelessWidget {
             children: [
               if (establishment.imageUrl != null &&
                   establishment.imageUrl!.isNotEmpty)
-                Image.network(
-                  establishment.imageUrl!,
-                  fit: BoxFit.cover,
-                  cacheWidth: imageCacheWidthFor(context, 360),
-                  errorBuilder: (_, _, _) => _storeImageFallback(),
+                CoverImage(
+                  imageUrl: establishment.imageUrl,
+                  logicalWidth: 360,
+                  fallback: _storeImageFallback(),
                 )
               else
                 _storeImageFallback(),
@@ -1191,51 +1191,6 @@ class _CartBar extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Chip de filtro das secções do menu (Horizontal). Selecionado usa o
-/// laranja da marca, tal como os chips de categoria da página inicial.
-class _MenuChip extends StatelessWidget {
-  const _MenuChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.primary : context.cardColor,
-      borderRadius: BorderRadius.circular(999),
-      shape: StadiumBorder(
-        side: BorderSide(
-          color: selected ? AppColors.primary : context.lineColor,
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          child: Center(
-            child: Text(
-              label,
-              maxLines: 1,
-              style: TextStyle(
-                color: selected ? Colors.white : context.mutedColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
           ),
         ),
       ),

@@ -770,6 +770,177 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
+/// Chip de filtro selecionável (pill) usado nas listas de pedidos, loja,
+/// utilizadores e painel de administração — um único widget em vez de
+/// quatro cópias quase idênticas espalhadas pelos ecrãs.
+class FilterChipPill extends StatelessWidget {
+  const FilterChipPill({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.selectedColor,
+    this.radius = 999,
+    this.dense = false,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// Cor de preenchimento/borda quando selecionado (padrão: tinta escura).
+  final Color? selectedColor;
+
+  /// Raio da pílula (o filtro de pedidos usa 13 px em vez de pílula total).
+  final double radius;
+
+  /// Versão compacta (11 px) usada nos filtros de estado do cliente/loja.
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = selectedColor ?? context.inkColor;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected ? active : context.cardColor,
+        borderRadius: BorderRadius.circular(radius),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(radius),
+          onTap: onTap,
+          child: Container(
+            alignment: Alignment.center,
+            padding: dense
+                ? const EdgeInsets.symmetric(vertical: 13, horizontal: 5)
+                : const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(color: selected ? active : context.lineColor),
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected
+                    ? (context.isDarkMode ? AppColors.darkBg : Colors.white)
+                    : dense
+                    ? context.mutedColor
+                    : context.inkColor,
+                fontSize: dense ? 11 : 12,
+                fontWeight: dense ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Imagem de capa de estabelecimento/categoria com substituto automático:
+/// URL ausente, erro de rede ou formato inválido mostram [fallback] — sem
+/// repetir `errorBuilder` em cada ecrã.
+class CoverImage extends StatelessWidget {
+  const CoverImage({
+    super.key,
+    required this.imageUrl,
+    required this.fallback,
+    this.fit = BoxFit.cover,
+    this.logicalWidth = 320,
+  });
+
+  final String? imageUrl;
+  final Widget fallback;
+  final BoxFit fit;
+
+  /// Largura lógica de apresentação, para dimensionar a memória de cache.
+  final double logicalWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = imageUrl?.trim();
+    if (url == null || url.isEmpty) return fallback;
+    return Image.network(
+      url,
+      fit: fit,
+      cacheWidth: imageCacheWidthFor(context, logicalWidth),
+      errorBuilder: (_, _, _) => fallback,
+      loadingBuilder: (context, child, progress) =>
+          progress == null ? child : fallback,
+    );
+  }
+}
+
+/// Cabeçalho comum aos cartões de pedido (cliente, parceiro, admin):
+/// ícone do pedido, número, subtítulo e selo de estado.
+class OrderCardHeader extends StatelessWidget {
+  const OrderCardHeader({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    this.icon = Icons.receipt_long_rounded,
+    this.trailing,
+  });
+
+  final String title;
+  final String subtitle;
+  final String status;
+  final IconData icon;
+
+  /// Elemento extra à direita do selo de estado (raramente usado).
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: context.primarySoftColor,
+            borderRadius: BorderRadius.circular(13),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: context.accentColor, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: context.inkColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: context.mutedColor, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        StatusBadge(status: status),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+      ],
+    );
+  }
+}
+
 class QuantityStepper extends StatelessWidget {
   const QuantityStepper({
     super.key,

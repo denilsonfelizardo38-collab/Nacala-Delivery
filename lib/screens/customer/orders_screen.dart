@@ -232,10 +232,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: _FilterChip(
+                child: FilterChipPill(
                   label: filter.$2,
                   selected: _status == filter.$1,
                   onTap: () => _select(filter.$1),
+                  radius: 13,
+                  dense: true,
                 ),
               ),
             ),
@@ -297,52 +299,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? context.inkColor : context.cardColor,
-      borderRadius: BorderRadius.circular(13),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(13),
-        onTap: onTap,
-        child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 5),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(
-              color: selected ? context.inkColor : context.lineColor,
-            ),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: selected
-                  ? (context.isDarkMode ? AppColors.darkBg : Colors.white)
-                  : context.mutedColor,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _OrderCard extends StatelessWidget {
   const _OrderCard({required this.order, required this.onTap});
 
@@ -373,53 +329,10 @@ class _OrderCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 43,
-                    height: 43,
-                    decoration: BoxDecoration(
-                      color: context.primarySoftColor,
-                      borderRadius: BorderRadius.circular(13),
-                    ),
-                    child: Icon(
-                      Icons.receipt_long_rounded,
-                      color: context.accentColor,
-                      size: 21,
-                    ),
-                  ),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          order.number,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: context.inkColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          order.establishment.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: context.mutedColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  StatusBadge(status: order.status),
-                ],
+              OrderCardHeader(
+                title: order.number,
+                subtitle: order.establishment.name,
+                status: order.status,
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 14),

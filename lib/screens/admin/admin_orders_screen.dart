@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
 
@@ -78,9 +77,10 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                 itemBuilder: (context, index) {
                   final entry = _filters[index];
                   final selected = _status == entry.$1;
-                  return _OrderFilter(
+                  return FilterChipPill(
                     label: entry.$2,
                     selected: selected,
+                    selectedColor: context.accentColor,
                     onTap: () => _select(entry.$1),
                   );
                 },
@@ -127,48 +127,6 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   }
 }
 
-class _OrderFilter extends StatelessWidget {
-  const _OrderFilter({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? context.accentColor : context.cardColor,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? context.accentColor : context.lineColor,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : context.inkColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _OrderAdminCard extends StatelessWidget {
   const _OrderAdminCard({required this.order});
 
@@ -181,34 +139,10 @@ class _OrderAdminCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const NetworkThumb(
-                imageUrl: null,
-                icon: Icons.receipt_long_outlined,
-                size: 46,
-                radius: 13,
-                color: AppColors.primarySoft,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.number,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      formatDateTime(order.createdAt),
-                      style: TextStyle(color: context.mutedColor, fontSize: 10),
-                    ),
-                  ],
-                ),
-              ),
-              StatusBadge(status: order.status),
-            ],
+          OrderCardHeader(
+            title: order.number,
+            subtitle: formatDateTime(order.createdAt),
+            status: order.status,
           ),
           const SizedBox(height: 8),
           InfoRow(
