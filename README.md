@@ -58,8 +58,9 @@ totais calculados no servidor.
 - Categorias (criar/eliminar) e registo de auditoria.
 
 ### Transversal
-- Design system centralizado, tema claro fixo (o tema escuro existe em
-  `AppTheme.dark()` mas não é aplicado automaticamente):
+- Design system centralizado, com tema **claro/escuro/sistema** selecionável
+  pelo utilizador em **Conta → Tema da aplicação** (`AppTheme.light()` e
+  `AppTheme.dark()` são aplicadas conforme a preferência guardada):
   - tipografia Inter incluída na aplicação, com pesos Regular, Medium,
     SemiBold e Bold;
   - laranja `#FF7900` (secundário `#FF9A3D`), azul secundário `#1260D8`,
@@ -103,11 +104,15 @@ Nacala Derivery/
 
 ### Backend
 - **Dart + shelf + shelf_router + sqlite3**, sem serviços externos.
-- Base de dados SQLite com **migrações versionadas** (`schema_migrations`).
-- CORS, tratamento uniforme de erros (`ApiError`), *health check* em `/health`.
-- Autenticação **PBKDF2-HMAC-SHA256** (120 000 iterações, salt por utilizador) e
-  **JWT HS256** com `token_version` para invalidar sessões após alteração de
-  palavra-passe, papel ou estado da conta.
+- Base de dados SQLite com **migrações versionadas** (`migrations`), incluindo
+  reconstruções de tabela com verificação de integridade referencial.
+- CORS configurável, tratamento uniforme de erros (`ApiError`), *health check*
+  em `/health` que **toca na base de dados** (503 se indisponível), limitação
+  de tentativas de login/registo e log de pedidos (método, rota, estado,
+  duração).
+- Autenticação **PBKDF2-HMAC-SHA256** (120 000 iterações, salt por utilizador)
+  calculada em *isolate*, e **JWT HS256** com `token_version` para invalidar
+  sessões após alteração de palavra-passe, papel ou estado da conta.
 - Autorização por papel em **todas** as rotas sensíveis
   (`customer | partner | delivery | admin`); o parceiro só acede ao próprio
   estabelecimento e o estafeta apenas às entregas atribuídas.
@@ -190,9 +195,18 @@ O tráfego em texto simples só está autorizado para `127.0.0.1`, `localhost` e
 
 ### Primeiro acesso
 
-| Papel         | Email                | Palavra-passe |
-| ------------- | -------------------- | ------------- |
-| Administrador | `admin@nacala.co.mz` | `Admin@1234`  |
+| Papel         | Email                | Palavra-passe                        |
+| ------------- | -------------------- | ------------------------------------ |
+| Administrador | `admin@nacala.co.mz` | definida no arranque (ver abaixo)    |
+
+A palavra-passe inicial do administrador é resolvida nesta ordem:
+
+1. `SEED_DEMO=1` (testes/demonstração): `Admin@1234`, determinística.
+2. Variável `ADMIN_PASSWORD` (mínimo 8 caracteres com letras e números).
+3. Caso contrário, é **gerada aleatoriamente e impressa uma única vez** no
+   log do servidor no primeiro arranque — guarde-a nesse momento.
+
+A antiga `Admin@1234` publicada no README já **não** nasce em produção.
 
 1. Entrar como administrador.
 2. Abrir **Parceiros → Registar parceiro**.
@@ -216,14 +230,22 @@ qualquer host que suporte Docker (Render, Fly.io, Railway, Koyeb, etc.).
 
 ### Variáveis de ambiente
 
-| Variável     | Omissão                        | Descrição                                        |
-| ------------ | ------------------------------ | ------------------------------------------------ |
-| `PORT`       | `8080`                         | porta HTTP                                       |
-| `DB_PATH`    | `data`                         | diretório da base SQLite                        |
-| `UPLOADS_DIR` | `data/uploads`                | pasta persistente para imagens                  |
-| `JWT_SECRET` | segredo de desenvolvimento   | **definir em produção**                          |
-| `SEED`       | ativo                          | `SEED=0` não cria administrador/categorias       |
-| `SEED_DEMO`  | desligado                      | `SEED_DEMO=1` cria dados de demonstração       |
+| Variável              | Omissão                     | Descrição                                            |
+| --------------------- | --------------------------- | ---------------------------------------------------- |
+| `PORT`                | `8080`                      | porta HTTP                                          |
+| `DB_PATH`             | `data`                      | diretório da base SQLite                            |
+| `UPLOADS_DIR`         | `data/uploads`              | pasta persistente para imagens                      |
+| `JWT_SECRET`          | — (obrigatória)             | segredo HS256; **o servidor recusa arrancar sem ele** |
+| `ALLOW_DEV_JWT_SECRET`| desligado                   | `1` permite o segredo de desenvolvimento (só local)  |
+| `ADMIN_PASSWORD`      | aleatória (log no arranque) | palavra-passe inicial do administrador               |
+| `CORS_ORIGIN`         | `*`                         | origem permitida (ex.: `https://app.exemplo.com`)    |
+| `SEED`                | ativo                       | `SEED=0` não cria administrador/categorias           |
+| `SEED_DEMO`           | desligado                   | `SEED_DEMO=1` cria dados de demonstração             |
+
+O endpoint de login/registo limita tentativas falhadas por IP (10/min no
+login, 5/10 min no registo) e devolve `429` quando excedidas. Os corpos JSON
+estão limitados a 1 MB e todos os pedidos ficam registados no log com método,
+rota, estado e duração.
 
 ### Opção 1 — Render (recomendado para teste gratuito)
 
@@ -232,10 +254,16 @@ qualquer host que suporte Docker (Render, Fly.io, Railway, Koyeb, etc.).
 3. Configura: **Runtime = Docker**, **Dockerfile path = `server/Dockerfile`**.
 4. Instance type: **Free**.
 5. Define as variáveis de ambiente (`PORT=8080`, `DB_PATH=/data`,
-   `UPLOADS_DIR=/data/uploads`, `JWT_SECRET=<segredo>`, `SEED=1`).
+   `UPLOADS_DIR=/data/uploads`, `JWT_SECRET=<segredo aleatório>`, `SEED=1`).
    **Não definas `SEED_DEMO`** — em produção ele enche o catálogo com lojas,
-   contas e pedidos de demonstração.
+   contas e pedidos de demonstração. Sem `JWT_SECRET` o serviço **não arranca**
+   (é proposital).
 6. Publica e guarda a URL gerada (ex.: `https://<nome>.onrender.com`).
+
+> **Disco efémero:** o plano gratuito do Render não tem disco persistente — a
+> base SQLite (`/data`) e as imagens sobrevivem a *redeploys* apenas em planos
+> com disco montado (ou via Fly.io volume). Perde os dados a cada apagamento do
+> serviço; para produção, monte um disco ou use armazenamento de objetos.
 
 ### Opção 2 — Fly.io
 
@@ -283,6 +311,12 @@ Rotas principais (todas sob `/api`, JSON, `Authorization: Bearer <token>`):
   `PATCH /admin/users/<id>`, `GET /admin/orders`, `GET /admin/audit`,
   `POST/PATCH/DELETE /admin/categories...`.
 
+**Paginação:** as listagens (`/establishments`, `/orders`,
+`/partner/orders`, `/admin/orders`, `/admin/users`) aceitam `limit`
+(teto 500) e `offset` e devolvem `has_more` para paginação incremental. Por
+omissão mantêm os limites anteriores (100/200), por isso clientes existentes
+não mudam de comportamento.
+
 ---
 
 ## Testes e análise
@@ -302,13 +336,17 @@ Estado atual:
 
 - `dart analyze lib test`: sem erros nem avisos (restam apenas sugestões
   informativas `use_build_context_synchronously`).
-- `flutter test`: **22/22** a passar (formatação monetária, sessão, carrinho,
-  arranque/login/home, confirmação do checkout, repetição de pedido e menu de
-  conta do administrador).
-- `server`: `dart analyze` sem problemas e `dart test` **16/16** a passar
-  (autenticação, autorização por papel, totais no servidor, cupões,
-  indisponibilidade de produtos, transições de parceiro/estafeta e isolamento
-  entre estabelecimentos).
+- `flutter test`: **44/44** a passar (formatação monetária, sessão, carrinho,
+  arranque/login/home, confirmação do checkout, repetição de pedido, menu de
+  conta do administrador, favoritos, notificações e localização).
+- `server`: `dart analyze lib bin test` sem problemas e `dart test` **29/29**
+  a passar (autenticação, autorização por papel, totais no servidor, cupões,
+  indisponibilidade de produtos, transições de parceiro/estafeta, isolamento
+  entre estabelecimentos, pagamentos mKesh, JSON inválido → 400, corpo
+  excessivo → 413, bloqueio de força-bruta 429 e `/health`).
+- O CI (`.github/workflows/ci.yml`) corre **os dois conjuntos**: Flutter
+  (format + analyze + test) e servidor (format + analyze + test) em jobs
+  separados.
 
 Os testes usam `test/fake_api.dart` (implementação falsa explícita) e uma base
 SQLite `:memory:` partilhada; nenhum teste depende de rede ou dados reais.
@@ -342,8 +380,9 @@ flutter build appbundle --release             # Play Store
 
 ## Integrações pendentes
 
-- **Pagamentos M-Pesa/e-Mola**: a UI expõe os métodos, mas a cobrança
-  automática **não está integrada**. O pedido é registado com
+- **Pagamentos M-Pesa/e-Mola/mKesh**: a UI expõe os métodos (o mKesh já é
+  guardado na base desde a migração 6), mas a cobrança automática **não está
+  integrada**. O pedido é registado com
   `payment_status = pending_integration` (ou `cash_on_delivery` para dinheiro) e
   o utilizador é avisado no checkout. É necessária uma conta de comerciante e
   credenciais do fornecedor (API M-Pesa / e-Mola) para implementar o fluxo de
@@ -369,18 +408,26 @@ flutter build appbundle --release             # Play Store
 
 ## Segurança
 
-- Palavras-passe com PBKDF2-HMAC-SHA256 e salt aleatório; nunca em texto simples.
-- JWT assinado no servidor; segredo apenas em variável de ambiente.
+- Palavras-passe com PBKDF2-HMAC-SHA256 (120 000 iterações) em *isolate*;
+  nunca em texto simples e sem bloquear o event loop.
+- JWT assinado no servidor; o arranque **recusa** usar o segredo de
+  desenvolvimento (use `JWT_SECRET` ou `ALLOW_DEV_JWT_SECRET=1` apenas em
+  local).
+- Conta de administração semeada com `ADMIN_PASSWORD` ou palavra-passe
+  aleatória impressa uma vez no log — nunca com credenciais públicas fixas.
 - Autorização por papel no backend em todas as rotas sensíveis.
+- Limite de tentativas de login/registo por IP (429) e corpos JSON limitados
+  a 1 MB (413); tentativas de login falhadas ficam em `audit_logs`.
 - Consultas SQL parametrizadas e validação de entrada nos limites do sistema.
+- CORS restritível por variável `CORS_ORIGIN`.
 - Auditoria de ações administrativas e de negócio.
 - Nenhum dado de outro cliente é devolvido ao cliente autenticado.
 
 ## Limitações conhecidas
 
-- O tema é sempre claro, para corresponder às referências visuais. A paleta
-  escura está preparada, mas não há seletor de tema nas definições.
 - A pesquisa do catálogo é feita no servidor (insensível a acentos), mas a
   pesquisa dentro das listas de parceiro/admin é local ao ecrã.
 - Não há testes de integração end-to-end em dispositivo; a validação em
   telemóvel é manual.
+- O limite de tentativas de login é em memória (por instância) — correto para
+  o SQLite de instância única desta API.
