@@ -240,7 +240,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       appBar: AppBar(
         title: const Text('Finalizar pedido'),
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        foregroundColor: AppColors.ink,
+        foregroundColor: context.inkColor,
         elevation: 0,
       ),
       body: SafeArea(
@@ -415,8 +415,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         child: FilledButton(
                           onPressed: _couponLoading ? null : _applyCoupon,
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
                             minimumSize: const Size.fromHeight(48),
                           ),
                           child: _couponLoading
@@ -715,8 +713,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: FilledButton(
                     onPressed: _submitting ? null : _submit,
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
                       disabledBackgroundColor: AppColors.primary.withValues(
                         alpha: 0.45,
                       ),

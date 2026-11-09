@@ -295,8 +295,8 @@ class _UserCard extends StatelessWidget {
                           ),
                           child: Text(
                             user.roleLabel,
-                            style: const TextStyle(
-                              color: AppColors.primary,
+                            style: TextStyle(
+                              color: context.accentColor,
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),

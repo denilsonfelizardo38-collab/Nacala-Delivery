@@ -74,9 +74,9 @@ class _StoreScreenState extends State<StoreScreen> {
         !state.isCartEmpty && state.cartBelongsTo(widget.establishmentId);
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         title: FutureBuilder<EstablishmentDetail>(
           future: _future,
           builder: (context, snapshot) => Text(
@@ -862,8 +862,6 @@ class _ProductCard extends StatelessWidget {
                                 icon: const Icon(Icons.add_rounded, size: 17),
                                 label: const Text('Adicionar'),
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
                                   disabledBackgroundColor: AppColors.border,
                                   disabledForegroundColor: AppColors.muted,
                                   elevation: 0,
@@ -1127,11 +1125,11 @@ class _CartBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(top: BorderSide(color: AppColors.border)),
+        color: context.isDarkMode ? AppColors.darkCard : Colors.white,
+        border: Border(top: BorderSide(color: context.lineColor)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.ink.withValues(alpha: 0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 18,
             offset: const Offset(0, -5),
           ),
@@ -1174,8 +1172,6 @@ class _CartBar extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: onTap,
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),

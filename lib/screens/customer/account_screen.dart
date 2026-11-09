@@ -498,8 +498,8 @@ class _AccountScreenState extends State<AccountScreen> {
                 icon: const Icon(Icons.logout_rounded, size: 18),
                 label: const Text('Terminar sessão'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
+                  foregroundColor: context.accentColor,
+                  side: BorderSide(color: context.accentColor),
                   minimumSize: const Size.fromHeight(50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -576,8 +576,6 @@ class _AccountScreenState extends State<AccountScreen> {
                       icon: const Icon(Icons.login_rounded),
                       label: const Text('Entrar ou criar conta'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
                         minimumSize: const Size.fromHeight(50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -662,8 +660,8 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                       ),
                       child: Text(
                         widget.roleLabel,
-                        style: const TextStyle(
-                          color: AppColors.primary,
+                        style: TextStyle(
+                          color: context.accentColor,
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                         ),
@@ -787,10 +785,10 @@ class _AddressCard extends StatelessWidget {
                           color: AppColors.primarySoft,
                           borderRadius: BorderRadius.circular(5),
                         ),
-                        child: const Text(
+                        child: Text(
                           'PREDEFINIDA',
                           style: TextStyle(
-                            color: AppColors.primary,
+                            color: context.accentColor,
                             fontSize: 8,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.4,
@@ -1204,8 +1202,6 @@ class _ProfileDialogState extends State<_ProfileDialog> {
             );
           },
           style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
             minimumSize: const Size(0, 44),
           ),
           child: const Text('Guardar'),

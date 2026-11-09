@@ -205,10 +205,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                               .establishments();
                         });
                       },
-                      child: const Text(
+                      child: Text(
                         'Limpar filtro',
                         style: TextStyle(
-                          color: AppColors.primary,
+                          color: context.accentColor,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -344,8 +344,8 @@ class _CategoryCard extends StatelessWidget {
                         ),
                         child: Text(
                           '${category.establishmentCount}',
-                          style: const TextStyle(
-                            color: AppColors.primary,
+                          style: TextStyle(
+                            color: context.accentColor,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                           ),
@@ -360,7 +360,7 @@ class _CategoryCard extends StatelessWidget {
                       right: 7,
                       child: CircleAvatar(
                         radius: 12,
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: AppColors.textOrange,
                         child: Icon(
                           Icons.check_rounded,
                           color: Colors.white,

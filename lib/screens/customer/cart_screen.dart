@@ -101,10 +101,8 @@ class _CartScreenState extends State<CartScreen> {
     final empty = state.isCartEmpty;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.ink,
-        foregroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 20,
         title: const Column(
@@ -118,7 +116,7 @@ class _CartScreenState extends State<CartScreen> {
             Text(
               'NACALA DELIVERY',
               style: TextStyle(
-                color: AppColors.primary,
+                color: AppColors.textOrange,
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.8,
@@ -186,8 +184,6 @@ class _CartScreenState extends State<CartScreen> {
                             icon: const Icon(Icons.storefront_rounded),
                             label: const Text('Ver estabelecimentos'),
                             style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(15),
                               ),
@@ -348,8 +344,8 @@ class _CartScreenState extends State<CartScreen> {
                             const SizedBox(height: 3),
                             Text(
                               formatMoney(state.cartTotalCents),
-                              style: const TextStyle(
-                                color: AppColors.primary,
+                              style: TextStyle(
+                                color: context.accentColor,
                                 fontSize: 19,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -363,8 +359,6 @@ class _CartScreenState extends State<CartScreen> {
                         child: FilledButton.icon(
                           onPressed: _continue,
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
                             minimumSize: const Size.fromHeight(52),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(15),
@@ -586,8 +580,8 @@ class _CartLineCard extends StatelessWidget {
                 child: Text(
                   formatMoney(line.totalCents),
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: AppColors.ink,
+                  style: TextStyle(
+                    color: context.inkColor,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -730,20 +724,26 @@ class _CouponCard extends StatelessWidget {
                   child: FilledButton(
                     onPressed: loading ? null : onApply,
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.ink,
-                      foregroundColor: Colors.white,
+                      backgroundColor: context.isDarkMode
+                          ? AppColors.darkElevated
+                          : AppColors.ink,
+                      foregroundColor: context.isDarkMode
+                          ? AppColors.darkInk
+                          : Colors.white,
                       minimumSize: const Size.fromHeight(50),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     child: loading
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white,
+                              color: context.isDarkMode
+                                  ? AppColors.darkInk
+                                  : Colors.white,
                             ),
                           )
                         : const Text(

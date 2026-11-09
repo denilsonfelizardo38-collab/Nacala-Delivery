@@ -522,8 +522,6 @@ class _LoginScreenState extends State<LoginScreen> {
               child: FilledButton(
                 onPressed: _submitting ? null : _submit,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
                   disabledBackgroundColor: AppColors.primary.withValues(
                     alpha: 0.5,
                   ),

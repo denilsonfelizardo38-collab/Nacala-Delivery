@@ -617,7 +617,6 @@ class _AssignmentCard extends StatelessWidget {
                             onPressed: () => onAction(action.$1),
                             style: FilledButton.styleFrom(
                               minimumSize: const Size(0, 44),
-                              backgroundColor: AppColors.primary,
                             ),
                             child: Text(action.$2),
                           ),

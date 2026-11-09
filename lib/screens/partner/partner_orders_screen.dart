@@ -390,7 +390,6 @@ class _ActionButton extends StatelessWidget {
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         minimumSize: const Size(0, 44),
-        backgroundColor: AppColors.primary,
       ),
       child: label,
     );

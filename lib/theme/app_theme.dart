@@ -213,9 +213,9 @@ abstract final class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: Colors.white,
+          foregroundColor: scheme.onPrimary,
           disabledBackgroundColor: primary.withValues(alpha: 0.4),
-          disabledForegroundColor: Colors.white.withValues(alpha: 0.9),
+          disabledForegroundColor: scheme.onPrimary.withValues(alpha: 0.85),
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),

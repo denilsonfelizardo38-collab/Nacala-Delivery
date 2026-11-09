@@ -424,8 +424,8 @@ class _TrackingScreenState extends State<TrackingScreen> {
                           ),
                           child: Text(
                             '${item.quantity}×',
-                            style: const TextStyle(
-                              color: AppColors.primary,
+                            style: TextStyle(
+                              color: context.accentColor,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                             ),
@@ -587,8 +587,6 @@ class _TrackingScreenState extends State<TrackingScreen> {
           label: const Text('Avaliar experiência'),
           style: FilledButton.styleFrom(
             minimumSize: const Size(0, 50),
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
@@ -833,7 +831,7 @@ class _TrackingSection extends StatelessWidget {
                     Text(
                       eyebrow,
                       style: TextStyle(
-                        color: AppColors.primary,
+                        color: context.accentColor,
                         fontSize: 8,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.1,
@@ -952,10 +950,10 @@ class _TimelineStep extends StatelessWidget {
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text(
+            child: Text(
               'AGORA',
               style: TextStyle(
-                color: AppColors.primary,
+                color: context.accentColor,
                 fontSize: 8,
                 fontWeight: FontWeight.w700,
                 letterSpacing: .7,

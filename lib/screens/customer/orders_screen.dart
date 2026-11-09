@@ -67,9 +67,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget build(BuildContext context) {
     if (AppScope.of(context).isGuest) {
       return Scaffold(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: AppColors.surface,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           title: const Text('Meus pedidos'),
         ),
         body: Center(
@@ -90,9 +90,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         title: const Text('Meus pedidos'),
         actions: const [CartButton(), SizedBox(width: 8)],
       ),
