@@ -40,6 +40,11 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
+  /// Tabs já visitadas: ficam montadas (guardando scroll/filtros) mas as
+  /// restantes só são construídas na primeira visita.
+  final Set<int> _openedTabs = {0};
+  Object? _tabsOwner;
+
   static const _guestDestinations = [
     _Destination(
       'Início',
@@ -158,7 +163,35 @@ class _AppShellState extends State<AppShell> {
     final destinations = role == null
         ? _guestDestinations
         : _destinationsFor(role);
+    // Troca de papel (convidado → cliente → parceiro…) reinicia as tabs.
+    final owner = role?.email ?? (state.isGuest ? 'guest' : 'anon');
+    if (_tabsOwner != owner) {
+      _tabsOwner = owner;
+      _index = 0;
+      _openedTabs
+        ..clear()
+        ..add(0);
+    }
     if (_index >= destinations.length) _index = 0;
+
+    void select(int value) => setState(() {
+          _index = value;
+          _openedTabs.add(value);
+        });
+
+    // Mantém as tabs já visitadas montadas: trocar de separador preserva
+    // scroll, filtros e estado de carregamento; as demais só carregam na
+    // primeira visita (sem 5 arranques de dados em simultâneo).
+    Widget stack() => IndexedStack(
+      index: _index,
+      children: [
+        for (var i = 0; i < destinations.length; i++)
+          if (_openedTabs.contains(i))
+            destinations[i].screen
+          else
+            const SizedBox.shrink(),
+      ],
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -171,19 +204,19 @@ class _AppShellState extends State<AppShell> {
                   _AdminNavigationRail(
                     destinations: destinations,
                     index: _index,
-                    onSelected: (value) => setState(() => _index = value),
+                    onSelected: select,
                   ),
-                  Expanded(child: destinations[_index].screen),
+                  Expanded(child: stack()),
                 ],
               ),
             );
           }
           return Scaffold(
-            body: destinations[_index].screen,
+            body: stack(),
             bottomNavigationBar: _AppBottomBar(
               destinations: destinations,
               index: _index,
-              onSelected: (value) => setState(() => _index = value),
+              onSelected: select,
             ),
           );
         }
@@ -194,7 +227,7 @@ class _AppShellState extends State<AppShell> {
               _Sidebar(
                 destinations: destinations,
                 index: _index,
-                onSelected: (value) => setState(() => _index = value),
+                onSelected: select,
               ),
               Expanded(
                 child: ColoredBox(
@@ -202,7 +235,7 @@ class _AppShellState extends State<AppShell> {
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 1180),
-                      child: destinations[_index].screen,
+                      child: stack(),
                     ),
                   ),
                 ),
