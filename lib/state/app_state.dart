@@ -628,10 +628,10 @@ class ReorderOutcome {
 
   /// Utilizador cancelou a substituição do carrinho.
   const ReorderOutcome.cancelled()
-      : added = 0,
-        unavailable = const [],
-        storeName = '',
-        cancelled = true;
+    : added = 0,
+      unavailable = const [],
+      storeName = '',
+      cancelled = true;
 
   /// Nº de itens do pedido que entraram no carrinho.
   final int added;

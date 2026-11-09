@@ -62,7 +62,8 @@ String formatMoneyCompact(int cents) {
 /// "2 avaliações" (troca `ão` -> `ões` por omissão).
 String plural(int count, String singular, [String? pluralForm]) {
   if (count == 1) return singular;
-  final form = pluralForm ??
+  final form =
+      pluralForm ??
       (singular.endsWith('ão')
           ? '${singular.substring(0, singular.length - 2)}ões'
           : '${singular}s');

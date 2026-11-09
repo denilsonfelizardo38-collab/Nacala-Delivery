@@ -286,7 +286,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               borderRadius: BorderRadius.circular(13),
               onTap: _setDeliveryLocation,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
                 child: Row(
                   children: [
                     const Icon(
@@ -416,9 +419,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               // Exige pelo menos 5 avaliações: evitar que "5,0" com uma
               // única avaliação apareça como "mais bem avaliado".
               final all = snapshot.data ?? const <Establishment>[];
-              final promoIds = {
-                for (final e in all.take(3)) e.id,
-              };
+              final promoIds = {for (final e in all.take(3)) e.id};
               final rated = [
                 for (final e in all)
                   if (e.rating > 0 &&
@@ -776,11 +777,7 @@ class _PromoCarouselState extends State<_PromoCarousel> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              for (
-                var index = 0;
-                index < slides.length;
-                index++
-              )
+              for (var index = 0; index < slides.length; index++)
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -898,11 +895,16 @@ class _PromoCard extends StatelessWidget {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        establishment == null ? 'Explorar parceiros ›' : 'Ver menu  ›',
+                        establishment == null
+                            ? 'Explorar parceiros ›'
+                            : 'Ver menu  ›',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
@@ -980,9 +982,7 @@ class _HomeStoreCard extends StatelessWidget {
                         establishment.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
+                        style: Theme.of(context).textTheme.titleSmall
                             ?.copyWith(height: 1.25),
                       ),
                     ),

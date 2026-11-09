@@ -266,21 +266,16 @@ class _AccountScreenState extends State<AccountScreen> {
               padding: EdgeInsets.fromLTRB(20, 12, 20, 4),
               child: Text(
                 'Tema da aplicação',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
               ),
             ),
             for (final option in ThemeSetting.values)
               ListTile(
-                leading: Icon(
-                  switch (option) {
-                    ThemeSetting.system => Icons.brightness_auto_rounded,
-                    ThemeSetting.light => Icons.light_mode_outlined,
-                    ThemeSetting.dark => Icons.dark_mode_outlined,
-                  },
-                ),
+                leading: Icon(switch (option) {
+                  ThemeSetting.system => Icons.brightness_auto_rounded,
+                  ThemeSetting.light => Icons.light_mode_outlined,
+                  ThemeSetting.dark => Icons.dark_mode_outlined,
+                }),
                 title: Text(
                   switch (option) {
                     ThemeSetting.system => 'Sistema',
@@ -296,17 +291,17 @@ class _AccountScreenState extends State<AccountScreen> {
                   switch (option) {
                     ThemeSetting.system => 'Segue a definição do telemóvel',
                     ThemeSetting.light => 'Fundo claro em todas as áreas',
-                    ThemeSetting.dark => 'Conforto à noite e poupança de bateria',
+                    ThemeSetting.dark =>
+                      'Conforto à noite e poupança de bateria',
                   },
-                  style: TextStyle(fontSize: 11, color: sheetContext.mutedColor),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: sheetContext.mutedColor,
+                  ),
                 ),
-                trailing:
-                    option == current
-                        ? const Icon(
-                          Icons.check_rounded,
-                          color: AppColors.primary,
-                        )
-                        : null,
+                trailing: option == current
+                    ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                    : null,
                 onTap: () => Navigator.of(sheetContext).pop(option),
               ),
             const SizedBox(height: 8),
@@ -1201,9 +1196,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
               ),
             );
           },
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 44),
-          ),
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
           child: const Text('Guardar'),
         ),
       ],

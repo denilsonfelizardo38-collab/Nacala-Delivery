@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../state/app_scope.dart';
@@ -23,10 +24,7 @@ IconData categoryIconFor(String icon) => switch (icon) {
 };
 
 /// Abre a marcação `tel:` (usa o disco do sistema).
-Future<void> launchCall(
-  BuildContext context, {
-  required String phone,
-}) async {
+Future<void> launchCall(BuildContext context, {required String phone}) async {
   final url = Uri(scheme: 'tel', path: digitsOnly(phone));
   try {
     if (await canLaunchUrl(url)) {
@@ -62,11 +60,7 @@ Future<void> launchWhatsApp(
     }
   } on Exception {
     if (context.mounted) {
-      showAppSnack(
-        context,
-        'Não foi possível abrir o WhatsApp.',
-        error: true,
-      );
+      showAppSnack(context, 'Não foi possível abrir o WhatsApp.', error: true);
     }
   }
 }
@@ -841,7 +835,12 @@ class _StepperButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      onPressed: onPressed,
+      onPressed: onPressed == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onPressed!();
+            },
       tooltip: tooltip,
       icon: Icon(icon, size: 18),
       constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
@@ -1142,9 +1141,7 @@ class EstablishmentTile extends StatelessWidget {
                         establishment.name,
                         maxLines: 2, // nomes longos não são cortados
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
+                        style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(height: 1.2),
                       ),
                     ),
@@ -1225,31 +1222,26 @@ class FavoriteIconButton extends StatelessWidget {
           : context.mutedColor,
       size: onDark ? 17 : 21,
     );
-    if (!onDark) {
-      return IconButton(
-        tooltip: isFavorite ? 'Remover dos favoritos' : 'Guardar nos favoritos',
-        onPressed: onPressed,
-        icon: heart,
-        style: IconButton.styleFrom(
-          minimumSize: const Size(40, 40),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-      );
-    }
+    // Alvo de toque ≥44 px (MaterialTapTargetSize.padded) com ícone
+    // visualmente pequeno; toque háptico ao alternar favorito.
+    final button = IconButton(
+      tooltip: isFavorite ? 'Remover dos favoritos' : 'Guardar nos favoritos',
+      onPressed: () {
+        HapticFeedback.selectionClick();
+        onPressed();
+      },
+      icon: heart,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(44, 44),
+        tapTargetSize: MaterialTapTargetSize.padded,
+      ),
+    );
+    if (!onDark) return button;
     return Material(
       shape: const CircleBorder(),
       color: Colors.white.withValues(alpha: 0.92),
       elevation: 2,
-      child: IconButton(
-        tooltip: isFavorite ? 'Remover dos favoritos' : 'Guardar nos favoritos',
-        onPressed: onPressed,
-        icon: heart,
-        padding: EdgeInsets.zero,
-        style: IconButton.styleFrom(
-          minimumSize: const Size(34, 34),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-      ),
+      child: button,
     );
   }
 }

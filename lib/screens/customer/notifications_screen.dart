@@ -150,10 +150,7 @@ class _NotificationTile extends StatelessWidget {
           context.warningColor,
         );
       default:
-        return (
-          context.primarySoftColor,
-          context.accentColor,
-        );
+        return (context.primarySoftColor, context.accentColor);
     }
   }
 
@@ -218,10 +215,7 @@ class _NotificationTile extends StatelessWidget {
                       order.establishment.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.mutedColor,
-                        fontSize: 11,
-                      ),
+                      style: TextStyle(color: context.mutedColor, fontSize: 11),
                     ),
                     if (description.isNotEmpty) ...[
                       const SizedBox(height: 4),

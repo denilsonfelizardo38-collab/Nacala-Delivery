@@ -307,61 +307,68 @@ class _StoreTabStrip extends StatelessWidget {
         children: [
           for (var index = 0; index < _tabs.length; index++)
             Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSelected(index),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 11,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selectedIndex == index
-                        ? (context.isDarkMode ? AppColors.darkCard : Colors.white)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(11),
-                    boxShadow: selectedIndex == index
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: context.isDarkMode ? 0.3 : 0.07,
+              child: Semantics(
+                button: true,
+                selected: selectedIndex == index,
+                label: _tabs[index].$1,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onSelected(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selectedIndex == index
+                          ? (context.isDarkMode
+                                ? AppColors.darkCard
+                                : Colors.white)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(11),
+                      boxShadow: selectedIndex == index
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(
+                                  alpha: context.isDarkMode ? 0.3 : 0.07,
+                                ),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                            ]
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _tabs[index].$2,
+                          size: 15,
+                          color: selectedIndex == index
+                              ? context.accentColor
+                              : context.mutedColor,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            _tabs[index].$1,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: selectedIndex == index
+                                  ? context.inkColor
+                                  : context.mutedColor,
+                              fontSize: 11,
+                              fontWeight: selectedIndex == index
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
                             ),
-                          ]
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _tabs[index].$2,
-                        size: 15,
-                        color: selectedIndex == index
-                            ? context.accentColor
-                            : context.mutedColor,
-                      ),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          _tabs[index].$1,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: selectedIndex == index
-                                ? context.inkColor
-                                : context.mutedColor,
-                            fontSize: 11,
-                            fontWeight: selectedIndex == index
-                                ? FontWeight.w700
-                                : FontWeight.w600,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -532,9 +539,7 @@ class _StoreHeader extends StatelessWidget {
                     child: _HeaderMeta(
                       icon: Icons.delivery_dining_rounded,
                       label: 'Entrega',
-                      value: formatMoneyCompact(
-                        establishment.deliveryFeeCents,
-                      ),
+                      value: formatMoneyCompact(establishment.deliveryFeeCents),
                     ),
                   ),
                   Container(width: 1, height: 32, color: AppColors.border),

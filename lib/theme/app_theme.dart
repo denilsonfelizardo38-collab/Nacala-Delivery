@@ -365,10 +365,9 @@ extension AppThemeContext on BuildContext {
   Color get primarySoftColor =>
       isDarkMode ? AppColors.darkPrimarySoft : AppColors.primarySoft;
 
-  Color get primarySoftStrongColor =>
-      isDarkMode
-          ? AppColors.darkPrimarySoftStrong
-          : AppColors.primarySoftStrong;
+  Color get primarySoftStrongColor => isDarkMode
+      ? AppColors.darkPrimarySoftStrong
+      : AppColors.primarySoftStrong;
 
   Color get accentColor => Theme.of(this).colorScheme.primary;
 

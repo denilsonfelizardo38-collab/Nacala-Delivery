@@ -90,9 +90,7 @@ class _NacalaDeliveryAppState extends State<NacalaDeliveryApp> {
       value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
           .copyWith(
             statusBarColor: Colors.transparent,
-            systemNavigationBarColor: isDark
-                ? AppColors.darkBg
-                : Colors.white,
+            systemNavigationBarColor: isDark ? AppColors.darkBg : Colors.white,
           ),
       child: AppScope(
         state: widget.state,
@@ -105,6 +103,20 @@ class _NacalaDeliveryAppState extends State<NacalaDeliveryApp> {
           // mas o utilizador escolhe o tema em «Conta › Tema da aplicação».
           // A opção «Sistema» segue a definição do telemóvel.
           themeMode: themeMode,
+          // Limita a escala de texto extremas do sistema (acessibilidade)
+          // para os ecrãs não partirem o layout; 1.4 continua generoso.
+          builder: (context, child) {
+            final mq = MediaQuery.of(context);
+            final scale = mq.textScaler.scale(1);
+            return MediaQuery(
+              data: mq.copyWith(
+                textScaler: scale > 1.4
+                    ? const TextScaler.linear(1.4)
+                    : mq.textScaler,
+              ),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           home: _RootGate(ready: _ready),
           onGenerateRoute: _generateRoute,
           onUnknownRoute: (settings) => MaterialPageRoute(

@@ -175,9 +175,9 @@ class _AppShellState extends State<AppShell> {
     if (_index >= destinations.length) _index = 0;
 
     void select(int value) => setState(() {
-          _index = value;
-          _openedTabs.add(value);
-        });
+      _index = value;
+      _openedTabs.add(value);
+    });
 
     // Mantém as tabs já visitadas montadas: trocar de separador preserva
     // scroll, filtros e estado de carregamento; as demais só carregam na

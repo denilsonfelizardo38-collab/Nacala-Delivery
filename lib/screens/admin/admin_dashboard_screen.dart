@@ -291,8 +291,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           subtitle: summary.pendingEstablishments.isEmpty
               ? 'Nenhum parceiro à espera de aprovação'
               : '${summary.pendingEstablishments.length} '
-                  '${plural(summary.pendingEstablishments.length, 'parceiro')} '
-                  'por aprovar',
+                    '${plural(summary.pendingEstablishments.length, 'parceiro')} '
+                    'por aprovar',
           actionLabel: 'Ver parceiros',
           onAction: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const AdminPartnersScreen()),

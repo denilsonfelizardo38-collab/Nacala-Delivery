@@ -388,9 +388,7 @@ class _ActionButton extends StatelessWidget {
     }
     return FilledButton(
       onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        minimumSize: const Size(0, 44),
-      ),
+      style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
       child: label,
     );
   }
