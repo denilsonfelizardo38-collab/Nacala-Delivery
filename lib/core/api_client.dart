@@ -74,7 +74,7 @@ class ApiClient {
         if (parsed is Map<String, dynamic>) decoded = parsed;
       } on FormatException {
         throw ApiException(
-          'Resposta inválida do servidor.',
+          _invalidResponseMessage(response.statusCode),
           status: response.statusCode,
         );
       }
@@ -111,4 +111,18 @@ class ApiClient {
   }) => send('PATCH', path, body: body);
 
   Future<Map<String, dynamic>> delete(String path) => send('DELETE', path);
+}
+
+/// Mensagem honesta para respostas que não são JSON (tipicamente um servidor
+/// desatualizado a devolver texto puro, como os 404 do shelf_router antigo).
+String _invalidResponseMessage(int status) {
+  if (status == 404) {
+    return 'O servidor não reconhece este pedido (404). Se a aplicação foi '
+        'atualizada, o servidor publicado também precisa de ser atualizado.';
+  }
+  if (status >= 500) {
+    return 'O servidor encontrou um problema (erro $status). Tente novamente '
+        'mais tarde.';
+  }
+  return 'Resposta inválida do servidor (erro $status). Tente novamente.';
 }

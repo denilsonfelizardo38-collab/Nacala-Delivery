@@ -23,7 +23,10 @@ class UserAccount {
     required this.name,
     required this.email,
     required this.phone,
+    this.whatsapp,
     this.avatarUrl,
+    this.approvalStatus = 'approved',
+    this.permissions = const [],
   });
 
   final String id;
@@ -31,18 +34,38 @@ class UserAccount {
   final String name;
   final String email;
   final String phone;
+
+  /// WhatsApp do cliente, quando preenchido no registo (opcional e pode
+  /// diferir do telemóvel principal).
+  final String? whatsapp;
   final String? avatarUrl;
+
+  /// Estado da candidatura (`users.approval_status`). Contas de parceiro ou
+  /// estafeta ainda não aprovadas ficam bloqueadas no servidor: o app abre
+  /// o ecrã de estado da candidatura em vez do painel.
+  final String approvalStatus;
+
+  /// Permissões de funcionário (`employees.permissions`). Usadas apenas
+  /// para escolher os separadores do painel — **cada rota continua a ser
+  /// validada no servidor** por `requirePermission`.
+  final List<String> permissions;
 
   bool get isCustomer => role == 'customer';
   bool get isPartner => role == 'partner';
   bool get isDelivery => role == 'delivery';
   bool get isAdmin => role == 'admin';
+  bool get isEmployee => role == 'employee';
+
+  /// Papel ainda pendente de aprovação pelo administrador.
+  bool get isPendingApproval =>
+      (isPartner || isDelivery) && approvalStatus != 'approved';
 
   String get roleLabel => switch (role) {
     'customer' => 'Cliente',
     'partner' => 'Parceiro',
     'delivery' => 'Estafeta',
     'admin' => 'Administrador',
+    'employee' => 'Funcionário',
     _ => role,
   };
 
@@ -52,20 +75,36 @@ class UserAccount {
     name: _str(json['name']),
     email: _str(json['email']),
     phone: _str(json['phone']),
+    whatsapp: _strOrNull(json['whatsapp']),
     avatarUrl: _strOrNull(json['avatar_url']),
+    approvalStatus: _strOrNull(json['approval_status']) ?? 'approved',
+    permissions: [
+      if (json['permissions'] is List)
+        for (final item in json['permissions'] as List) '$item',
+    ],
   );
 }
 
 class AuthResult {
-  const AuthResult({required this.token, required this.user});
+  const AuthResult({
+    required this.token,
+    required this.user,
+    this.recoveryCode,
+  });
   final String token;
   final UserAccount user;
+
+  /// Código de recuperação de palavra-passe — devolvido **uma única vez**
+  /// no registo (e na recuperação, quando é rotacionado). Não há envio por
+  /// email/SMS na plataforma, por isso o utilizador tem de o guardar.
+  final String? recoveryCode;
 
   factory AuthResult.fromJson(Map<String, dynamic> json) => AuthResult(
     token: _str(json['token']),
     user: UserAccount.fromJson(
       (json['user'] as Map<String, dynamic>?) ?? const {},
     ),
+    recoveryCode: _strOrNull(json['recovery_code']),
   );
 }
 
@@ -117,6 +156,9 @@ class Establishment {
     required this.categorySlug,
     this.imageUrl,
     this.isApproved = true,
+    this.latitude,
+    this.longitude,
+    this.nuit,
   });
 
   final String id;
@@ -139,6 +181,16 @@ class Establishment {
   final String? imageUrl;
   final bool isApproved;
 
+  /// Ponto marcado pelo parceiro no mapa (FASE 11). Nulo quando ainda não
+  /// foi definido — nesse caso o cliente mostra só a morada textual.
+  final double? latitude;
+  final double? longitude;
+
+  /// Número Único de Identificação Tributária do contribuinte (parceiro).
+  final String? nuit;
+
+  bool get hasLocation => latitude != null && longitude != null;
+
   factory Establishment.fromJson(Map<String, dynamic> json) => Establishment(
     id: _str(json['id']),
     name: _str(json['name']),
@@ -159,6 +211,9 @@ class Establishment {
     categorySlug: _str(json['category_slug']),
     imageUrl: json['image_url'] as String?,
     isApproved: json['is_approved'] != false,
+    latitude: _doubleOrNull(json['latitude']),
+    longitude: _doubleOrNull(json['longitude']),
+    nuit: json['nuit'] as String?,
   );
 }
 
@@ -421,12 +476,14 @@ class MiniEstablishment {
     required this.name,
     required this.address,
     required this.phone,
+    this.ownerUserId,
   });
 
   final String id;
   final String name;
   final String address;
   final String phone;
+  final String? ownerUserId;
 
   factory MiniEstablishment.fromJson(Map<String, dynamic> json) =>
       MiniEstablishment(
@@ -434,6 +491,7 @@ class MiniEstablishment {
         name: _str(json['name']),
         address: _str(json['address']),
         phone: _str(json['phone']),
+        ownerUserId: json['owner_user_id'] as String?,
       );
 }
 
@@ -459,6 +517,7 @@ class Order {
     this.note,
     this.rejectionReason,
     this.cancellationReason,
+    this.customerId,
     this.customerName,
     this.customerPhone,
     this.delivery,
@@ -486,6 +545,7 @@ class Order {
   final String? note;
   final String? rejectionReason;
   final String? cancellationReason;
+  final String? customerId;
   final String? customerName;
   final String? customerPhone;
   final DeliveryInfo? delivery;
@@ -584,6 +644,7 @@ class Order {
       note: json['note'] as String?,
       rejectionReason: json['rejection_reason'] as String?,
       cancellationReason: json['cancellation_reason'] as String?,
+      customerId: customer['id'] as String?,
       customerName: customer['name'] as String?,
       customerPhone: customer['phone'] as String?,
       delivery: json['delivery'] == null
@@ -691,6 +752,8 @@ class DeliveryAssignment {
     this.courierLongitude,
     this.departedAt,
     this.locationUpdatedAt,
+    this.customerId,
+    this.establishmentOwnerId,
   });
 
   final String id;
@@ -714,6 +777,8 @@ class DeliveryAssignment {
   final double? courierLongitude;
   final DateTime? departedAt;
   final DateTime? locationUpdatedAt;
+  final String? customerId;
+  final String? establishmentOwnerId;
 
   bool get isAvailable => status == 'available';
 
@@ -744,6 +809,8 @@ class DeliveryAssignment {
         courierLongitude: _doubleOrNull(json['courier_longitude']),
         departedAt: _dateOrNull(json['departed_at']),
         locationUpdatedAt: _dateOrNull(json['location_updated_at']),
+        customerId: json['customer_id'] as String?,
+        establishmentOwnerId: json['establishment_owner_id'] as String?,
       );
 }
 
@@ -860,5 +927,320 @@ class AuditLog {
     createdAt: _date(json['created_at']),
     actor: json['actor'] as String?,
     entityId: json['entity_id'] as String?,
+  );
+}
+
+/// Candidatura de estabelecimento ou entregador enviada para aprovação
+/// (`applications`). O candidato consulta o estado em
+/// `/api/applications/me`; o administrador gere-as em Gestão de Registos.
+class Application {
+  const Application({
+    required this.id,
+    required this.kind,
+    required this.status,
+    required this.name,
+    required this.email,
+    required this.phone,
+    this.whatsapp,
+    this.payload = const {},
+    this.adminNote,
+    this.userId,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+
+  /// `establishment` ou `delivery`.
+  final String kind;
+
+  /// `pending`, `approved`, `rejected` ou `changes_requested`.
+  final String status;
+
+  final String name;
+  final String email;
+  final String phone;
+  final String? whatsapp;
+
+  /// Dados completos do formulário (categoria, morada, coordenadas…).
+  final Map<String, dynamic> payload;
+
+  /// Motivo devolvido pelo administrador (recusa ou correções).
+  final String? adminNote;
+  final String? userId;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  bool get isPending => status == 'pending';
+  bool get isApproved => status == 'approved';
+  bool get isRejected => status == 'rejected';
+  bool get needsChanges => status == 'changes_requested';
+
+  String get kindLabel => kind == 'establishment' ? 'Estabelecimento' : 'Entregador';
+
+  String get statusLabel => switch (status) {
+    'pending' => 'Em análise',
+    'approved' => 'Aprovada',
+    'rejected' => 'Recusada',
+    'changes_requested' => 'Correções solicitadas',
+    _ => status,
+  };
+
+  factory Application.fromJson(Map<String, dynamic> json) => Application(
+    id: _str(json['id']),
+    kind: _str(json['kind']),
+    status: _str(json['status']),
+    name: _str(json['name']),
+    email: _str(json['email']),
+    phone: _str(json['phone']),
+    whatsapp: _strOrNull(json['whatsapp']),
+    payload: json['payload'] is Map
+        ? (json['payload'] as Map).cast<String, dynamic>()
+        : const {},
+    adminNote: _strOrNull(json['admin_note']),
+    userId: _strOrNull(json['user_id']),
+    createdAt: _date(json['created_at']),
+    updatedAt: _date(json['updated_at']),
+  );
+}
+
+/// Notificação persistente do utilizador (`notifications`). O [kind] decide
+/// o som e o canal no telemóvel (ex.: `order_ready`, `new_order`).
+class AppNotification {
+  const AppNotification({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.body,
+    this.data = const {},
+    this.isRead = false,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String kind;
+  final String title;
+  final String body;
+  final Map<String, dynamic> data;
+  final bool isRead;
+  final DateTime createdAt;
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) =>
+      AppNotification(
+        id: _str(json['id']),
+        kind: _str(json['kind']),
+        title: _str(json['title']),
+        body: _str(json['body']),
+        data: json['data'] is Map
+            ? (json['data'] as Map).cast<String, dynamic>()
+            : const {},
+        isRead: json['is_read'] == true,
+        createdAt: _date(json['created_at']),
+      );
+}
+
+/// Conversa entre dois participantes (cliente↔parceiro, cliente↔estafeta,
+/// parceiro↔estafeta), opcionalmente ligada a uma encomenda.
+class Conversation {
+  const Conversation({
+    required this.id,
+    required this.customerId,
+    required this.partnerId,
+    required this.courierId,
+    required this.status,
+    required this.createdAt,
+    this.orderId,
+    this.lastMessageAt,
+    this.lastBody,
+    this.lastSenderId,
+    this.unreadCount = 0,
+    this.otherUserId,
+    this.otherUserName,
+  });
+
+  final String id;
+  final String? customerId;
+  final String? partnerId;
+  final String? courierId;
+  final String status;
+  final DateTime createdAt;
+  final String? orderId;
+  final String? lastMessageAt;
+  final String? lastBody;
+  final String? lastSenderId;
+  final int unreadCount;
+  /// ID do outro participante (não o utilizador autenticado).
+  final String? otherUserId;
+  final String? otherUserName;
+
+  /// Papel do outro participante, quando conhecido.
+  String? get otherRole {
+    if (otherUserId == null) return null;
+    // Inferido a partir dos papéis preenchidos na conversa.
+    if (customerId == otherUserId) return 'customer';
+    if (partnerId == otherUserId) return 'partner';
+    if (courierId == otherUserId) return 'delivery';
+    return null;
+  }
+
+  factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
+    id: _str(json['id']),
+    customerId: _strOrNull(json['customer_id']),
+    partnerId: _strOrNull(json['partner_id']),
+    courierId: _strOrNull(json['courier_id']),
+    status: _str(json['status']),
+    createdAt: _date(json['created_at']),
+    orderId: _strOrNull(json['order_id']),
+    lastMessageAt: _strOrNull(json['last_message_at']),
+    lastBody: _strOrNull(json['last_body']),
+    lastSenderId: _strOrNull(json['last_sender_id']),
+    unreadCount: _int(json['unread_count']),
+    otherUserId: _strOrNull(json['other_user_id']),
+    otherUserName: _strOrNull(json['other_user_name']),
+  );
+}
+
+/// Mensagem de uma conversa.
+class Message {
+  const Message({
+    required this.id,
+    required this.conversationId,
+    required this.senderId,
+    required this.body,
+    required this.type,
+    required this.createdAt,
+    this.readAt,
+  });
+
+  final String id;
+  final String conversationId;
+  final String senderId;
+  final String body;
+  /// `text`, `image`, `location` ou `order_status`.
+  final String type;
+  final DateTime createdAt;
+  final DateTime? readAt;
+
+  bool get isRead => readAt != null;
+
+  factory Message.fromJson(Map<String, dynamic> json) => Message(
+    id: _str(json['id']),
+    conversationId: _str(json['conversation_id']),
+    senderId: _str(json['sender_id']),
+    body: _str(json['body']),
+    type: _str(json['type']),
+    createdAt: _date(json['created_at']),
+    readAt: _dateOrNull(json['read_at']),
+  );
+}
+
+/// Registo de uma chamada (voz ou vídeo) entre dois utilizadores.
+class CallLog {
+  const CallLog({
+    required this.id,
+    required this.callerId,
+    required this.callerName,
+    required this.calleeId,
+    required this.calleeName,
+    required this.type,
+    required this.status,
+    required this.startedAt,
+    this.answeredAt,
+    this.endedAt,
+    required this.durationSeconds,
+    this.conversationId,
+  });
+
+  final String id;
+  final String? conversationId;
+  final String callerId;
+  final String callerName;
+  final String calleeId;
+  final String calleeName;
+  /// `voice` ou `video`.
+  final String type;
+  /// `initiated`, `answered`, `missed`, `declined`, `ended`.
+  final String status;
+  final DateTime startedAt;
+  final DateTime? answeredAt;
+  final DateTime? endedAt;
+  final int durationSeconds;
+
+  factory CallLog.fromJson(Map<String, dynamic> json) => CallLog(
+    id: _str(json['id']),
+    conversationId: _strOrNull(json['conversation_id']),
+    callerId: _str(json['caller_id']),
+    callerName: _str(json['caller_name']),
+    calleeId: _str(json['callee_id']),
+    calleeName: _str(json['callee_name']),
+    type: _str(json['type']),
+    status: _str(json['status']),
+    startedAt: _date(json['started_at']),
+    answeredAt: _dateOrNull(json['answered_at']),
+    endedAt: _dateOrNull(json['ended_at']),
+    durationSeconds: _int(json['duration_seconds']),
+  );
+}
+
+/// Permissões possíveis de uma conta de funcionário e o seu rótulo.
+/// O conjunto tem de coincidir com `_employeePermissions` do servidor.
+const employeePermissionLabels = <String, String>{
+  'orders': 'Encomendas',
+  'products': 'Produtos e catálogo',
+  'establishments': 'Estabelecimentos',
+  'customers': 'Clientes',
+  'applications': 'Gestão de registos',
+  'notifications': 'Notificações',
+};
+
+/// Registo de funcionário (`employees` + `users`) — só o administrador os
+/// cria/edita/elimina (`/api/admin/employees`).
+class AdminEmployee {
+  const AdminEmployee({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.email,
+    required this.phone,
+    required this.level,
+    this.permissions = const [],
+    this.isActive = true,
+    this.establishmentId,
+    this.createdAt,
+  });
+
+  final String id;
+  final String userId;
+  final String name;
+  final String email;
+  final String phone;
+
+  /// `staff` ou `admin` (o `super_admin` é reservado e não é criável).
+  final String level;
+  final List<String> permissions;
+  final bool isActive;
+  final String? establishmentId;
+  final DateTime? createdAt;
+
+  String get levelLabel => switch (level) {
+    'admin' => 'Gestor',
+    'staff' => 'Staff',
+    _ => level,
+  };
+
+  factory AdminEmployee.fromJson(Map<String, dynamic> json) => AdminEmployee(
+    id: _str(json['id']),
+    userId: _str(json['user_id']),
+    name: _str(json['name']),
+    email: _str(json['email']),
+    phone: _str(json['phone']),
+    level: _str(json['level']),
+    permissions: [
+      if (json['permissions'] is List)
+        for (final item in json['permissions'] as List) '$item',
+    ],
+    isActive: json['is_active'] != false,
+    establishmentId: _strOrNull(json['establishment_id']),
+    createdAt: json['created_at'] == null ? null : _date(json['created_at']),
   );
 }

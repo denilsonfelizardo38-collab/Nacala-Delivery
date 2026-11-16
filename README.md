@@ -30,6 +30,9 @@ totais calculados no servidor.
 - Histórico com filtros (todos / em curso / entregues), detalhe e repetição de
   pedido quando os produtos continuam disponíveis.
 - Conta: perfil, moradas CRUD, alteração de palavra-passe, cupões e logout.
+- Favoritos, mensagens com o estabelecimento (chat) e registo de chamadas.
+- Recuperação de palavra-passe por **código exibido uma vez** no registo
+  (não depende de email/SMS).
 
 ### Parceiro
 - Painel com estabelecimento, estado aberto/fechado, métricas do dia e totais
@@ -43,38 +46,59 @@ totais calculados no servidor.
 - Perfil do estabelecimento: descrição, contacto, morada, horário e abertura.
 
 ### Estafeta
+- Candidatura própria com **NUIT** e documentos obrigatórios carregados como
+  ficheiro (selfie, B.I. frente, B.I. verso e carta de condução), com
+  acompanhamento do estado até à aprovação.
 - Entregas disponíveis, em curso e histórico.
 - Aceitar, recusar e concluir entregas; contacto e morada apenas do pedido
   atribuído.
+- Partilha de posição GPS durante a entrega (apagada ao concluir, por
+  privacidade).
 
 ### Administração
-- Registo de parceiros reais (conta + estabelecimento) com validação no
-  servidor; o catálogo começa vazio e é preenchido pela administração.
+- **Candidaturas** de estabelecimentos e estafetas (ver **API →
+  Candidaturas**): fila com contagens, aprovação, recusa com nota e pedido de
+  alterações — cada decisão é notificada ao candidato.
+- Registo de parceiros reais (conta + estabelecimento) com **NUIT**
+  obrigatório e fotografia carregada como ficheiro; o catálogo começa vazio
+  e é preenchido pela administração.
+- **Funcionários** criados pelo administrador com nível (`admin`/`staff`) e
+  permissões por módulo (pedidos, produtos, estabelecimentos, clientes,
+  candidaturas, notificações); activação/desactivação invalida a sessão de
+  imediato.
 - Métricas da plataforma (clientes, parceiros ativos, estafetas, pedidos,
   vendas) calculadas por consultas reais.
 - Fila de aprovação de parceiros, suspensão e reativação.
 - Gestão de utilizadores (papel e estado da conta).
 - Pedidos da plataforma com filtros e detalhe.
+- Notificações da plataforma (por utilizador, com contagem de não lidas).
 - Categorias (criar/eliminar) e registo de auditoria.
 
 ### Transversal
-- Design system centralizado, com tema **claro/escuro/sistema** selecionável
-  pelo utilizador em **Conta → Tema da aplicação** (`AppTheme.light()` e
-  `AppTheme.dark()` são aplicadas conforme a preferência guardada):
-  - tipografia Inter incluída na aplicação, com pesos Regular, Medium,
-    SemiBold e Bold;
-  - laranja `#FF7900` (secundário `#FF9A3D`), azul secundário `#1260D8`,
-    superfícies `#FFFFFF` e `#F7F7F9`, texto `#17191F` e secundário
-    `#747982`;
-  - cartões brancos com raio de 16–22 px, borda discreta e sombra suave;
-  - navegação ativa laranja, botões e campos com estados consistentes;
+- Design system centralizado, **sempre em tema escuro** (`AppTheme.dark()`
+  é aplicada em `theme`, `darkTheme` e `themeMode: ThemeMode.dark` — a
+  aplicação não expõe escolha de tema):
+  - tipografia **Bricolage Grotesque** nos títulos e **Figtree** no corpo,
+    incluídas na aplicação (instâncias estáticas geradas a partir das
+    fontes variáveis OFL);
+  - destaque vermelho `#F2151C` (pressionado `#C10D13`, tinta `#FF4A50`),
+    fundo `#000000`, superfícies `#141414` · `#1F1F1F` · `#2B2B2B`, texto
+    `#FFFFFF` · `#B9B9B9` · `#858585`;
+  - estados verde `#2BD46F`, âmbar `#FFA41B` e ouro `#FFB81C` sobre fundos
+    escuros próprios (`#0D2417`, `#241704`, `#2A0709`);
+  - escala de raios 10 · 14 · 20 · 28 px, campos e cartões com contorno
+    discreto, botões e filtros em pílula (999 px);
+  - navegação inferior em cápsula vermelha com o item ativo em selo preto,
+    barra lateral `#0B0B0B` e trilho de administração vermelho;
   - splash com fotografia noturna de Nacala, capas de estabelecimentos e
     fotografias reais dos produtos carregadas pelos parceiros.
 - Layout responsivo: navegação inferior para cliente/parceiro/estafeta, trilho
-  lateral laranja para administração em mobile e *sidebar* em ecrãs largos.
+  lateral para administração em mobile e *sidebar* em ecrãs largos.
 - Estados de carregamento, vazio e erro em todos os ecrãs com dados remotos.
 - Feedback em português; alvos de toque ≥44 px; *safe areas* respeitadas.
 - Sessão persistida e revalidada em `/api/auth/me`; `401` limpa a sessão.
+- Notificações locais (barra de estado) com som próprio por evento, alimentadas
+  por *polling* a `/api/notifications`.
 
 ---
 
@@ -211,11 +235,14 @@ A antiga `Admin@1234` publicada no README já **não** nasce em produção.
 1. Entrar como administrador.
 2. Abrir **Parceiros → Registar parceiro**.
 3. Preencher os dados da conta do parceiro (email, telemóvel, palavra-passe
-   inicial) e do estabelecimento (nome, categoria, morada, taxa de entrega,
-   horário). O parceiro fica ativo e visível no catálogo de imediato.
+   inicial) e do estabelecimento (nome, categoria, **NUIT**, morada, taxa de
+   entrega, horário, fotografia carregada como ficheiro). O parceiro fica
+   ativo e visível no catálogo de imediato.
 
-Clientes e estafetas registam-se na app; a administração altera o papel de
-estafeta em **Utilizadores**.
+Os clientes registam-se na app. Os estafetas candidatam-se por **Candidaturas**
+(com NUIT e documentos) e a administração aprova antes de o painel de entregas
+desbloquear; o papel é promovido na aprovação (a alteração manual em
+**Utilizadores** continua disponível para migrações de contas antigas).
 
 > `SEED_DEMO=1` repõe o conjunto antigo de dados de demonstração (parceiros,
 > produtos, pedidos e cupões `BEMVINDO10`/`ENTREGA50`). Serve apenas para
@@ -292,24 +319,37 @@ flutter run --dart-define=API_BASE_URL=https://<o-teu-host>:8080
 Rotas principais (todas sob `/api`, JSON, `Authorization: Bearer <token>`):
 
 - **Auth**: `POST /auth/register`, `POST /auth/login`, `GET /auth/me`,
-  `PATCH /auth/profile`, `POST /auth/change-password`, `POST /auth/logout`.
+  `PATCH /auth/profile`, `POST /auth/change-password`, `POST /auth/logout`,
+  `POST /auth/recover` (código de recuperação), `POST /auth/recovery-code`,
+  `POST /auth/avatar`.
 - **Catálogo**: `GET /categories`, `GET /establishments`,
   `GET /establishments/<id>`, `GET /establishments/<id>/products`,
   `GET /products`, `GET /search`.
 - **Cliente**: `GET/POST /addresses`, `PATCH/DELETE /addresses/<id>`,
   `POST /coupons/validate`, `POST /orders`, `GET /orders`, `GET /orders/<id>`,
-  `POST /orders/<id>/cancel`, `POST /orders/<id>/review`.
+  `POST /orders/<id>/cancel`, `POST /orders/<id>/review`,
+  `GET/POST/DELETE /favorites[/<id>]`.
+- **Candidaturas**: `POST /applications` (estabelecimento ou estafeta, com
+  NUIT), `POST /applications/images` (documentos), `GET /applications/me`.
 - **Parceiro**: `GET /partner/summary`, `GET /partner/orders`,
   `POST /partner/orders/<id>/{accept,reject,preparing,ready}`,
   `GET/POST /partner/products`, `PATCH/DELETE /partner/products/<id>`,
-  `GET/PATCH /partner/establishment`.
+  `POST /partner/product-images`, `GET/PATCH /partner/establishment`.
 - **Estafeta**: `GET /delivery/assignments`, `GET /delivery/history`,
-  `POST /delivery/assignments/<id>/{accept,decline,complete}`.
+  `POST /delivery/assignments/<id>/{accept,decline,start,complete}`,
+  `POST /delivery/assignments/<id>/location` (GPS durante a entrega).
+- **Notificações**: `GET /notifications`, `POST /notifications/read`.
+- **Mensagens**: `GET/POST /conversations`, `GET/POST
+  /conversations/<id>/messages`, `POST /conversations/<id>/read`,
+  `GET/POST /call-logs` (só participantes; terceiros recebem 403).
 - **Admin**: `GET /admin/summary`, `GET /admin/partners`,
-  `POST /admin/partners` (registo de parceiro + estabelecimento),
+  `POST /admin/partners` (registo de parceiro + estabelecimento, com NUIT e
+  fotografia), `POST /admin/partner-images`,
   `POST /admin/partners/<id>/{approve,reject}`, `GET /admin/users`,
   `PATCH /admin/users/<id>`, `GET /admin/orders`, `GET /admin/audit`,
-  `POST/PATCH/DELETE /admin/categories...`.
+  `GET/POST /admin/applications`, `POST /admin/applications/<id>/{approve,
+  reject,changes}`, `GET/POST/PATCH/DELETE /admin/employees[/<id>]`,
+  `GET /admin/notifications`, `POST/PATCH/DELETE /admin/categories...`.
 
 **Paginação:** as listagens (`/establishments`, `/orders`,
 `/partner/orders`, `/admin/orders`, `/admin/users`) aceitam `limit`
@@ -334,22 +374,34 @@ dart test
 
 Estado atual:
 
-- `dart analyze lib test`: sem erros nem avisos (restam apenas sugestões
-  informativas `use_build_context_synchronously`).
-- `flutter test`: **44/44** a passar (formatação monetária, sessão, carrinho,
+- `dart analyze lib test server`: sem erros nem avisos (restam apenas 8
+  sugestões informativas externas `use_null_aware_elements` e
+  `use_build_context_synchronously`).
+- `flutter test`: **71/71** a passar (formatação monetária, sessão, carrinho,
   arranque/login/home, confirmação do checkout, repetição de pedido, menu de
-  conta do administrador, favoritos, notificações e localização).
-- `server`: `dart analyze lib bin test` sem problemas e `dart test` **29/29**
-  a passar (autenticação, autorização por papel, totais no servidor, cupões,
-  indisponibilidade de produtos, transições de parceiro/estafeta, isolamento
-  entre estabelecimentos, pagamentos mKesh, JSON inválido → 400, corpo
-  excessivo → 413, bloqueio de força-bruta 429 e `/health`).
+  conta do administrador, favoritos, notificações, localização, candidaturas
+  com NUIT/documentos, funcionários e permissões, produtos do parceiro,
+  splash e offline).
+- `server`: `dart analyze lib bin test` sem problemas e `dart test` **58/58**
+  a passar (autenticação, autorização por papel, permissões de funcionários,
+  candidaturas e aprovação, NUIT, documentos do estafeta, totais no servidor,
+  cupões, indisponibilidade de produtos, transições de parceiro/estafeta,
+  chat com bloqueio de terceiros, isolamento entre estabelecimentos,
+  pagamentos mKesh, JSON inválido → 400, corpo excessivo → 413, bloqueio de
+  força-bruta 429 e `/health`).
+- **Smoke E2E** (fluxos HTTP reais contra o servidor local com
+  `SEED_DEMO=1`): **99/99 verificações OK** cobrindo os TESTEs 1–16 do
+  specification (registo/login, candidaturas, aprovações, produtos,
+  funcionários e permissões, ciclo completo de pedido com mapa e GPS,
+  notificações, splash, funcionalidades antigas e limites de tentativas).
+  Script reutilizável em `tool/smoke_e2e.py` (ver "Limitações conhecidas").
 - O CI (`.github/workflows/ci.yml`) corre **os dois conjuntos**: Flutter
   (format + analyze + test) e servidor (format + analyze + test) em jobs
   separados.
 
-Os testes usam `test/fake_api.dart` (implementação falsa explícita) e uma base
-SQLite `:memory:` partilhada; nenhum teste depende de rede ou dados reais.
+Os testes usam `test/fake_api.dart` e `test/fake_image_picker.dart`
+(implementações falsas explícitas) e uma base SQLite `:memory:` partilhada;
+nenhum teste depende de rede ou dados reais.
 
 ---
 
@@ -370,8 +422,10 @@ flutter build apk --release --split-per-abi   # APKs por arquitetura
 flutter build appbundle --release             # Play Store
 ```
 
-Última build validada: `app-armeabi-v7a-release.apk` (16,5 MB),
-`app-arm64-v8a-release.apk` (19,1 MB), `app-x86_64-release.apk` (20,6 MB).
+Última build validada (16 Nov 2026): `app-armeabi-v7a-release.apk` (22,0 MB),
+`app-arm64-v8a-release.apk` (24,4 MB), `app-x86_64-release.apk` (25,9 MB) e o
+`app-release.apk` único com os três ABIs (63,3 MB) — todos assinados com a
+chave de release (`CN=Nacala Entrega`).
 
 > **Guarde o keystore e as palavras-passe em local seguro.** Sem eles não é
 > possível publicar atualizações na Play Store.
@@ -387,9 +441,12 @@ flutter build appbundle --release             # Play Store
   o utilizador é avisado no checkout. É necessária uma conta de comerciante e
   credenciais do fornecedor (API M-Pesa / e-Mola) para implementar o fluxo de
   cobrança e confirmação por *callback*.
-- **Imagens de produtos/estabelecimentos**: o modelo já suporta `image_url`, mas
-  não existe serviço de armazenamento nem *upload*. A UI usa um fallback
-  gráfico. Falta integrar armazenamento de objetos e validação de ficheiros.
+- **Imagens**: uploads locais funcionam (produtos, fotografia do parceiro,
+  avatar e documentos de candidatura ficam em `server/data/uploads`, com
+  validação de tipo/tamanho). Falta, para produção, **armazenamento
+  persistente** (o disco do Render é efémero: as imagens desaparecem no
+  redeploy) — integre um serviço de objetos (S3, Cloudinary, etc.) quando
+  houver credenciais.
 - **Mapa e GPS**: OpenStreetMap mostra o ponto do cliente e a posição do
   estafeta; o serviço OSRM calcula a rota e a previsão de chegada. A partilha
   inicia quando o estafeta toca em **Iniciar entrega** e exige permissão de
@@ -398,11 +455,15 @@ flutter build appbundle --release             # Play Store
   O APK deve apontar para uma API acessível pelos dois telemóveis via
   `--dart-define=API_BASE_URL=https://...` (a configuração `localhost` é apenas
   para desenvolvimento).
-- **Notificações push**: inexistentes.
+- **Notificações push (FCM/APNs)**: inexistentes. Existem notificações
+  locais no telemóvel (polling a `/api/notifications`); push automático
+  exigiria credenciais do fornecedor.
 - **Pagamentos/recibos e comissões da plataforma**: as métricas de vendas são
   reais; o modelo de comissão ainda não está definido.
-- **Reposição de palavra-passe por email/SMS**: só existe alteração de
-  palavra-passe autenticada (não há fornecedor de email/SMS configurado).
+- **Reposição de palavra-passe por email/SMS**: a reposição por **código de
+  recuperação** (exibido uma vez no registo, regenerável autenticadamente)
+  está implementada e testada; falta a entrega automática por email/SMS —
+  exige fornecedor (SMTP, Twilio, etc.) e credenciais.
 
 ---
 
@@ -427,7 +488,9 @@ flutter build appbundle --release             # Play Store
 
 - A pesquisa do catálogo é feita no servidor (insensível a acentos), mas a
   pesquisa dentro das listas de parceiro/admin é local ao ecrã.
-- Não há testes de integração end-to-end em dispositivo; a validação em
-  telemóvel é manual.
+- Não há testes de integração end-to-end em dispositivo; o **smoke E2E por
+  HTTP** (`tool/smoke_e2e.py`, 99 verificações contra um servidor local com
+  `SEED_DEMO=1` na porta 8099) cobre os fluxos de negócio e a validação da
+  UI em telemóvel é manual.
 - O limite de tentativas de login é em memória (por instância) — correto para
   o SQLite de instância única desta API.

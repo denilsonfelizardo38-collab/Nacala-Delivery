@@ -2,73 +2,46 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
-/// Tema Material 3 da Nacala Delivery, claro e escuro.
+/// Tema Material 3 da Nacala Delivery — tema escuro único.
 ///
-/// Identidade visual: laranja vivo `#FF7900` para ícones e destaques,
-/// laranja de leitura `#D95F00` para texto e botões em fundo claro
-/// (contraste AA), fundo `#F7F7F9` e cartões brancos. Tipografia Inter
-/// com hierarquia consistente
-/// (títulos SemiBold/Bold, corpo Regular, subtítulos Medium).
+/// Identidade visual escura "dark-first": fundo preto `#000000`, cartões
+/// `#141414`, elevações `#1F1F1F`, destaque vermelho `#F2151C`, texto
+/// `#FFFFFF` / `#B9B9B9` / `#858585`. Tipografia **Bricolage Grotesque**
+/// nos títulos (display) e **Figtree** no corpo, com hierarquia
+/// consistente (títulos Bold/ExtraBold, corpo Regular, subtítulos Medium).
+///
+/// Raios do sistema: 10 (sm) · 14 (md) · 20 (lg) · 28 (xl) · pill.
 abstract final class AppTheme {
-  static const String fontFamily = 'Inter';
+  /// Corpo da aplicação.
+  static const String fontFamily = 'Figtree';
 
-  static ThemeData light() => _build(
-    brightness: Brightness.light,
-    surface: AppColors.surface,
-    card: AppColors.bg,
-    ink: AppColors.ink,
-    muted: AppColors.muted,
-    border: AppColors.border,
-  );
+  /// Títulos e destaques (display).
+  static const String displayFontFamily = 'Bricolage Grotesque';
 
-  static ThemeData dark() => _build(
-    brightness: Brightness.dark,
-    surface: AppColors.darkBg,
-    card: AppColors.darkCard,
-    ink: AppColors.darkInk,
-    muted: AppColors.darkMuted,
-    border: AppColors.darkBorder,
-  );
+  static ThemeData dark() => _build();
 
-  static ThemeData _build({
-    required Brightness brightness,
-    required Color surface,
-    required Color card,
-    required Color ink,
-    required Color muted,
-    required Color border,
-  }) {
-    final isDark = brightness == Brightness.dark;
-    final primary = isDark ? const Color(0xFFFF9E45) : AppColors.textOrange;
-    final scheme = isDark
-        ? const ColorScheme.dark(
-            primary: Color(0xFFFF9E45),
-            onPrimary: Color(0xFF2B1500),
-            secondary: Color(0xFF6FA8F2),
-            onSecondary: Color(0xFF04182E),
-            surface: AppColors.darkBg,
-            onSurface: AppColors.darkInk,
-            error: Color(0xFFFF8A80),
-            onError: Color(0xFF2B0509),
-            outline: AppColors.darkBorder,
-          )
-        : const ColorScheme.light(
-            // O laranja de leitura (#D95F00) garante contraste de texto
-            // e botões sobre fundos claros; o laranja vivo (#FF7900)
-            // fica reservado a ícones e destaque.
-            primary: AppColors.textOrange,
-            onPrimary: Colors.white,
-            secondary: AppColors.secondary,
-            onSecondary: Colors.white,
-            surface: AppColors.bg,
-            onSurface: AppColors.ink,
-            error: AppColors.danger,
-            onError: Colors.white,
-            outline: AppColors.border,
-          );
+  static ThemeData _build() {
+    const surface = AppColors.darkBg;
+    const card = AppColors.darkCard;
+    const ink = AppColors.darkInk;
+    const muted = AppColors.darkMuted;
+    const border = AppColors.darkBorder;
+    const primary = AppColors.primary;
+
+    final scheme = const ColorScheme.dark(
+      primary: AppColors.primary,
+      onPrimary: Colors.white,
+      secondary: AppColors.secondary,
+      onSecondary: Color(0xFF04182E),
+      surface: AppColors.darkBg,
+      onSurface: AppColors.darkInk,
+      error: AppColors.danger,
+      onError: Colors.white,
+      outline: AppColors.darkBorder,
+    );
 
     final typography = Typography.material2021();
-    final base = isDark ? typography.white : typography.black;
+    final base = typography.white;
 
     TextStyle style(
       Color color,
@@ -76,49 +49,71 @@ abstract final class AppTheme {
       FontWeight? fontWeight,
       double height = 1.45,
       double? letterSpacing,
+      String? fontFamily,
     }) => TextStyle(
       color: color,
       fontSize: fontSize ?? 14,
       fontWeight: fontWeight ?? FontWeight.w400,
       height: height,
       letterSpacing: letterSpacing,
+      fontFamily: fontFamily ?? AppTheme.fontFamily,
+    );
+
+    TextStyle display(
+      Color color,
+      double fontSize, {
+      FontWeight fontWeight = FontWeight.w700,
+      double height = 1.15,
+      double? letterSpacing,
+    }) => style(
+      color,
+      fontSize,
+      fontWeight: fontWeight,
+      height: height,
+      letterSpacing: letterSpacing,
+      fontFamily: AppTheme.displayFontFamily,
     );
 
     final textTheme = base
         .apply(fontFamily: fontFamily)
         .copyWith(
-          displaySmall: style(
+          displaySmall: display(
             ink,
             30,
-            fontWeight: FontWeight.w700,
-            height: 1.12,
+            fontWeight: FontWeight.w800,
+            height: 1.1,
             letterSpacing: -0.6,
           ),
-          headlineSmall: style(
+          headlineSmall: display(
             ink,
             25,
-            fontWeight: FontWeight.w700,
-            height: 1.16,
+            fontWeight: FontWeight.w800,
+            height: 1.14,
             letterSpacing: -0.4,
           ),
-          titleLarge: style(
+          titleLarge: display(
             ink,
             22,
             fontWeight: FontWeight.w700,
-            height: 1.24,
+            height: 1.2,
             letterSpacing: -0.3,
           ),
-          titleMedium: style(
+          titleMedium: display(
             ink,
             17,
             fontWeight: FontWeight.w600,
-            height: 1.32,
+            height: 1.28,
           ),
-          titleSmall: style(ink, 15, fontWeight: FontWeight.w600, height: 1.35),
+          titleSmall: display(
+            ink,
+            15,
+            fontWeight: FontWeight.w600,
+            height: 1.3,
+          ),
           bodyLarge: style(ink, 16, height: 1.5),
           bodyMedium: style(ink, 14, height: 1.5),
           bodySmall: style(muted, 13, height: 1.5),
-          labelLarge: style(ink, 14, fontWeight: FontWeight.w600, height: 1.35),
+          labelLarge: style(ink, 14, fontWeight: FontWeight.w700, height: 1.35),
           labelSmall: style(
             muted,
             11,
@@ -130,7 +125,7 @@ abstract final class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
-      brightness: brightness,
+      brightness: Brightness.dark,
       fontFamily: fontFamily,
       colorScheme: scheme,
       scaffoldBackgroundColor: surface,
@@ -141,88 +136,88 @@ abstract final class AppTheme {
       visualDensity: VisualDensity.standard,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: card,
+        backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         foregroundColor: ink,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleSpacing: 20,
-        titleTextStyle: style(
+        titleTextStyle: display(
           ink,
           20,
-          fontWeight: FontWeight.w600,
-          height: 1.25,
+          fontWeight: FontWeight.w700,
+          height: 1.22,
           letterSpacing: -0.2,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: card,
+        fillColor: AppColors.darkElevated,
         hintStyle: style(muted, 14),
         labelStyle: style(muted, 13, fontWeight: FontWeight.w500),
-        floatingLabelStyle: style(primary, 13, fontWeight: FontWeight.w500),
+        floatingLabelStyle: style(primary, 13, fontWeight: FontWeight.w600),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: border),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: border),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: primary, width: 1.6),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: primary, width: 1.6),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: AppColors.danger),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.danger),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: AppColors.danger, width: 1.6),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.danger, width: 1.6),
         ),
         errorStyle: const TextStyle(color: AppColors.danger, fontSize: 12),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: card,
-        indicatorColor: isDark ? AppColors.darkElevated : AppColors.primarySoft,
+        backgroundColor: AppColors.darkElevated,
+        indicatorColor: AppColors.primary,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        height: 70,
+        height: 74,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
             fontFamily: fontFamily,
-            color: states.contains(WidgetState.selected) ? primary : muted,
+            color: states.contains(WidgetState.selected) ? Colors.white : muted,
           ),
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             size: 24,
-            color: states.contains(WidgetState.selected) ? primary : muted,
+            color: states.contains(WidgetState.selected) ? Colors.white : muted,
           ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: primary,
-          foregroundColor: scheme.onPrimary,
+          foregroundColor: Colors.white,
           disabledBackgroundColor: primary.withValues(alpha: 0.4),
-          disabledForegroundColor: scheme.onPrimary.withValues(alpha: 0.85),
+          disabledForegroundColor: Colors.white.withValues(alpha: 0.85),
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(999),
           ),
           textStyle: const TextStyle(
             fontSize: 15,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             fontFamily: fontFamily,
           ),
         ),
@@ -231,15 +226,15 @@ abstract final class AppTheme {
         backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: ink,
           minimumSize: const Size.fromHeight(52),
-          side: BorderSide(color: border),
+          side: const BorderSide(color: AppColors.darkElevatedHigh),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(999),
           ),
           textStyle: const TextStyle(
             fontSize: 14,
@@ -250,13 +245,11 @@ abstract final class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          // O esquema de cores resolve: laranja de leitura em claro,
-          // laranja claro em escuro — nunca o azul, fora da identidade.
-          foregroundColor: primary,
+          foregroundColor: AppColors.primarySecondary,
           minimumSize: const Size(44, 48),
           textStyle: const TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             fontFamily: fontFamily,
           ),
         ),
@@ -268,21 +261,21 @@ abstract final class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: card,
-        selectedColor: AppColors.primarySoft,
-        side: BorderSide(color: border),
+        backgroundColor: AppColors.darkElevated,
+        selectedColor: AppColors.darkPrimarySoft,
+        side: const BorderSide(color: AppColors.darkElevatedHigh),
         labelStyle: TextStyle(
           color: ink,
           fontSize: 13,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           fontFamily: fontFamily,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isDark ? AppColors.darkElevated : AppColors.ink,
+        backgroundColor: AppColors.darkElevatedHigh,
         contentTextStyle: const TextStyle(
           color: Colors.white,
           fontSize: 14,
@@ -290,10 +283,10 @@ abstract final class AppTheme {
         ),
         actionTextColor: Colors.white,
         insetPadding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: card,
+        backgroundColor: AppColors.darkCard,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         titleTextStyle: TextStyle(
@@ -301,7 +294,7 @@ abstract final class AppTheme {
           fontSize: 20,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
-          fontFamily: fontFamily,
+          fontFamily: displayFontFamily,
         ),
         contentTextStyle: TextStyle(
           color: muted,
@@ -311,21 +304,21 @@ abstract final class AppTheme {
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: card,
+        backgroundColor: AppColors.darkCard,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
       ),
       cardTheme: CardThemeData(
-        color: card,
+        color: AppColors.darkCard,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: border),
+          side: const BorderSide(color: AppColors.darkElevated),
         ),
       ),
       dividerTheme: DividerThemeData(color: border, thickness: 1, space: 1),
@@ -334,17 +327,19 @@ abstract final class AppTheme {
         thumbColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? Colors.white
-              : (isDark ? AppColors.darkMuted : AppColors.mutedLight),
+              : AppColors.darkMuted,
         ),
         trackColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? primary : border,
+          (states) => states.contains(WidgetState.selected)
+              ? primary
+              : AppColors.darkElevatedHigh,
         ),
       ),
       listTileTheme: ListTileThemeData(
         iconColor: muted,
         textColor: ink,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
@@ -356,29 +351,23 @@ extension AppThemeContext on BuildContext {
 
   Color get cardColor => Theme.of(this).cardColor;
 
-  Color get inkColor => isDarkMode ? AppColors.darkInk : AppColors.ink;
+  Color get inkColor => AppColors.darkInk;
 
-  Color get mutedColor => isDarkMode ? AppColors.darkMuted : AppColors.muted;
+  Color get mutedColor => AppColors.darkMuted;
 
-  Color get lineColor => isDarkMode ? AppColors.darkBorder : AppColors.border;
+  Color get lineColor => AppColors.darkBorder;
 
-  Color get primarySoftColor =>
-      isDarkMode ? AppColors.darkPrimarySoft : AppColors.primarySoft;
+  Color get primarySoftColor => AppColors.darkPrimarySoft;
 
-  Color get primarySoftStrongColor => isDarkMode
-      ? AppColors.darkPrimarySoftStrong
-      : AppColors.primarySoftStrong;
+  Color get primarySoftStrongColor => AppColors.darkPrimarySoftStrong;
 
   Color get accentColor => Theme.of(this).colorScheme.primary;
 
   Color get secondaryColor => Theme.of(this).colorScheme.secondary;
 
-  Color get successColor =>
-      isDarkMode ? const Color(0xFF4ED6A0) : AppColors.success;
+  Color get successColor => AppColors.success;
 
-  Color get dangerColor =>
-      isDarkMode ? const Color(0xFFFF8A80) : AppColors.danger;
+  Color get dangerColor => AppColors.dangerInk;
 
-  Color get warningColor =>
-      isDarkMode ? const Color(0xFFFFC45C) : AppColors.warning;
+  Color get warningColor => AppColors.warning;
 }

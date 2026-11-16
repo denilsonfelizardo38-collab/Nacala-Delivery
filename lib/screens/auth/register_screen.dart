@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 
 import '../../core/api_client.dart';
 import '../../core/formatters.dart';
 import '../../state/app_scope.dart';
+import '../../widgets/jb.dart';
+import '../../widgets/recovery_code.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,6 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
+  final _whatsapp = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
 
@@ -32,6 +36,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _name.dispose();
     _email.dispose();
     _phone.dispose();
+    _whatsapp.dispose();
     _password.dispose();
     _confirm.dispose();
     super.dispose();
@@ -48,15 +53,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      await AppScope.of(context).register(
+      final recoveryCode = await AppScope.of(context).register(
         name: _name.text.trim(),
         email: _email.text.trim(),
         phone: digitsOnly(_phone.text),
+        whatsapp: digitsOnly(_whatsapp.text),
         password: _password.text,
       );
 
       if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // Sem envio por email/SMS, o código de recuperação é mostrado
+        // uma única vez — obrigatório guardar antes de seguir para a Home.
+        if (recoveryCode != null && recoveryCode.isNotEmpty) {
+          await showRecoveryCodeDialog(context, code: recoveryCode);
+        }
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
       }
     } on ApiException catch (error) {
       if (mounted) {
@@ -177,7 +190,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(compact ? 22 : 28),
       child: SizedBox(
-        height: compact ? 225 : 590,
+        // Altura do painel hero: o conteúdo compacto (marca, selo,
+        // título e descrição) ocupa ~200 px, pelo que a caixa precisa
+        // de folga para o padding de 20 px em cada lado.
+        height: compact ? 248 : 590,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -320,14 +336,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Container(
       padding: EdgeInsets.all(wide ? 32 : 22),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(color: AppColors.border),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: AppColors.deepNavy.withValues(alpha: 0.055),
+            color: Color(0x73000000),
             blurRadius: 35,
-            offset: const Offset(0, 15),
+            offset: Offset(0, 15),
           ),
         ],
       ),
@@ -336,45 +352,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Criar conta',
-                        style: TextStyle(
-                          color: AppColors.deepNavy,
-                          fontSize: 27,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.8,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      const Text(
-                        'Preenche os teus dados para começar.',
-                        style: TextStyle(color: AppColors.muted, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 45,
-                  height: 45,
-                  decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.person_add_alt_1_rounded,
-                    color: AppColors.primaryPressed,
-                    size: 23,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 27),
+            // O cabeçalho do cartão ("Criar conta" + subtítulo + ícone)
+            // passou para o `page-head` da página (JbPageHeader).
+            const SizedBox(height: 6),
 
             _label('NOME COMPLETO'),
             TextFormField(
@@ -394,7 +374,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
 
             const SizedBox(height: 19),
-            _label('EMAIL'),
+            _label('EMAIL (OPCIONAL)'),
             TextFormField(
               controller: _email,
               keyboardType: TextInputType.emailAddress,
@@ -406,8 +386,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               validator: (value) {
                 final text = value?.trim() ?? '';
+                // Opcional: só valida o formato quando preenchido — sem
+                // email o servidor deriva um endereço interno ao telefone.
+                if (text.isEmpty) return null;
                 if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)) {
-                  return 'Indica um email válido.';
+                  return 'Indica um email válido ou deixa o campo vazio.';
                 }
                 return null;
               },
@@ -425,6 +408,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               validator: (value) {
                 final digits = digitsOnly(value ?? '');
+                if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(digits)) {
+                  return 'Número moçambicano inválido (9 dígitos).';
+                }
+                return null;
+              },
+            ),
+
+            const SizedBox(height: 19),
+            _label('WHATSAPP (OPCIONAL)'),
+            TextFormField(
+              controller: _whatsapp,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              decoration: _decoration(
+                hint: 'Diferente do telemóvel, se quiseres',
+                icon: Icons.chat_outlined,
+              ),
+              validator: (value) {
+                final text = value?.trim() ?? '';
+                if (text.isEmpty) return null;
+                final digits = digitsOnly(text);
                 if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(digits)) {
                   return 'Número moçambicano inválido (9 dígitos).';
                 }
@@ -507,11 +511,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   textStyle: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
+                    fontFamily: AppTheme.fontFamily,
                   ),
                 ),
                 child: _submitting
@@ -569,7 +574,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   onPressed: () => Navigator.of(context).maybePop(),
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.primaryPressed,
-                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontFamily: AppTheme.fontFamily,
+                    ),
                   ),
                   child: const Text('Entrar'),
                 ),
@@ -586,7 +594,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: AppColors.dangerSoft,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.dangerBorder),
       ),
       child: Row(
@@ -617,53 +625,99 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final wide = width >= 850;
+    final horizontal = wide ? 30.0 : 18.0;
+    // Insets da barra do sistema, aplicados como padding inferior do
+    // conteúdo porque o SafeArea está com `bottom: false` (padrão Já
+    // Bazou) — o comportamento de rolagem fica igual ao original.
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: wide ? 30 : 18,
-              vertical: 22,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1120),
-              child: wide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 28),
-                            child: _heroPanel(compact: false),
-                          ),
-                        ),
-                        Expanded(flex: 6, child: _formCard(wide: true)),
-                      ],
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _heroPanel(compact: true),
-                        const SizedBox(height: 20),
-                        _formCard(wide: false),
-                        const SizedBox(height: 22),
-                        const Text(
-                          'NACALA DELIVERY  •  FEITO PARA NACALA-PORTO',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: AppColors.mutedLight,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                      ],
+        bottom: false,
+        child: Column(
+          children: [
+            // CABEÇALHO DA PÁGINA — padrão `page-head` do referencial:
+            // botão circular de voltar, título display, subtítulo e o
+            // ícone do formulário como acção secundária.
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: JbPageHeader(
+                  title: 'Criar conta',
+                  subtitle: 'Preenche os teus dados para começar.',
+                  padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 6),
+                  onBack: Navigator.of(context).canPop()
+                      ? () => Navigator.of(context).maybePop()
+                      : null,
+                  trailing: Container(
+                    width: 45,
+                    height: 45,
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(14),
                     ),
+                    child: const Icon(
+                      Icons.person_add_alt_1_rounded,
+                      color: AppColors.primaryPressed,
+                      size: 23,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    22,
+                    horizontal,
+                    22 + bottomInset,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1120),
+                    child: wide
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 28),
+                                  child: _heroPanel(compact: false),
+                                ),
+                              ),
+                              Expanded(
+                                flex: 6,
+                                child: _formCard(wide: true),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _heroPanel(compact: true),
+                              const SizedBox(height: 20),
+                              _formCard(wide: false),
+                              const SizedBox(height: 22),
+                              const Text(
+                                'NACALA DELIVERY  •  FEITO PARA NACALA-PORTO',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AppColors.mutedLight,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

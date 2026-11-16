@@ -6,6 +6,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 class AdminAuditScreen extends StatefulWidget {
   const AdminAuditScreen({super.key});
@@ -35,56 +36,67 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Auditoria'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: () async => _reload(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            children: [
-              Text(
-                'Registo de ações administrativas e de negócio. '
-                'Os registos são apenas de leitura.',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: context.mutedColor),
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Auditoria',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              AsyncSection<List<AuditLog>>(
-                future: _future,
-                onRetry: _reload,
-                builder: (context, logs) {
-                  if (logs.isEmpty) {
-                    return const EmptyState(
-                      icon: Icons.history_rounded,
-                      title: 'Sem registos',
-                      message: 'Ainda não há ações registadas.',
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final log in logs)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _AuditTile(log: log),
-                        ),
-                    ],
-                  );
-                },
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => _reload(),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  children: [
+                    Text(
+                      'Registo de ações administrativas e de negócio. '
+                      'Os registos são apenas de leitura.',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: context.mutedColor),
+                    ),
+                    const SizedBox(height: 14),
+                    AsyncSection<List<AuditLog>>(
+                      future: _future,
+                      onRetry: _reload,
+                      builder: (context, logs) {
+                        if (logs.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.history_rounded,
+                            title: 'Sem registos',
+                            message: 'Ainda não há ações registadas.',
+                          );
+                        }
+                        return Column(
+                          children: [
+                            for (final log in logs)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _AuditTile(log: log),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

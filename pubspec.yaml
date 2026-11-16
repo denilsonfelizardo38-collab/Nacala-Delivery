@@ -21,11 +21,15 @@ dependencies:
   image_picker: ^1.2.4
   geocoding: ^5.0.1
   url_launcher: ^6.3.2
+  connectivity_plus: ^7.3.1
+  flutter_local_notifications: ^19.4.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Seletor de imagens simulado nos testes de widget (memória, sem disco).
+  image_picker_platform_interface: ^2.11.0
 
 flutter:
   uses-material-design: true
@@ -44,3 +48,28 @@ flutter:
           weight: 600
         - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
+
+    # Corpo — Figtree (mesma família do referencial), pesos estáticos
+    # gerados a partir da fonte variável oficial (OFL).
+    - family: Figtree
+      fonts:
+        - asset: assets/fonts/Figtree-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Figtree-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Figtree-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Figtree-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Figtree-ExtraBold.ttf
+          weight: 800
+
+    # Títulos — Bricolage Grotesque (display), pesos estáticos.
+    - family: Bricolage Grotesque
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BricolageGrotesque-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/BricolageGrotesque-ExtraBold.ttf
+          weight: 800

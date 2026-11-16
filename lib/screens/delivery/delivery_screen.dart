@@ -12,6 +12,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 import '../../widgets/live_delivery_map.dart';
 
 class DeliveryScreen extends StatefulWidget {
@@ -50,6 +51,68 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       _historyFuture = api.deliveryHistory();
     });
     unawaited(_resumeLocationSharing(assignments));
+  }
+
+  /// Abre o chat com o cliente da entrega.
+  Future<void> _openChatWithCustomer(
+    BuildContext context,
+    DeliveryAssignment assignment,
+  ) async {
+    if (assignment.customerId == null) {
+      showAppSnack(context, 'Não foi possível iniciar a conversa.');
+      return;
+    }
+    final api = AppScope.of(context).api;
+    try {
+      final conversation = await api.createConversation(
+        otherUserId: assignment.customerId!,
+        orderId: assignment.orderId,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushNamed(
+        '/chat',
+        arguments: {
+          'id': conversation.id,
+          'order_id': assignment.orderId,
+          'other_user_id': assignment.customerId,
+          'other_user_name': 'Cliente',
+          'other_role': 'customer',
+        },
+      );
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
+  /// Abre o chat com o parceiro (dono do estabelecimento) da entrega.
+  Future<void> _openChatWithPartner(
+    BuildContext context,
+    DeliveryAssignment assignment,
+  ) async {
+    if (assignment.establishmentOwnerId == null) {
+      showAppSnack(context, 'Não foi possível iniciar a conversa.');
+      return;
+    }
+    final api = AppScope.of(context).api;
+    try {
+      final conversation = await api.createConversation(
+        otherUserId: assignment.establishmentOwnerId!,
+        orderId: assignment.orderId,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushNamed(
+        '/chat',
+        arguments: {
+          'id': conversation.id,
+          'order_id': assignment.orderId,
+          'other_user_id': assignment.establishmentOwnerId,
+          'other_user_name': assignment.establishmentName,
+          'other_role': 'partner',
+        },
+      );
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
   }
 
   Future<void> _resumeLocationSharing(
@@ -165,11 +228,11 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     if (action == 'decline') {
       final confirmed = await showConfirmDialog(
         context,
-        title: 'Recusar entrega',
+        title: 'Desistir da entrega',
         message:
             'A entrega ${assignment.number} voltará a ficar disponível '
             'para outro estafeta.',
-        confirmLabel: 'Recusar',
+        confirmLabel: 'Desistir',
         destructive: true,
       );
       if (!confirmed || !mounted) return;
@@ -224,7 +287,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
         'accept' => 'Entrega aceite. Recolha o pedido no parceiro.',
         'start' => 'Entrega iniciada. A sua localização está a ser partilhada.',
         'resume' => 'Partilha da localização retomada.',
-        'decline' => 'Entrega recusada.',
+        'decline' => 'Desistiu da entrega. Ela voltou a ficar disponível.',
         'complete' => 'Entrega concluída.',
         _ => 'Entrega atualizada.',
       });
@@ -239,38 +302,46 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Entregas'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
+        bottom: false,
         child: Column(
           children: [
+            JbPageHeader(
+              title: 'Entregas',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: Row(
-                children: [
-                  for (var i = 0; i < _tabs.length; i++) ...[
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _Tab(
-                          label: _tabs[i],
-                          selected: _tab == i,
-                          onTap: () => setState(() => _tab = i),
+              child: SizedBox(
+                height: 40,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < _tabs.length; i++) ...[
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChipPill(
+                            label: _tabs[i],
+                            selected: _tab == i,
+                            onTap: () => setState(() => _tab = i),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             Expanded(
@@ -322,11 +393,16 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                 child: _AssignmentCard(
                   assignment: assignment,
                   busy: _busyId == assignment.id,
-                  actions: [
-                    ('accept', 'Aceitar entrega'),
-                    ('decline', 'Recusar'),
-                  ],
+                  // Só se pode "desistir" de uma entrega já aceite — o
+                  // backend exige `courier_id = me` no decline.
+                  actions: const [('accept', 'Aceitar entrega')],
                   onAction: (action) => _act(assignment, action),
+                  onChatWithCustomer: assignment.customerId != null
+                      ? () => _openChatWithCustomer(context, assignment)
+                      : null,
+                  onChatWithPartner: assignment.establishmentOwnerId != null
+                      ? () => _openChatWithPartner(context, assignment)
+                      : null,
                 ),
               ),
           ],
@@ -375,16 +451,24 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                               assignment.courierLatitude!,
                               assignment.courierLongitude!,
                             )),
-                  actions: assignment.orderStatus == 'on_the_way'
-                      ? [
-                          if (!_sharingAssignmentIds.contains(assignment.id))
-                            ('resume', 'Ativar localização'),
-                          ('complete', 'Concluir entrega'),
-                        ]
-                      : assignment.orderStatus == 'ready'
-                      ? [('start', 'Iniciar entrega')]
-                      : const [],
+                  actions: [
+                    if (assignment.orderStatus == 'on_the_way') ...[
+                      if (!_sharingAssignmentIds.contains(assignment.id))
+                        ('resume', 'Ativar localização'),
+                      ('complete', 'Concluir entrega'),
+                    ] else if (assignment.orderStatus == 'ready')
+                      ('start', 'Iniciar entrega'),
+                    // Desistir devolve a entrega ao pool e, se já estava
+                    // a caminho, recoloca o pedido como "pronto".
+                    ('decline', 'Desistir'),
+                  ],
                   onAction: (action) => _act(assignment, action),
+                  onChatWithCustomer: assignment.customerId != null
+                      ? () => _openChatWithCustomer(context, assignment)
+                      : null,
+                  onChatWithPartner: assignment.establishmentOwnerId != null
+                      ? () => _openChatWithPartner(context, assignment)
+                      : null,
                 ),
               ),
           ],
@@ -430,53 +514,17 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                   busy: false,
                   actions: const [],
                   onAction: (_) {},
+                  onChatWithCustomer: assignment.customerId != null
+                      ? () => _openChatWithCustomer(context, assignment)
+                      : null,
+                  onChatWithPartner: assignment.establishmentOwnerId != null
+                      ? () => _openChatWithPartner(context, assignment)
+                      : null,
                 ),
               ),
           ],
         );
       },
-    );
-  }
-}
-
-class _Tab extends StatelessWidget {
-  const _Tab({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? context.accentColor : context.cardColor,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? context.accentColor : context.lineColor,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : context.inkColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -488,6 +536,8 @@ class _AssignmentCard extends StatelessWidget {
     required this.actions,
     required this.onAction,
     this.courierLocation,
+    this.onChatWithCustomer,
+    this.onChatWithPartner,
   });
 
   final DeliveryAssignment assignment;
@@ -495,6 +545,8 @@ class _AssignmentCard extends StatelessWidget {
   final List<(String, String)> actions;
   final ValueChanged<String> onAction;
   final LatLng? courierLocation;
+  final VoidCallback? onChatWithCustomer;
+  final VoidCallback? onChatWithPartner;
 
   @override
   Widget build(BuildContext context) {
@@ -535,6 +587,9 @@ class _AssignmentCard extends StatelessWidget {
             label: 'Recolha',
             title: assignment.establishmentName,
             subtitle: assignment.establishmentAddress ?? '',
+            phone: assignment.establishmentPhone,
+            whatsappMessage:
+                'Olá! Falo sobre a recolha do pedido ${assignment.number}.',
           ),
           Container(
             margin: const EdgeInsets.only(left: 15),
@@ -547,6 +602,9 @@ class _AssignmentCard extends StatelessWidget {
             label: 'Entrega · ${assignment.addressLabel ?? 'Cliente'}',
             title: assignment.addressLine,
             subtitle: assignment.customerPhone ?? '',
+            phone: assignment.customerPhone,
+            whatsappMessage:
+                'Olá! Falo sobre a entrega do pedido ${assignment.number}.',
           ),
           if (assignment.orderStatus == 'on_the_way' &&
               assignment.addressLatitude != null &&
@@ -585,6 +643,35 @@ class _AssignmentCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (assignment.customerId != null && onChatWithCustomer != null)
+                OutlinedButton.icon(
+                  onPressed: onChatWithCustomer,
+                  icon: const Icon(Icons.message_rounded, size: 18),
+                  label: const Text('Cliente'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                  ),
+                ),
+              if (assignment.establishmentOwnerId != null && onChatWithPartner != null)
+                OutlinedButton.icon(
+                  onPressed: onChatWithPartner,
+                  icon: const Icon(Icons.storefront_rounded, size: 18),
+                  label: const Text('Parceiro'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 44),
+                    foregroundColor: AppColors.success,
+                    side: const BorderSide(color: AppColors.success),
+                  ),
+                ),
             ],
           ),
           if (actions.isNotEmpty) ...[
@@ -644,12 +731,19 @@ class _RouteRow extends StatelessWidget {
     required this.label,
     required this.title,
     required this.subtitle,
+    this.phone,
+    this.whatsappMessage,
   });
 
   final IconData icon;
   final String label;
   final String title;
   final String subtitle;
+
+  /// Quando definido, mostra as ações de ligação (telefone + WhatsApp)
+  /// para este contacto — o número deixa de ser apenas texto.
+  final String? phone;
+  final String? whatsappMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -661,7 +755,7 @@ class _RouteRow extends StatelessWidget {
           height: 32,
           decoration: BoxDecoration(
             color: AppColors.primarySoft,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 17, color: AppColors.primary),
         ),
@@ -683,6 +777,34 @@ class _RouteRow extends StatelessWidget {
             ],
           ),
         ),
+        if (phone != null && phone!.isNotEmpty)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Ligar',
+                onPressed: () => launchCall(context, phone: phone!),
+                icon: const Icon(
+                  Icons.call_rounded,
+                  color: AppColors.success,
+                  size: 20,
+                ),
+              ),
+              IconButton(
+                tooltip: 'WhatsApp',
+                onPressed: () => launchWhatsApp(
+                  context,
+                  phone: phone!,
+                  message: whatsappMessage,
+                ),
+                icon: const Icon(
+                  Icons.chat_rounded,
+                  color: AppColors.success,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }

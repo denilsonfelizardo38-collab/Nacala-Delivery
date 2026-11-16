@@ -16,7 +16,9 @@ import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/address_dialog.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 import '../../widgets/password_dialog.dart';
+import '../../widgets/recovery_code.dart';
 import 'favorites_screen.dart';
 import 'notifications_screen.dart';
 import 'support_info_screen.dart';
@@ -72,6 +74,7 @@ class _AccountScreenState extends State<AccountScreen> {
         name: user.name,
         phone: user.phone,
         email: user.email,
+        whatsapp: user.whatsapp ?? '',
         avatarUrl: user.avatarUrl,
       ),
     );
@@ -102,6 +105,7 @@ class _AccountScreenState extends State<AccountScreen> {
         name: input.name,
         phone: digitsOnly(input.phone),
         email: input.email,
+        whatsapp: digitsOnly(input.whatsapp),
       );
 
       if (mounted) {
@@ -247,69 +251,30 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   void _leaveGuestMode() {
-    AppScope.of(context).exitGuestMode();
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    // Convidado: escolher tipo de conta (Entrar / Criar conta).
+    Navigator.of(context).pushNamed('/roles', arguments: 'login');
   }
 
-  /// Escolha do tema (sistema, claro ou escuro) numa folha inferior; a
-  /// alteração aplica-se imediatamente e fica guardada no dispositivo.
-  Future<void> _openThemePicker() async {
+  /// Gera um novo código de recuperação (o anterior deixa de valer) e
+  /// mostra-o uma única vez, para o utilizador guardar.
+  Future<void> _regenerateRecoveryCode() async {
     final state = AppScope.of(context);
-    final current = state.themeSetting;
-    final selected = await showModalBottomSheet<ThemeSetting>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 12, 20, 4),
-              child: Text(
-                'Tema da aplicação',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-              ),
-            ),
-            for (final option in ThemeSetting.values)
-              ListTile(
-                leading: Icon(switch (option) {
-                  ThemeSetting.system => Icons.brightness_auto_rounded,
-                  ThemeSetting.light => Icons.light_mode_outlined,
-                  ThemeSetting.dark => Icons.dark_mode_outlined,
-                }),
-                title: Text(
-                  switch (option) {
-                    ThemeSetting.system => 'Sistema',
-                    ThemeSetting.light => 'Claro',
-                    ThemeSetting.dark => 'Escuro',
-                  },
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(
-                  switch (option) {
-                    ThemeSetting.system => 'Segue a definição do telemóvel',
-                    ThemeSetting.light => 'Fundo claro em todas as áreas',
-                    ThemeSetting.dark =>
-                      'Conforto à noite e poupança de bateria',
-                  },
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: sheetContext.mutedColor,
-                  ),
-                ),
-                trailing: option == current
-                    ? const Icon(Icons.check_rounded, color: AppColors.primary)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop(option),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Gerar novo código?',
+      message:
+          'O código atual deixa de valer. O novo é mostrado uma única vez — '
+          'guarde-o antes de fechar.',
+      confirmLabel: 'Gerar novo código',
     );
-    if (selected != null) state.setThemeSetting(selected);
+    if (!confirmed || !mounted) return;
+    try {
+      final code = await state.regenerateRecoveryCode();
+      if (!mounted || code.isEmpty) return;
+      await showRecoveryCodeDialog(context, code: code);
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
   }
 
   @override
@@ -318,205 +283,208 @@ class _AccountScreenState extends State<AccountScreen> {
     final user = state.user;
 
     if (user == null) {
-      if (state.isGuest) {
-        return _buildGuestView(context);
+      // Só há "a carregar" durante o arranque; qualquer outro estado sem
+      // conta (convidado ou sessão terminada) mostra a entrada convidado.
+      if (state.status == SessionStatus.loading) {
+        return const Scaffold(
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                JbPageHeader(title: 'A minha conta'),
+                Expanded(child: Center(child: LoadingBlock())),
+              ],
+            ),
+          ),
+        );
       }
 
-      return const Scaffold(body: Center(child: LoadingBlock()));
+      return _buildGuestView(context);
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('A minha conta'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          color: AppColors.primary,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 30),
-            children: [
-              _ProfileHeader(
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                roleLabel: user.roleLabel,
-                avatarUrl: user.avatarUrl,
-              ),
-
-              const SizedBox(height: 14),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _QuickAction(
-                      icon: Icons.edit_outlined,
-                      label: 'Editar perfil',
-                      onTap: _editProfile,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _QuickAction(
-                      icon: Icons.lock_outline_rounded,
-                      label: 'Palavra-passe',
-                      onTap: _changePassword,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 28),
-
-              SectionTitle(
-                title: 'As minhas moradas',
-                subtitle: 'Locais guardados para as entregas',
-                actionLabel: 'Adicionar',
-                onAction: _addAddress,
-              ),
-
-              const SizedBox(height: 12),
-
-              if (state.addresses.isEmpty)
-                EmptyState(
-                  icon: Icons.location_off_outlined,
-                  title: 'Ainda não tens moradas',
-                  message:
-                      'Adiciona uma morada para facilitar os próximos pedidos.',
-                  actionLabel: 'Adicionar morada',
-                  onAction: _addAddress,
-                )
-              else
-                for (final address in state.addresses)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _AddressCard(
-                      address: address,
-                      onEdit: () => _editAddress(address),
-                      onDelete: () => _deleteAddress(address),
-                    ),
-                  ),
-
-              const SizedBox(height: 22),
-
-              _LinkCard(
-                icon: Icons.favorite_rounded,
-                title: 'Favoritos',
-                subtitle: 'Restaurantes que guardaste',
-                onTap: () => _open(const FavoritesScreen()),
-              ),
-
-              const SizedBox(height: 22),
-
-              SectionTitle(
-                title: 'Preferências e ajuda',
-                subtitle: 'Tema, notificações e informação útil',
-              ),
-
-              const SizedBox(height: 12),
-
-              _LinkCard(
-                icon: Icons.contrast_rounded,
-                title: 'Tema da aplicação',
-                subtitle: switch (state.themeSetting) {
-                  ThemeSetting.system => 'Sistema — segue o telemóvel',
-                  ThemeSetting.light => 'Claro',
-                  ThemeSetting.dark => 'Escuro',
-                },
-                onTap: _openThemePicker,
-              ),
-              const SizedBox(height: 10),
-              _LinkCard(
-                icon: Icons.notifications_none_rounded,
-                title: 'Notificações',
-                subtitle: 'O que aconteceu nos teus pedidos',
-                onTap: () => _open(const NotificationsScreen()),
-              ),
-              const SizedBox(height: 10),
-              _LinkCard(
-                icon: Icons.payments_outlined,
-                title: 'Métodos de pagamento',
-                subtitle: 'M-Pesa, e-Mola e dinheiro na entrega',
-                onTap: () => _open(const PaymentMethodsScreen()),
-              ),
-              const SizedBox(height: 10),
-              _LinkCard(
-                icon: Icons.help_outline_rounded,
-                title: 'Ajuda e suporte',
-                subtitle: 'Perguntas frequentes e contacto',
-                onTap: () => _open(const HelpSupportScreen()),
-              ),
-              const SizedBox(height: 10),
-              _LinkCard(
-                icon: Icons.article_outlined,
-                title: 'Termos e condições',
-                subtitle: 'Regras de uso da plataforma',
-                onTap: () => _open(const TermsScreen()),
-              ),
-              const SizedBox(height: 10),
-              _LinkCard(
-                icon: Icons.shield_outlined,
-                title: 'Política de privacidade',
-                subtitle: 'Como tratamos os teus dados',
-                onTap: () => _open(const PrivacyScreen()),
-              ),
-              const SizedBox(height: 18),
-              _LinkCard(
-                icon: Icons.switch_account_rounded,
-                title: 'Área de parceiro, estafeta ou administração',
-                subtitle: 'Entra com a conta própria da tua área',
-                onTap: _openAreaExchange,
-              ),
-
-              const SizedBox(height: 22),
-
-              const SectionTitle(title: 'Aplicação'),
-
-              const SizedBox(height: 12),
-
-              _AppInfoCard(),
-
-              const SizedBox(height: 24),
-
-              OutlinedButton.icon(
-                onPressed: _logout,
-                icon: const Icon(Icons.logout_rounded, size: 18),
-                label: const Text('Terminar sessão'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: context.accentColor,
-                  side: BorderSide(color: context.accentColor),
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'A minha conta',
+              trailing: Material(
+                color: AppColors.darkCard,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'Atualizar',
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded, size: 21),
+                  color: context.inkColor,
+                  style: IconButton.styleFrom(shape: const CircleBorder()),
                 ),
               ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                color: AppColors.primary,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(18, 4, 18, 30),
+                  children: [
+                    _ProfileHeader(
+                      name: user.name,
+                      email: user.email,
+                      phone: user.phone,
+                      roleLabel: user.roleLabel,
+                      avatarUrl: user.avatarUrl,
+                    ),
 
-              const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-              Center(
-                child: Text(
-                  'NACALA DELIVERY',
-                  style: TextStyle(
-                    color: context.mutedColor.withValues(alpha: 0.65),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 2,
-                  ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _QuickAction(
+                            icon: Icons.edit_outlined,
+                            label: 'Editar perfil',
+                            onTap: _editProfile,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _QuickAction(
+                            icon: Icons.lock_outline_rounded,
+                            label: 'Palavra-passe',
+                            onTap: _changePassword,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    _LinkCard(
+                      icon: Icons.password_rounded,
+                      title: 'Código de recuperação',
+                      subtitle: 'Gera um novo código para repor a palavra-passe',
+                      onTap: _regenerateRecoveryCode,
+                    ),
+                    const SizedBox(height: 10),
+
+                    JbSectionHeader(
+                      title: 'As minhas moradas',
+                      actionLabel: 'Adicionar',
+                      onAction: _addAddress,
+                    ),
+
+                    if (state.addresses.isEmpty)
+                      EmptyState(
+                        icon: Icons.location_off_outlined,
+                        title: 'Ainda não tens moradas',
+                        message: 'Adiciona uma morada para facilitar os próximos pedidos.',
+                        actionLabel: 'Adicionar morada',
+                        onAction: _addAddress,
+                      )
+                    else
+                      for (final address in state.addresses)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _AddressCard(
+                            address: address,
+                            onEdit: () => _editAddress(address),
+                            onDelete: () => _deleteAddress(address),
+                          ),
+                        ),
+
+                    const SizedBox(height: 22),
+
+                    _LinkCard(
+                      icon: Icons.favorite_rounded,
+                      title: 'Favoritos',
+                      subtitle: 'Restaurantes que guardaste',
+                      onTap: () => _open(const FavoritesScreen()),
+                    ),
+
+                    JbSectionHeader(title: 'Preferências e ajuda'),
+
+                    _LinkCard(
+                      icon: Icons.notifications_none_rounded,
+                      title: 'Notificações',
+                      subtitle: 'O que aconteceu nos teus pedidos',
+                      onTap: () => _open(const NotificationsScreen()),
+                    ),
+                    const SizedBox(height: 10),
+                    _LinkCard(
+                      icon: Icons.payments_outlined,
+                      title: 'Métodos de pagamento',
+                      subtitle: 'M-Pesa, e-Mola e dinheiro na entrega',
+                      onTap: () => _open(const PaymentMethodsScreen()),
+                    ),
+                    const SizedBox(height: 10),
+                    _LinkCard(
+                      icon: Icons.help_outline_rounded,
+                      title: 'Ajuda e suporte',
+                      subtitle: 'Perguntas frequentes e contacto',
+                      onTap: () => _open(const HelpSupportScreen()),
+                    ),
+                    const SizedBox(height: 10),
+                    _LinkCard(
+                      icon: Icons.article_outlined,
+                      title: 'Termos e condições',
+                      subtitle: 'Regras de uso da plataforma',
+                      onTap: () => _open(const TermsScreen()),
+                    ),
+                    const SizedBox(height: 10),
+                    _LinkCard(
+                      icon: Icons.shield_outlined,
+                      title: 'Política de privacidade',
+                      subtitle: 'Como tratamos os teus dados',
+                      onTap: () => _open(const PrivacyScreen()),
+                    ),
+                    const SizedBox(height: 18),
+                    _LinkCard(
+                      icon: Icons.switch_account_rounded,
+                      title: 'Área de parceiro, estafeta ou administração',
+                      subtitle: 'Entra com a conta própria da tua área',
+                      onTap: _openAreaExchange,
+                    ),
+
+                    const JbSectionHeader(title: 'Aplicação'),
+
+                    _AppInfoCard(),
+
+                    const SizedBox(height: 24),
+
+                    OutlinedButton.icon(
+                      onPressed: _logout,
+                      icon: const Icon(Icons.logout_rounded, size: 18),
+                      label: const Text('Terminar sessão'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: context.accentColor,
+                        side: BorderSide(color: context.accentColor),
+                        minimumSize: const Size.fromHeight(50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    Center(
+                      child: Text(
+                        'NACALA DELIVERY',
+                        style: TextStyle(
+                          color: context.mutedColor.withValues(alpha: 0.65),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -524,64 +492,76 @@ class _AccountScreenState extends State<AccountScreen> {
 
   Widget _buildGuestView(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('A tua conta')),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(22),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: AppCard(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Icon(
-                      Icons.person_outline_rounded,
-                      color: AppColors.primary,
-                      size: 38,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Estás a explorar como convidado',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 9),
-                  Text(
-                    'Podes descobrir lojas e produtos. Para fazer pedidos '
-                    'e acompanhar entregas, entra ou cria uma conta.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: context.mutedColor, height: 1.5),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: _leaveGuestMode,
-                      icon: const Icon(Icons.login_rounded),
-                      label: const Text('Entrar ou criar conta'),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            const JbPageHeader(title: 'A tua conta'),
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(22),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: AppCard(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 76,
+                            height: 76,
+                            decoration: BoxDecoration(
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                            child: const Icon(
+                              Icons.person_outline_rounded,
+                              color: AppColors.primary,
+                              size: 38,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Estás a explorar como convidado',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 9),
+                          Text(
+                            'Podes descobrir lojas e produtos. Para fazer pedidos '
+                            'e acompanhar entregas, entra ou cria uma conta.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: context.mutedColor,
+                                  height: 1.5,
+                                ),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _leaveGuestMode,
+                              icon: const Icon(Icons.login_rounded),
+                              label: const Text('Entrar ou criar conta'),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -628,8 +608,14 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                   widget.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontFamily: AppTheme.displayFontFamily,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                    letterSpacing: -0.4,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -716,7 +702,7 @@ class _QuickAction extends StatelessWidget {
         minimumSize: const Size.fromHeight(48),
         padding: const EdgeInsets.symmetric(horizontal: 10),
         side: BorderSide(color: context.lineColor),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
@@ -747,7 +733,7 @@ class _AddressCard extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
               isWork ? Icons.work_outline_rounded : Icons.home_outlined,
@@ -931,12 +917,16 @@ class _ProfileInput {
     required this.name,
     required this.phone,
     required this.email,
+    required this.whatsapp,
     this.pickedImage,
   });
 
   final String name;
   final String phone;
   final String email;
+
+  /// WhatsApp (opcional): vazio limpa o campo no servidor.
+  final String whatsapp;
   final XFile? pickedImage;
 }
 
@@ -945,12 +935,14 @@ class _ProfileDialog extends StatefulWidget {
     required this.name,
     required this.phone,
     required this.email,
+    this.whatsapp = '',
     this.avatarUrl,
   });
 
   final String name;
   final String phone;
   final String email;
+  final String whatsapp;
   final String? avatarUrl;
 
   @override
@@ -964,6 +956,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
   late final TextEditingController _name;
   late final TextEditingController _phone;
   late final TextEditingController _email;
+  late final TextEditingController _whatsapp;
   XFile? _pickedImage;
 
   @override
@@ -972,6 +965,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     _name = TextEditingController(text: widget.name);
     _phone = TextEditingController(text: widget.phone);
     _email = TextEditingController(text: widget.email);
+    _whatsapp = TextEditingController(text: widget.whatsapp);
   }
 
   @override
@@ -979,6 +973,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     _name.dispose();
     _phone.dispose();
     _email.dispose();
+    _whatsapp.dispose();
     super.dispose();
   }
 
@@ -1155,6 +1150,29 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
+                  controller: _whatsapp,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  maxLength: 9,
+                  decoration: const InputDecoration(
+                    labelText: 'WhatsApp (opcional)',
+                    counterText: '',
+                    prefixIcon: Icon(Icons.chat_outlined),
+                    helperText:
+                        'Deixe vazio para não ter WhatsApp ou para limpar.',
+                    helperMaxLines: 2,
+                  ),
+                  validator: (value) {
+                    final text = value?.trim() ?? '';
+                    if (text.isEmpty) return null;
+                    return RegExp(r'^8[2-7][0-9]{7}$')
+                            .hasMatch(digitsOnly(text))
+                        ? null
+                        : 'Número inválido (8x, 9 dígitos).';
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
@@ -1192,6 +1210,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
                 name: _name.text.trim(),
                 phone: _phone.text.trim(),
                 email: _email.text.trim(),
+                whatsapp: _whatsapp.text.trim(),
                 pickedImage: _pickedImage,
               ),
             );

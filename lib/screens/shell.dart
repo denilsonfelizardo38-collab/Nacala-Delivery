@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../screens/admin/admin_audit_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
+import '../screens/admin/admin_employees_screen.dart';
 import '../screens/admin/admin_orders_screen.dart';
 import '../screens/admin/admin_partners_screen.dart';
+import '../screens/admin/admin_registos_screen.dart';
 import '../screens/admin/admin_users_screen.dart';
+import '../screens/auth/application_status_screen.dart';
+import '../screens/chat/chat_list_screen.dart';
 import '../screens/customer/account_screen.dart';
 import '../screens/customer/categories_screen.dart';
 import '../screens/customer/customer_home_screen.dart';
@@ -73,6 +77,25 @@ class _AppShellState extends State<AppShell> {
   ];
 
   List<_Destination> _destinationsFor(UserAccount role) {
+    // Candidatura ainda por aprovar: o servidor bloqueia o painel
+    // (`requireApprovedRole`), por isso mostra-se o estado da candidatura
+    // em vez de um painel que devolveria 403 em toda a parte.
+    if (role.isPendingApproval) {
+      return const [
+        _Destination(
+          'Candidatura',
+          Icons.how_to_reg_outlined,
+          Icons.how_to_reg_rounded,
+          ApplicationStatusScreen(),
+        ),
+        _Destination(
+          'Conta',
+          Icons.person_outline_rounded,
+          Icons.person_rounded,
+          AccountScreen(),
+        ),
+      ];
+    }
     if (role.isPartner) {
       return const [
         _Destination(
@@ -94,6 +117,12 @@ class _AppShellState extends State<AppShell> {
           PartnerOrdersScreen(),
         ),
         _Destination(
+          'Mensagens',
+          Icons.message_outlined,
+          Icons.message_rounded,
+          ChatListScreen(),
+        ),
+        _Destination(
           'Perfil',
           Icons.storefront_outlined,
           Icons.storefront_rounded,
@@ -110,6 +139,12 @@ class _AppShellState extends State<AppShell> {
           DeliveryScreen(),
         ),
         _Destination(
+          'Mensagens',
+          Icons.message_outlined,
+          Icons.message_rounded,
+          ChatListScreen(),
+        ),
+        _Destination(
           'Conta',
           Icons.person_outline_rounded,
           Icons.person_rounded,
@@ -124,6 +159,12 @@ class _AppShellState extends State<AppShell> {
           Icons.space_dashboard_outlined,
           Icons.space_dashboard_rounded,
           AdminDashboardScreen(),
+        ),
+        _Destination(
+          'Registos',
+          Icons.how_to_reg_outlined,
+          Icons.how_to_reg_rounded,
+          AdminRegistosScreen(),
         ),
         _Destination(
           'Parceiros',
@@ -144,6 +185,12 @@ class _AppShellState extends State<AppShell> {
           AdminUsersScreen(),
         ),
         _Destination(
+          'Funcionários',
+          Icons.badge_outlined,
+          Icons.badge_rounded,
+          AdminEmployeesScreen(),
+        ),
+        _Destination(
           'Auditoria',
           Icons.history_rounded,
           Icons.history_rounded,
@@ -151,15 +198,89 @@ class _AppShellState extends State<AppShell> {
         ),
       ];
     }
+    // Funcionário: só vê os separadores correspondentes às permissões da
+    // conta (`employees.permissions`). O servidor continua a validar cada
+    // rota — aqui é apenas filtragem da navegação.
+    if (role.isEmployee) {
+      final permissions = role.permissions.toSet();
+      return [
+        if (permissions.contains('orders'))
+          _Destination(
+            'Pedidos',
+            Icons.receipt_long_outlined,
+            Icons.receipt_long_rounded,
+            AdminOrdersScreen(),
+          ),
+        if (permissions.contains('establishments'))
+          _Destination(
+            'Parceiros',
+            Icons.storefront_outlined,
+            Icons.storefront_rounded,
+            AdminPartnersScreen(),
+          ),
+        if (permissions.contains('customers'))
+          _Destination(
+            'Utilizadores',
+            Icons.people_outline_rounded,
+            Icons.people_rounded,
+            AdminUsersScreen(),
+          ),
+        if (permissions.contains('applications'))
+          _Destination(
+            'Registos',
+            Icons.how_to_reg_outlined,
+            Icons.how_to_reg_rounded,
+            AdminRegistosScreen(),
+          ),
+        _Destination(
+          'Conta',
+          Icons.person_outline_rounded,
+          Icons.person_rounded,
+          AccountScreen(),
+        ),
+      ];
+    }
     // Clientes (e convidados) usam a navegação de cliente.
-    return _guestDestinations;
+    return const [
+      _Destination(
+        'Início',
+        Icons.home_outlined,
+        Icons.home_rounded,
+        CustomerHomeScreen(),
+      ),
+      _Destination(
+        'Categorias',
+        Icons.grid_view_outlined,
+        Icons.grid_view_rounded,
+        CategoriesScreen(),
+      ),
+      _Destination(
+        'Pedidos',
+        Icons.receipt_long_outlined,
+        Icons.receipt_long_rounded,
+        OrdersScreen(),
+      ),
+      _Destination(
+        'Mensagens',
+        Icons.message_outlined,
+        Icons.message_rounded,
+        ChatListScreen(),
+      ),
+      _Destination(
+        'Conta',
+        Icons.person_outline_rounded,
+        Icons.person_rounded,
+        AccountScreen(),
+      ),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final role = state.user;
-    if (role == null && !state.isGuest) return const SizedBox.shrink();
+    // Sem papel autenticado (convidado ou sessão terminada) a navegação é
+    // sempre a de cliente — nunca um ecrã em branco.
     final destinations = role == null
         ? _guestDestinations
         : _destinationsFor(role);
@@ -279,12 +400,12 @@ class _AdminNavigationRail extends StatelessWidget {
                   message: destinations[i].label,
                   child: Material(
                     color: i == index
-                        ? Colors.white
+                        ? Colors.black
                         : Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(10),
                     child: InkWell(
                       onTap: () => onSelected(i),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(10),
                       child: SizedBox(
                         width: 42,
                         height: 42,
@@ -293,7 +414,7 @@ class _AdminNavigationRail extends StatelessWidget {
                               ? destinations[i].selectedIcon
                               : destinations[i].icon,
                           size: 20,
-                          color: i == index ? AppColors.primary : Colors.white,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -323,8 +444,11 @@ class _Sidebar extends StatelessWidget {
     final state = AppScope.of(context);
     final user = state.user;
     return Container(
-      width: 252,
-      color: context.cardColor,
+      width: 260,
+      decoration: const BoxDecoration(
+        color: AppColors.sidebar,
+        border: Border(right: BorderSide(color: AppColors.darkBorder)),
+      ),
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -342,8 +466,10 @@ class _Sidebar extends StatelessWidget {
                         const Text(
                           'Nacala Delivery',
                           style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                            fontFamily: AppTheme.displayFontFamily,
                           ),
                         ),
                         Text(
@@ -370,9 +496,9 @@ class _Sidebar extends StatelessWidget {
                 ),
                 child: Material(
                   color: i == index ? AppColors.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                     onTap: () => onSelected(i),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -395,8 +521,8 @@ class _Sidebar extends StatelessWidget {
                             destinations[i].label,
                             style: TextStyle(
                               color: i == index
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : context.inkColor,
+                                  ? Colors.white
+                                  : context.mutedColor,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
@@ -464,10 +590,10 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
-/// Barra de navegação inferior própria do Nacala Delivery: item ativo num
-/// selo laranja com transição animada, tipografia consistente com os
-/// cartões e semas discretas — mais coesa que o [NavigationBar] material
-/// e igualmente leve em Android de gama baixa.
+/// Barra de navegação inferior do Nacala Delivery: cápsula vermelha com o
+/// item ativo num selo preto, tipografia consistente com os cartões e
+/// semas discretas — o mesmo padrão estrutural da navegação flutuante
+/// moderna e igualmente leve em Android de gama baixa.
 class _AppBottomBar extends StatelessWidget {
   const _AppBottomBar({
     required this.destinations,
@@ -482,32 +608,46 @@ class _AppBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: context.isDarkMode ? AppColors.darkCard : Colors.white,
-        boxShadow: const [AppColors.cardShadow],
+      decoration: const BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x66000000),
+            blurRadius: 18,
+            offset: Offset(0, -6),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(height: 1, color: context.lineColor),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 10, 6, 7),
-              child: Row(
-                children: [
-                  for (var i = 0; i < destinations.length; i++)
-                    Expanded(
-                      child: _BottomBarItem(
-                        destination: destinations[i],
-                        selected: i == index,
-                        onTap: () => onSelected(i),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          child: Center(
+            // Encolhe na vertical (a barra mede a cápsula, não a tela)
+            // e centra a cápsula na horizontal.
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(26),
+                ),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < destinations.length; i++)
+                      Expanded(
+                        child: _BottomBarItem(
+                          destination: destinations[i],
+                          selected: i == index,
+                          onTap: () => onSelected(i),
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -527,51 +667,39 @@ class _BottomBarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final idle = Colors.white.withValues(alpha: 0.72);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 210),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          decoration: BoxDecoration(
+            color: selected ? Colors.black : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 210),
-                curve: Curves.easeOut,
-                width: selected ? 58 : 46,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? context.primarySoftColor
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(
-                  selected ? destination.selectedIcon : destination.icon,
-                  size: selected ? 20 : 21,
-                  color: selected
-                      ? Theme.of(context).colorScheme.primary
-                      : context.mutedColor,
-                ),
+              Icon(
+                selected ? destination.selectedIcon : destination.icon,
+                size: 23,
+                color: selected ? Colors.white : idle,
               ),
-              const SizedBox(height: 3),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 210),
+              const SizedBox(height: 2),
+              Text(
+                destination.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: selected ? 11 : 10.5,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-                  color: selected
-                      ? Theme.of(context).colorScheme.primary
-                      : context.mutedColor,
-                  letterSpacing: selected ? 0.1 : 0,
-                ),
-                child: Text(
-                  destination.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : idle,
+                  letterSpacing: 0.1,
                 ),
               ),
             ],

@@ -4,6 +4,7 @@ import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 import 'store_screen.dart';
 
 /// Restaurantes e parceiros guardados pelo utilizador (dados reais do
@@ -79,21 +80,35 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
 
+    final onBack = Navigator.of(context).canPop()
+        ? () => Navigator.of(context).maybePop()
+        : null;
+
     if (state.isGuest || !state.isSignedIn) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Favoritos')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: EmptyState(
-              icon: Icons.favorite_border_rounded,
-              title: 'Os teus favoritos são da tua conta',
-              message:
-                  'Entra ou cria uma conta para guardar os teus locais '
-                  'preferidos.',
-              actionLabel: 'Entrar ou criar conta',
-              onAction: state.exitGuestMode,
-            ),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              JbPageHeader(title: 'Favoritos', onBack: onBack),
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: EmptyState(
+                      icon: Icons.favorite_border_rounded,
+                      title: 'Os teus favoritos são da tua conta',
+                      message:
+                          'Entra ou cria uma conta para guardar os teus locais '
+                          'preferidos.',
+                      actionLabel: 'Entrar ou criar conta',
+                      onAction: () => Navigator.of(context)
+                          .pushNamed('/roles', arguments: 'login'),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -102,59 +117,67 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     final favorites = _favorites;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Favoritos')),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          color: AppColors.primary,
-          onRefresh: _refresh,
-          child: _loading
-              ? const LoadingBlock(height: 320)
-              : _error != null
-              ? ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    ErrorState(
-                      message: messageForError(_error),
-                      onRetry: _load,
-                    ),
-                  ],
-                )
-              : favorites == null || favorites.isEmpty
-              ? ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: const [
-                    EmptyState(
-                      icon: Icons.favorite_border_rounded,
-                      title: 'Ainda sem favoritos',
-                      message:
-                          'Toca no coração num estabelecimento para o '
-                          'guardares aqui.',
-                    ),
-                  ],
-                )
-              : ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-                  itemCount: favorites.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final establishment = favorites[index];
-                    return EstablishmentTile(
-                      establishment: establishment,
-                      isFavorite: state.isFavoriteEstablishment(
-                        establishment.id,
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(title: 'Favoritos', onBack: onBack),
+            Expanded(
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: _refresh,
+                child: _loading
+                    ? const LoadingBlock(height: 320)
+                    : _error != null
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          ErrorState(
+                            message: messageForError(_error),
+                            onRetry: _load,
+                          ),
+                        ],
+                      )
+                    : favorites == null || favorites.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          EmptyState(
+                            icon: Icons.favorite_border_rounded,
+                            title: 'Ainda sem favoritos',
+                            message:
+                                'Toca no coração num estabelecimento para o '
+                                'guardares aqui.',
+                          ),
+                        ],
+                      )
+                    : ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 28),
+                        itemCount: favorites.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 2),
+                        itemBuilder: (context, index) {
+                          final establishment = favorites[index];
+                          return StoreRow(
+                            establishment: establishment,
+                            isFavorite: state.isFavoriteEstablishment(
+                              establishment.id,
+                            ),
+                            onFavoriteToggle: () =>
+                                _toggleFavorite(establishment),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => StoreScreen(
+                                  establishmentId: establishment.id,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      onFavoriteToggle: () => _toggleFavorite(establishment),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              StoreScreen(establishmentId: establishment.id),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

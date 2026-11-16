@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 
 import 'package:flutter/services.dart';
 
@@ -45,18 +46,18 @@ class WelcomeScreen extends StatelessWidget {
             ),
 
             // Gradiente para melhorar a leitura dos elementos: mais
-            // escuro no topo, onde a marca se apoia sobre o pôr do sol.
+            // escuro no topo, onde a marca se apoia sobre a fotografia.
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0x8F001635),
-                    Color(0x40001635),
-                    Color(0x6B001E3F),
-                    Color(0xC0001A38),
-                    Color(0xF5001835),
+                    Color(0x8F000000),
+                    Color(0x40000000),
+                    Color(0x6B000000),
+                    Color(0xC0000000),
+                    Color(0xF5000000),
                   ],
                   stops: [0.0, 0.3, 0.54, 0.78, 1.0],
                 ),
@@ -79,45 +80,30 @@ class WelcomeScreen extends StatelessWidget {
                             children: [
                               const Spacer(flex: 2),
 
-                              // NOME DA MARCA — inteiro em branco para
-                              // se ler sobre a fotografia do pôr do sol.
+                              // NOME DA MARCA — wordmark inteiro em branco,
+                              // na tipografia de display, para se ler sobre
+                              // a fotografia. [RichText] não herda o
+                              // [DefaultTextStyle], por isso a família é
+                              // declarada explicitamente.
                               RichText(
                                 textAlign: TextAlign.center,
                                 text: const TextSpan(
-                                  children: [
-                                    TextSpan(
-                                      text: 'Nacala',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 35,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -1.5,
-                                        shadows: [
-                                          Shadow(
-                                            color: Color(0x66000000),
-                                            blurRadius: 14,
-                                            offset: Offset(0, 2),
-                                          ),
-                                        ],
+                                  text: 'Nacala Delivery',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: AppTheme.displayFontFamily,
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -1.2,
+                                    height: 1.1,
+                                    shadows: [
+                                      Shadow(
+                                        color: Color(0x66000000),
+                                        blurRadius: 14,
+                                        offset: Offset(0, 2),
                                       ),
-                                    ),
-                                    TextSpan(
-                                      text: 'Delivery',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 35,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -1.5,
-                                        shadows: [
-                                          Shadow(
-                                            color: Color(0x66000000),
-                                            blurRadius: 14,
-                                            offset: Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
 
@@ -257,6 +243,7 @@ class WelcomeScreen extends StatelessWidget {
                                   textStyle: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
+                                    fontFamily: AppTheme.fontFamily,
                                   ),
                                 ),
                                 child: const Text('Explorar como convidado'),
@@ -270,7 +257,7 @@ class WelcomeScreen extends StatelessWidget {
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: Colors.black.withValues(alpha: 0.45),
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Row(
                                     children: [

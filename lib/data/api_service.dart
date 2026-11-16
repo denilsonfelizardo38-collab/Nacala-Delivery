@@ -30,20 +30,47 @@ class NacalaApi {
 
   Future<AuthResult> register({
     required String name,
-    required String email,
+    String? email,
     required String phone,
+    String? whatsapp,
     required String password,
   }) async {
     final json = await client.post(
       '/api/auth/register',
       body: {
         'name': name,
-        'email': email,
+        // E-mail opcional no registo de clientes: quando ausente o
+        // servidor deriva um endereço interno a partir do telefone.
+        if (email != null && email.trim().isNotEmpty) 'email': email,
         'phone': phone,
+        if (whatsapp != null && whatsapp.trim().isNotEmpty)
+          'whatsapp': whatsapp,
         'password': password,
       },
     );
     return AuthResult.fromJson(json);
+  }
+
+  /// Recupera o acesso com o código gerado no registo. Devolve uma nova
+  /// sessão; o código é rotacionado e o novo valor vem em
+  /// [AuthResult.recoveryCode] (única vez — não há envio por email/SMS).
+  Future<AuthResult> recoverPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) async {
+    final json = await client.post(
+      '/api/auth/recover',
+      body: {'identifier': identifier, 'code': code, 'password': password},
+    );
+    return AuthResult.fromJson(json);
+  }
+
+  /// Emite um novo código de recuperação para a conta autenticada (o
+  /// anterior deixa de valer), devolvido uma única vez.
+  Future<String> regenerateRecoveryCode() async {
+    final json = await client.post('/api/auth/recovery-code');
+    return (json['recovery_code'] as String?) ?? '';
   }
 
   Future<MeData> me() async {
@@ -61,10 +88,17 @@ class NacalaApi {
     required String name,
     required String phone,
     String? email,
+    String? whatsapp,
   }) async {
     final json = await client.patch(
       '/api/auth/profile',
-      body: {'name': name, 'phone': phone, 'email': ?email},
+      body: {
+        'name': name,
+        'phone': phone,
+        'email': ?email,
+        // Omitido quando nulo (mantém o valor); string vazia limpa o campo.
+        'whatsapp': ?whatsapp,
+      },
     );
     return UserAccount.fromJson(json['user'] as Map<String, dynamic>);
   }
@@ -94,6 +128,48 @@ class NacalaApi {
 
   Future<void> logout() async {
     await client.post('/api/auth/logout');
+  }
+
+  // ----------------------------------------------------------- candidaturas
+
+  /// Envia uma candidatura (estabelecimento ou entregador) para aprovação.
+  ///
+  /// [payload] contém os dados próprios de cada tipo (categoria, morada,
+  /// coordenadas…). Quando o utilizador tem sessão iniciada, o servidor
+  /// associa a candidatura à conta (reenvio de correções).
+  Future<Application> submitApplication({
+    required String kind,
+    required String name,
+    required String phone,
+    required String password,
+    String? email,
+    String? whatsapp,
+    Map<String, dynamic> payload = const {},
+  }) async {
+    final json = await client.post(
+      '/api/applications',
+      body: {
+        'kind': kind,
+        'name': name,
+        'phone': phone,
+        'password': password,
+        if (email != null && email.trim().isNotEmpty) 'email': email,
+        if (whatsapp != null && whatsapp.trim().isNotEmpty)
+          'whatsapp': whatsapp,
+        'payload': payload,
+      },
+    );
+    return Application.fromJson(
+      (json['application'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+  }
+
+  /// Candidatura da conta autenticada (acompanhar estado / corrigir).
+  Future<Application> myApplication() async {
+    final json = await client.get('/api/applications/me');
+    return Application.fromJson(
+      (json['application'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
   }
 
   // --------------------------------------------------------------- catálogo
@@ -370,7 +446,35 @@ class NacalaApi {
     ];
   }
 
-  Future<String> uploadProductImage(XFile file) async {
+  Future<String> uploadProductImage(XFile file) =>
+      _uploadImage('/api/partner/product-images', file);
+
+  /// Carrega uma imagem de candidatura (documentos do entregador). Endpoint
+  /// público: o candidato ainda não tem sessão iniciada.
+  Future<String> uploadApplicationImage(XFile file) =>
+      _uploadImage('/api/applications/images', file);
+
+  /// Carrega a fotografia do estabelecimento pela administração.
+  Future<String> adminUploadPartnerImage(XFile file) =>
+      _uploadImage('/api/admin/partner-images', file);
+
+  /// Envia a imagem para [path] e devolve o URL absoluto guardado.
+  Future<String> _uploadImage(String path, XFile file) async {
+    final response = await client.post(path, body: await _imageBody(file));
+    final imagePath = response['image_url'];
+    if (imagePath is! String || !imagePath.startsWith('/uploads/')) {
+      throw const ApiException(
+        'Resposta inválida ao carregar a imagem.',
+        code: 'invalid_response',
+        status: 502,
+      );
+    }
+    return client.resolveUri(imagePath).toString();
+  }
+
+  /// Monta o corpo `{mime_type, data_base64}` de um upload, validando tipo e
+  /// tamanho antes de gastar rede (o servidor repete a validação).
+  Future<Map<String, dynamic>> _imageBody(XFile file) async {
     final extension = file.name.toLowerCase().split('.').last;
     final mimeType = switch (file.mimeType?.toLowerCase()) {
       'image/jpeg' => 'image/jpeg',
@@ -407,19 +511,7 @@ class NacalaApi {
         status: 413,
       );
     }
-    final response = await client.post(
-      '/api/partner/product-images',
-      body: {'mime_type': mimeType, 'data_base64': base64Encode(bytes)},
-    );
-    final imagePath = response['image_url'];
-    if (imagePath is! String || !imagePath.startsWith('/uploads/')) {
-      throw const ApiException(
-        'Resposta inválida ao carregar a imagem.',
-        code: 'invalid_response',
-        status: 502,
-      );
-    }
-    return client.resolveUri(imagePath).toString();
+    return {'mime_type': mimeType, 'data_base64': base64Encode(bytes)};
   }
 
   Future<Product> saveProduct({
@@ -523,6 +615,66 @@ class NacalaApi {
     return AdminSummary.fromJson(json);
   }
 
+  // -------------------------------------------------------- gestão de registos
+
+  /// Candidaturas com contagens por estado (`Gestão de Registos`).
+  /// [status] e [kind] são filtros opcionais passados ao servidor.
+  Future<
+    ({List<Application> applications, Map<String, int> counts})
+  >
+  adminApplications({String? status, String? kind}) async {
+    final json = await client.get('/api/admin/applications', query: {
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (kind != null && kind.isNotEmpty) 'kind': kind,
+    });
+    final rawCounts = json['counts'];
+    return (
+      applications: [
+        for (final item in (json['applications'] as List? ?? const []))
+          Application.fromJson(item as Map<String, dynamic>),
+      ],
+      counts: {
+        if (rawCounts is Map)
+          for (final entry in rawCounts.entries)
+            '${entry.key}': (entry.value as num?)?.toInt() ?? 0,
+      },
+    );
+  }
+
+  Future<Application> adminApproveApplication(String id, {String? note}) async {
+    final json = await client.post(
+      '/api/admin/applications/$id/approve',
+      body: {if (note != null && note.isNotEmpty) 'note': note},
+    );
+    return Application.fromJson(
+      (json['application'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+  }
+
+  Future<Application> adminRejectApplication(String id, {String? note}) async {
+    final json = await client.post(
+      '/api/admin/applications/$id/reject',
+      body: {if (note != null && note.isNotEmpty) 'note': note},
+    );
+    return Application.fromJson(
+      (json['application'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+  }
+
+  /// Devolve a candidatura ao candidato com correções obrigatórias.
+  Future<Application> adminRequestApplicationChanges(
+    String id, {
+    required String note,
+  }) async {
+    final json = await client.post(
+      '/api/admin/applications/$id/changes',
+      body: {'note': note},
+    );
+    return Application.fromJson(
+      (json['application'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+  }
+
   Future<List<Establishment>> adminPartners() async {
     final json = await client.get('/api/admin/partners');
     return [
@@ -541,6 +693,7 @@ class NacalaApi {
     required String email,
     required String phone,
     required String password,
+    required String nuit,
     required String establishmentName,
     required String categoryId,
     String? description,
@@ -559,6 +712,7 @@ class NacalaApi {
         'email': email,
         'phone': phone,
         'password': password,
+        'nuit': nuit,
         'establishment_name': establishmentName,
         'category_id': categoryId,
         if (description != null && description.isNotEmpty)
@@ -629,5 +783,171 @@ class NacalaApi {
 
   Future<void> deleteCategory(String id) async {
     await client.delete('/api/admin/categories/$id');
+  }
+
+  // ------------------------------------------------------- funcionários (FASE 10)
+
+  /// Lista as contas de funcionário (rota admin-only: `employees`).
+  Future<List<AdminEmployee>> adminEmployees() async {
+    final json = await client.get('/api/admin/employees');
+    return [
+      for (final item in (json['employees'] as List? ?? const []))
+        AdminEmployee.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  /// Cria um funcionário com nível e permissões (só o administrador).
+  Future<AdminEmployee> adminCreateEmployee({
+    required String name,
+    required String email,
+    required String phone,
+    required String password,
+    required String level,
+    List<String> permissions = const [],
+  }) async {
+    final json = await client.post(
+      '/api/admin/employees',
+      body: {
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'password': password,
+        'level': level,
+        'permissions': permissions,
+      },
+    );
+    return AdminEmployee.fromJson(json['employee'] as Map<String, dynamic>);
+  }
+
+  /// Atualiza nível/permissões/estado de um funcionário.
+  Future<AdminEmployee> adminUpdateEmployee(
+    String id, {
+    String? level,
+    List<String>? permissions,
+    bool? isActive,
+  }) async {
+    final json = await client.patch(
+      '/api/admin/employees/$id',
+      body: {
+        'level': ?level,
+        'permissions': ?permissions,
+        'is_active': ?isActive,
+      },
+    );
+    return AdminEmployee.fromJson(json['employee'] as Map<String, dynamic>);
+  }
+
+  /// Elimina a conta de funcionário em definitivo.
+  Future<void> adminDeleteEmployee(String id) async {
+    await client.delete('/api/admin/employees/$id');
+  }
+
+  // ------------------------------------------------------------ notificações
+
+  /// Lista as notificações persistentes do utilizador autenticado.
+  Future<List<AppNotification>> notifications({int limit = 50}) async {
+    final json = await client.get(
+      '/api/notifications',
+      query: {'limit': '$limit'},
+    );
+    return [
+      for (final item in (json['notifications'] as List? ?? const []))
+        AppNotification.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  /// Marca notificações como lidas (sem ids marca todas).
+  Future<void> markNotificationsRead({List<String>? ids}) async {
+    await client.post(
+      '/api/notifications/read',
+      body: {if (ids != null) 'ids': ids},
+    );
+  }
+
+  // ------------------------------------------------------------ chat (FASE 13)
+
+  /// Lista as conversas do utilizador autenticado.
+  Future<List<Conversation>> conversations() async {
+    final json = await client.get('/api/conversations');
+    return [
+      for (final item in (json['conversations'] as List? ?? const []))
+        Conversation.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  /// Cria (ou reutiliza) uma conversa com outro utilizador, opcionalmente
+  /// ligada a uma encomenda.
+  Future<Conversation> createConversation({
+    required String otherUserId,
+    String? orderId,
+  }) async {
+    final json = await client.post(
+      '/api/conversations',
+      body: {'other_user_id': otherUserId, if (orderId != null) 'order_id': orderId},
+    );
+    return Conversation.fromJson(json['conversation'] as Map<String, dynamic>);
+  }
+
+  /// Lista as mensagens de uma conversa.
+  Future<List<Message>> messages(String conversationId, {int limit = 50, String? before}) async {
+    final json = await client.get(
+      '/api/conversations/$conversationId/messages',
+      query: {'limit': '$limit', if (before != null) 'before': before},
+    );
+    return [
+      for (final item in (json['messages'] as List? ?? const []))
+        Message.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  /// Envia uma mensagem numa conversa.
+  Future<Message> sendMessage({
+    required String conversationId,
+    required String body,
+    String type = 'text',
+  }) async {
+    final json = await client.post(
+      '/api/conversations/$conversationId/messages',
+      body: {'body': body, 'type': type},
+    );
+    return Message.fromJson(json['message'] as Map<String, dynamic>);
+  }
+
+  /// Marca as mensagens de uma conversa como lidas.
+  Future<void> markMessagesRead(String conversationId) async {
+    await client.post('/api/conversations/$conversationId/read', body: {});
+  }
+
+  // ------------------------------------------------------------ chamadas (FASE 13)
+
+  /// Lista o histórico de chamadas do utilizador autenticado.
+  Future<List<CallLog>> callLogs({int limit = 50}) async {
+    final json = await client.get(
+      '/api/call-logs',
+      query: {'limit': '$limit'},
+    );
+    return [
+      for (final item in (json['call_logs'] as List? ?? const []))
+        CallLog.fromJson(item as Map<String, dynamic>),
+    ];
+  }
+
+  /// Regista uma chamada (iniciada, atendida, recusada, perdida, terminada).
+  Future<CallLog> logCall({
+    required String calleeId,
+    String? conversationId,
+    String type = 'voice',
+    String status = 'initiated',
+  }) async {
+    final json = await client.post(
+      '/api/call-logs',
+      body: {
+        'callee_id': calleeId,
+        if (conversationId != null) 'conversation_id': conversationId,
+        'type': type,
+        'status': status,
+      },
+    );
+    return CallLog.fromJson(json['call_log'] as Map<String, dynamic>);
   }
 }

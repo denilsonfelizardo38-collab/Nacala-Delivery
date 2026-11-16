@@ -12,6 +12,7 @@ import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/address_dialog.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 import '../../widgets/location_picker.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -60,8 +61,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _leaveGuestMode() {
-    AppScope.of(context).exitGuestMode();
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    // Sem sessão: escolher tipo de conta para entrar e finalizar o pedido.
+    Navigator.of(context).pushNamed('/roles', arguments: 'login');
   }
 
   Future<void> _addAddress() async {
@@ -197,479 +198,492 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    if (state.isGuest) {
+    if (!state.isSignedIn) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Finalizar pedido')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: EmptyState(
-              icon: Icons.lock_outline_rounded,
-              title: 'Entra para fazer o pedido',
-              message:
-                  'O carrinho fica guardado. Entra ou cria uma conta para '
-                  'adicionar morada e confirmar a entrega.',
-              actionLabel: 'Entrar ou criar conta',
-              onAction: _leaveGuestMode,
-            ),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              JbPageHeader(
+                title: 'Finalizar pedido',
+                onBack: Navigator.of(context).canPop()
+                    ? () => Navigator.of(context).maybePop()
+                    : null,
+              ),
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: EmptyState(
+                      icon: Icons.lock_outline_rounded,
+                      title: 'Entra para fazer o pedido',
+                      message:
+                          'O carrinho fica guardado. Entra ou cria uma conta para '
+                          'adicionar morada e confirmar a entrega.',
+                      actionLabel: 'Entrar ou criar conta',
+                      onAction: _leaveGuestMode,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
     if (state.isCartEmpty && !_submitting) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Finalizar pedido')),
-        body: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: EmptyState(
-              icon: Icons.shopping_bag_outlined,
-              title: 'Carrinho vazio',
-              message: 'Adicione produtos antes de finalizar o pedido.',
-              actionLabel: 'Voltar',
-              onAction: () => Navigator.of(context).pop(),
-            ),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              JbPageHeader(
+                title: 'Finalizar pedido',
+                onBack: Navigator.of(context).canPop()
+                    ? () => Navigator.of(context).maybePop()
+                    : null,
+              ),
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: EmptyState(
+                      icon: Icons.shopping_bag_outlined,
+                      title: 'Carrinho vazio',
+                      message: 'Adicione produtos antes de finalizar o pedido.',
+                      actionLabel: 'Voltar',
+                      onAction: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Finalizar pedido'),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        foregroundColor: context.inkColor,
-        elevation: 0,
-      ),
       body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        bottom: false,
+        child: Column(
           children: [
-            AppCard(
-              padding: const EdgeInsets.all(14),
-              child: Row(
+            JbPageHeader(
+              title: 'Finalizar pedido',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 children: [
-                  NetworkThumb(
-                    imageUrl: state.cartStore?.imageUrl,
-                    icon: Icons.delivery_dining_outlined,
-                    size: 48,
-                    radius: 13,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  AppCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
                       children: [
-                        Text(
-                          state.cartStore?.name ?? 'O seu pedido',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
+                        NetworkThumb(
+                          imageUrl: state.cartStore?.imageUrl,
+                          icon: Icons.delivery_dining_outlined,
+                          size: 48,
+                          radius: 13,
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                state.cartStore?.name ?? 'O seu pedido',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              Text(
+                                '${state.cartItemCount} '
+                                '${plural(state.cartItemCount, 'unidade')}'
+                                ' · entrega em Nacala-Porto',
+                                style: TextStyle(
+                                  color: context.mutedColor,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          '${state.cartItemCount} '
-                          '${plural(state.cartItemCount, 'unidade')}'
-                          ' · entrega em Nacala-Porto',
+                          formatMoney(state.cartTotalCents),
                           style: TextStyle(
-                            color: context.mutedColor,
-                            fontSize: 10,
+                            color: context.accentColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    formatMoney(state.cartTotalCents),
-                    style: TextStyle(
-                      color: context.accentColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            const SectionTitle(
-              title: 'Entrega',
-              subtitle: 'Onde devemos entregar o seu pedido?',
-            ),
-            const SizedBox(height: 10),
-            if (state.addresses.isEmpty)
-              AppCard(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.location_off_outlined,
-                      color: context.mutedColor,
-                      size: 26,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Ainda não tem moradas guardadas.',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _addAddress,
-                      icon: const Icon(Icons.add_location_alt_outlined),
-                      label: const Text('Adicionar morada'),
-                    ),
-                  ],
-                ),
-              )
-            else ...[
-              for (final address in state.addresses)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _AddressOption(
-                    address: address,
-                    selected: address.id == _selectedAddressId,
-                    onTap: () =>
-                        setState(() => _selectedAddressId = address.id),
-                  ),
-                ),
-              if (_address(state) case final selected?
-                  when !selected.hasLocation) ...[
-                OutlinedButton.icon(
-                  onPressed: () => _markDeliveryPoint(selected),
-                  icon: const Icon(Icons.map_outlined),
-                  label: const Text('Marcar ponto de entrega no mapa'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primaryPressed,
-                    side: const BorderSide(color: AppColors.primary),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              TextButton.icon(
-                onPressed: _addAddress,
-                icon: const Icon(Icons.add_location_alt_outlined, size: 18),
-                label: const Text('Adicionar outra morada'),
-                style: TextButton.styleFrom(
-                  foregroundColor: context.accentColor,
-                ),
-              ),
-            ],
-            const SizedBox(height: 20),
-            const SectionTitle(
-              title: 'Contacto',
-              subtitle: 'O estafeta liga para este número',
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _phone,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Telemóvel',
-                hintText: '84 123 4567',
-                prefixIcon: Icon(Icons.phone_outlined),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const SectionTitle(title: 'Cupão de desconto'),
-            const SizedBox(height: 10),
-            AppCard(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _coupon,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: InputDecoration(
-                            hintText: 'Digite o cupão',
-                            isDense: true,
-                            prefixIcon: const Icon(
-                              Icons.local_offer_outlined,
-                              color: AppColors.primary,
-                            ),
-                            suffixIcon: state.couponCode == null
-                                ? null
-                                : IconButton(
-                                    tooltip: 'Remover cupão',
-                                    onPressed: () {
-                                      state.removeCoupon();
-                                      _coupon.clear();
-                                      setState(() => _couponError = null);
-                                    },
-                                    icon: const Icon(
-                                      Icons.close_rounded,
-                                      size: 18,
-                                    ),
-                                  ),
-                          ),
-                          onSubmitted: (_) => _applyCoupon(),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 92,
-                        child: FilledButton(
-                          onPressed: _couponLoading ? null : _applyCoupon,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                          child: _couponLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  state.couponCode == null
-                                      ? 'Aplicar'
-                                      : 'Atualizar',
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (state.couponCode != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      '${state.couponCode} aplicado · '
-                      '${formatMoney(state.couponDiscountCents)} de desconto',
-                      style: TextStyle(
-                        color: context.successColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                  if (_couponError != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      _couponError!,
-                      style: TextStyle(
-                        color: context.dangerColor,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const SectionTitle(
-              title: 'Pagamento',
-              subtitle: 'Escolha como pretende pagar',
-            ),
-            const SizedBox(height: 10),
-            _PaymentOption(
-              value: 'mpesa',
-              selected: _payment == 'mpesa',
-              icon: Icons.phone_android_rounded,
-              title: 'M-Pesa',
-              subtitle: 'Pagamento móvel · integração pendente',
-              onTap: () => setState(() => _payment = 'mpesa'),
-            ),
-            const SizedBox(height: 8),
-            _PaymentOption(
-              value: 'emola',
-              selected: _payment == 'emola',
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'e-Mola',
-              subtitle: 'Pagamento móvel · integração pendente',
-              onTap: () => setState(() => _payment = 'emola'),
-            ),
-            const SizedBox(height: 8),
-            _PaymentOption(
-              value: 'mkesh',
-              selected: _payment == 'mkesh',
-              icon: Icons.smartphone_rounded,
-              title: 'mKesh',
-              subtitle: 'Pagamento móvel · integração pendente',
-              onTap: () => setState(() => _payment = 'mkesh'),
-            ),
-            const SizedBox(height: 8),
-            _PaymentOption(
-              value: 'cash',
-              selected: _payment == 'cash',
-              icon: Icons.payments_outlined,
-              title: 'Dinheiro na entrega',
-              subtitle: 'Pague ao estafeta quando receber',
-              onTap: () => setState(() => _payment = 'cash'),
-            ),
-            if (_payment != 'cash') ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      size: 18,
-                      color: AppColors.primaryPressed,
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'A cobrança automática M-Pesa, e-Mola e mKesh ainda '
-                        'não está ativa. O pedido será registado com '
-                        'pagamento pendente de integração; não será cobrado '
-                        'automaticamente.',
-                        style: TextStyle(
-                          color: AppColors.textOrange,
-                          fontSize: 11,
-                          height: 1.45,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 20),
-            const SectionTitle(title: 'Nota para o parceiro'),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _note,
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Ex.: tocar à campainha, sem cebola...',
-              ),
-            ),
-            const SizedBox(height: 20),
-            const SectionTitle(title: 'Resumo do pedido'),
-            const SizedBox(height: 10),
-            AppCard(
-              child: Column(
-                children: [
-                  for (final line in state.cart)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  const JbSectionHeader(title: 'Entrega'),
+                  if (state.addresses.isEmpty)
+                    AppCard(
+                      child: Column(
                         children: [
-                          Container(
-                            width: 26,
-                            height: 26,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${line.quantity}',
-                              style: const TextStyle(
-                                color: AppColors.primaryPressed,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                          Icon(
+                            Icons.location_off_outlined,
+                            color: context.mutedColor,
+                            size: 26,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Ainda não tem moradas guardadas.',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: _addAddress,
+                            icon: const Icon(Icons.add_location_alt_outlined),
+                            label: const Text('Adicionar morada'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    for (final address in state.addresses)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _AddressOption(
+                          address: address,
+                          selected: address.id == _selectedAddressId,
+                          onTap: () =>
+                              setState(() => _selectedAddressId = address.id),
+                        ),
+                      ),
+                    if (_address(state) case final selected?
+                        when !selected.hasLocation) ...[
+                      OutlinedButton.icon(
+                        onPressed: () => _markDeliveryPoint(selected),
+                        icon: const Icon(Icons.map_outlined),
+                        label: const Text('Marcar ponto de entrega no mapa'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primaryPressed,
+                          side: const BorderSide(color: AppColors.primary),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    TextButton.icon(
+                      onPressed: _addAddress,
+                      icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+                      label: const Text('Adicionar outra morada'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: context.accentColor,
+                      ),
+                    ),
+                  ],
+                  const JbSectionHeader(title: 'Contacto'),
+                  TextField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Telemóvel',
+                      hintText: '84 123 4567',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
+                  ),
+                  const JbSectionHeader(title: 'Cupão de desconto'),
+                  AppCard(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _coupon,
+                                textCapitalization: TextCapitalization.characters,
+                                decoration: InputDecoration(
+                                  hintText: 'Digite o cupão',
+                                  isDense: true,
+                                  prefixIcon: const Icon(
+                                    Icons.local_offer_outlined,
+                                    color: AppColors.primary,
+                                  ),
+                                  suffixIcon: state.couponCode == null
+                                      ? null
+                                      : IconButton(
+                                          tooltip: 'Remover cupão',
+                                          onPressed: () {
+                                            state.removeCoupon();
+                                            _coupon.clear();
+                                            setState(() => _couponError = null);
+                                          },
+                                          icon: const Icon(
+                                            Icons.close_rounded,
+                                            size: 18,
+                                          ),
+                                        ),
+                                ),
+                                onSubmitted: (_) => _applyCoupon(),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              line.product.name,
-                              style: Theme.of(context).textTheme.bodyMedium,
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 92,
+                              child: FilledButton(
+                                onPressed: _couponLoading ? null : _applyCoupon,
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                ),
+                                child: _couponLoading
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        state.couponCode == null
+                                            ? 'Aplicar'
+                                            : 'Atualizar',
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (state.couponCode != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            '${state.couponCode} aplicado · '
+                            '${formatMoney(state.couponDiscountCents)} de desconto',
+                            style: TextStyle(
+                              color: context.successColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                        ],
+                        if (_couponError != null) ...[
+                          const SizedBox(height: 6),
                           Text(
-                            formatMoney(line.totalCents),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                            _couponError!,
+                            style: TextStyle(
+                              color: context.dangerColor,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const JbSectionHeader(title: 'Pagamento'),
+                  _PaymentOption(
+                    value: 'mpesa',
+                    selected: _payment == 'mpesa',
+                    icon: Icons.phone_android_rounded,
+                    title: 'M-Pesa',
+                    subtitle: 'Pagamento móvel · integração pendente',
+                    onTap: () => setState(() => _payment = 'mpesa'),
+                  ),
+                  const SizedBox(height: 8),
+                  _PaymentOption(
+                    value: 'emola',
+                    selected: _payment == 'emola',
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'e-Mola',
+                    subtitle: 'Pagamento móvel · integração pendente',
+                    onTap: () => setState(() => _payment = 'emola'),
+                  ),
+                  const SizedBox(height: 8),
+                  _PaymentOption(
+                    value: 'mkesh',
+                    selected: _payment == 'mkesh',
+                    icon: Icons.smartphone_rounded,
+                    title: 'mKesh',
+                    subtitle: 'Pagamento móvel · integração pendente',
+                    onTap: () => setState(() => _payment = 'mkesh'),
+                  ),
+                  const SizedBox(height: 8),
+                  _PaymentOption(
+                    value: 'cash',
+                    selected: _payment == 'cash',
+                    icon: Icons.payments_outlined,
+                    title: 'Dinheiro na entrega',
+                    subtitle: 'Pague ao estafeta quando receber',
+                    onTap: () => setState(() => _payment = 'cash'),
+                  ),
+                  if (_payment != 'cash') ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 18,
+                            color: AppColors.primaryPressed,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'A cobrança automática M-Pesa, e-Mola e mKesh ainda '
+                              'não está ativa. O pedido será registado com '
+                              'pagamento pendente de integração; não será cobrado '
+                              'automaticamente.',
+                              style: TextStyle(
+                                color: AppColors.textOrange,
+                                fontSize: 11,
+                                height: 1.45,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  const Divider(height: 20),
-                  PriceLine(label: 'Subtotal', cents: state.cartSubtotalCents),
-                  PriceLine(
-                    label: 'Taxa de entrega',
-                    cents: state.cartDeliveryFeeCents,
-                  ),
-                  if (state.couponDiscountCents > 0)
-                    PriceLine(
-                      label: 'Desconto (${state.couponCode})',
-                      cents: -state.couponDiscountCents,
-                      color: context.successColor,
+                  ],
+                  const JbSectionHeader(title: 'Nota para o parceiro'),
+                  TextField(
+                    controller: _note,
+                    maxLines: 3,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: 'Ex.: tocar à campainha, sem cebola...',
                     ),
-                  const Divider(height: 20),
-                  PriceLine(
-                    label: 'Total',
-                    cents: state.cartTotalCents,
-                    strong: true,
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.verified_user_outlined,
-                        size: 15,
-                        color: context.mutedColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Preços e totais são confirmados pelo servidor no '
-                          'momento da criação do pedido.',
-                          style: TextStyle(
-                            color: context.mutedColor,
-                            fontSize: 11,
-                            height: 1.4,
+                  const JbSectionHeader(title: 'Resumo do pedido'),
+                  AppCard(
+                    child: Column(
+                      children: [
+                        for (final line in state.cart)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 26,
+                                  height: 26,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primarySoft,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '${line.quantity}',
+                                    style: const TextStyle(
+                                      color: AppColors.primaryPressed,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    line.product.name,
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  formatMoney(line.totalCents),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
+                        const Divider(height: 20),
+                        PriceLine(label: 'Subtotal', cents: state.cartSubtotalCents),
+                        PriceLine(
+                          label: 'Taxa de entrega',
+                          cents: state.cartDeliveryFeeCents,
+                        ),
+                        if (state.couponDiscountCents > 0)
+                          PriceLine(
+                            label: 'Desconto (${state.couponCode})',
+                            cents: -state.couponDiscountCents,
+                            color: context.successColor,
+                          ),
+                        const Divider(height: 20),
+                        PriceLine(
+                          label: 'Total',
+                          cents: state.cartTotalCents,
+                          strong: true,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.verified_user_outlined,
+                              size: 15,
+                              color: context.mutedColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Preços e totais são confirmados pelo servidor no '
+                                'momento da criação do pedido.',
+                                style: TextStyle(
+                                  color: context.mutedColor,
+                                  fontSize: 11,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: context.dangerColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: context.dangerColor.withValues(alpha: 0.2),
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: context.dangerColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: context.dangerColor.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.error_outline_rounded,
-                      color: context.dangerColor,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: TextStyle(
-                          color: context.dangerColor,
-                          fontSize: 12,
-                          height: 1.4,
-                        ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.error_outline_rounded,
+                            color: context.dangerColor,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                color: context.dangerColor,
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 10),
+                ],
               ),
-            ],
-            const SizedBox(height: 10),
+            ),
           ],
         ),
       ),
@@ -795,7 +809,7 @@ class _AddressOption extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Text(
                           'Predefinida',
@@ -858,7 +872,7 @@ class _PaymentOption extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: selected ? AppColors.primary : AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,

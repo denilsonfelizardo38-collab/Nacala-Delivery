@@ -137,3 +137,26 @@ class JwtService {
     return payload.cast<String, dynamic>();
   }
 }
+
+/// Alfabeto do código de recuperação sem caracteres ambiguos (sem 0/O nem
+/// 1/I/L): o código é lido e transposto manualmente pelo utilizador.
+const _recoveryAlphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+/// Gera um código de recuperação no formato `XXXXX-XXXXX` (10 caracteres).
+///
+/// Não existe SMTP/SMS na plataforma: o código é devolvido uma única vez
+/// no registo e guardado apenas como hash PBKDF2 em `users`.
+String generateRecoveryCode() {
+  final random = Random.secure();
+  final chars = List<String>.generate(
+    10,
+    (_) => _recoveryAlphabet[random.nextInt(_recoveryAlphabet.length)],
+  );
+  return '${chars.take(5).join()}-${chars.skip(5).join()}';
+}
+
+/// Forma canónica do código (sem separadores, maiúsculas) — sobre ela se
+/// calcula o hash, para aceitar variações de escrita (`xxxxx-xxxxx`,
+/// com ou sem espaços).
+String canonicalRecoveryCode(String code) =>
+    code.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();

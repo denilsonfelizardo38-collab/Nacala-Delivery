@@ -7,7 +7,6 @@ import 'package:nacala_derivery/data/api_service.dart';
 import 'package:nacala_derivery/models/models.dart';
 import 'package:nacala_derivery/screens/splash_screen.dart';
 import 'package:nacala_derivery/state/app_state.dart';
-import 'package:nacala_derivery/widgets/common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_api.dart';
@@ -38,8 +37,18 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: SplashScreen()));
-    expect(find.text('Nacala\nEntrega'), findsOneWidget);
-    expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
+    // Identidade actual: logótipo vermelho + wordmark "Nacala Delivery"
+    // e a mota de entrega presente, pronta para atravessar o ecrã.
+    expect(find.byIcon(Icons.delivery_dining_rounded), findsOneWidget);
+    expect(find.text('Nacala'), findsOneWidget);
+    expect(find.text('Delivery'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<Positioned>(find.byType(Positioned))
+          .any((position) => position.width != null),
+      isTrue,
+      reason: 'a mota de entrega está presente no splash',
+    );
   });
 
   testWidgets('a splash termina mesmo se a API demorar a restaurar sessão', (
@@ -57,12 +66,16 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(state.status, SessionStatus.signedOut);
+    // Sem sessão válida a app arranca em modo convidado — vai directamente
+    // para a Home (fluxo Splash → Home), nunca para um ecrã de login.
+    expect(state.isGuest, isTrue);
     expect(find.byType(SplashScreen), findsNothing);
-    expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
+    expect(find.text('Entrar'), findsOneWidget);
+    expect(find.text('Criar conta'), findsOneWidget);
+    expect(find.text('Email ou telefone'), findsNothing);
   });
 
-  testWidgets('sem sessão apresenta boas-vindas antes do formulário', (
+  testWidgets('sem sessão abre a Home e leva à seleção de tipo de utilizador', (
     tester,
   ) async {
     tester.view
@@ -76,27 +89,46 @@ void main() {
     await tester.pumpWidget(NacalaDeliveryApp(state: state));
     await tester.pump();
 
-    await tester.pump(const Duration(milliseconds: 900));
-    await tester.pump(const Duration(milliseconds: 400));
+    // O gate mantém a splash durante a animação de marca (1850 ms).
+    await tester.pump(const Duration(milliseconds: 1000));
+    await tester.pump(const Duration(milliseconds: 1000));
+    await tester.pumpAndSettle();
 
-    expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
+    // Depois do splash: Home directamente, em modo convidado — com os
+    // botões ENTRAR / CRIAR CONTA no hero, sem welcome nem login forçado.
     expect(find.text('Entrar'), findsOneWidget);
-    expect(find.text('Criar Conta'), findsOneWidget);
+    expect(find.text('Criar conta'), findsOneWidget);
     expect(find.text('Email ou telefone'), findsNothing);
-    // A marca apresenta-se apenas pelo wordmark (sem ícone em caixa),
-    // em branco, sobre o gradiente escuro.
-    expect(find.byType(AppLogo), findsNothing);
 
+    // ENTRAR → página de seleção do tipo de utilizador.
     await tester.tap(find.text('Entrar'));
+    await tester.pumpAndSettle();
+    expect(find.text('CLIENTE'), findsOneWidget);
+    expect(find.text('ESTABELECIMENTO'), findsOneWidget);
+    expect(find.text('ENTREGADOR'), findsOneWidget);
+    // O registo de administrador/funcionário nunca aparece na área pública.
+    expect(find.text('ADMINISTRADOR'), findsNothing);
+    expect(find.text('Email ou telefone'), findsNothing);
+
+    // CLIENTE → processo de login do cliente.
+    await tester.tap(find.byKey(const ValueKey('role-cliente')));
     await tester.pumpAndSettle();
     expect(find.text('Bem-vindo de volta!'), findsOneWidget);
     expect(find.text('Email ou telefone'), findsOneWidget);
+
+    // Voltar: login → seleção → Home.
     await tester.tap(find.byTooltip('Voltar'));
     await tester.pumpAndSettle();
-    expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
+    expect(find.text('CLIENTE'), findsOneWidget);
+    await tester.tap(find.byTooltip('Voltar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Entrar'), findsOneWidget);
     expect(find.text('Email ou telefone'), findsNothing);
 
+    // Login completo: o sistema identifica a conta e encaminha para o painel.
     await tester.tap(find.text('Entrar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('role-cliente')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byType(TextFormField).at(0),
@@ -105,7 +137,9 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(1), 'segredo');
     await tester.tap(find.widgetWithText(FilledButton, 'Entrar'));
     await tester.pumpAndSettle();
-    expect(find.text('Olá, Cliente!'), findsOneWidget);
+    // Saudação da Home autenticada (sem botões de entrada).
+    expect(find.text('Cliente, o que vai pedir hoje?'), findsOneWidget);
+    expect(find.text('Criar conta'), findsNothing);
   });
 
   testWidgets(
@@ -113,25 +147,28 @@ void main() {
     (tester) async {
       final state = await newState(FakeApi());
       await tester.pumpWidget(NacalaDeliveryApp(state: state));
-      await tester.pump(const Duration(milliseconds: 900));
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
-      await tester.ensureVisible(find.text('Explorar como convidado'));
-      await tester.tap(find.text('Explorar como convidado'));
+      // O gate mantém a splash durante a animação de marca (1850 ms).
+      await tester.pump(const Duration(milliseconds: 1000));
+      await tester.pump(const Duration(milliseconds: 1000));
       await tester.pumpAndSettle();
 
+      // Sem sessão a app arranca directamente na Home, em modo convidado.
       expect(state.isGuest, isTrue);
       expect(find.text('Início'), findsOneWidget);
+
       await tester.tap(find.text('Pedidos'));
       await tester.pumpAndSettle();
       expect(find.text('Os pedidos são da tua conta'), findsOneWidget);
       expect(find.text('Entrar ou criar conta'), findsOneWidget);
 
+      // A acção leva à seleção de tipo de utilizador (mantém o convidado
+      // até haver login — o carrinho e o estado local não se perdem).
       await tester.tap(find.text('Entrar ou criar conta'));
       await tester.pumpAndSettle();
-      expect(state.isGuest, isFalse);
-      expect(find.text('Pedido feito. Entrega garantida!'), findsOneWidget);
+      expect(state.isGuest, isTrue);
+      expect(find.text('CLIENTE'), findsOneWidget);
+      expect(find.text('ESTABELECIMENTO'), findsOneWidget);
+      expect(find.text('ENTREGADOR'), findsOneWidget);
     },
   );
 
@@ -145,18 +182,22 @@ void main() {
 
     await tester.pumpWidget(NacalaDeliveryApp(state: state));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 900));
-    await tester.pump(const Duration(milliseconds: 400));
+    // O gate mantém o splash durante a animação de marca (1850 ms).
+    await tester.pump(const Duration(milliseconds: 1000));
+    await tester.pump(const Duration(milliseconds: 1000));
+    await tester.pumpAndSettle();
 
-    expect(find.text('Olá, Cliente!'), findsOneWidget);
+    expect(find.text('Cliente, o que vai pedir hoje?'), findsOneWidget);
     expect(find.text('Início'), findsOneWidget);
     expect(find.text('Categorias'), findsWidgets);
     expect(find.text('Pedidos'), findsOneWidget);
     expect(find.text('Conta'), findsOneWidget);
     expect(find.text('Entre na sua conta'), findsNothing);
+    // Sessão iniciada: os botões de entrada desaparecem da Home.
+    expect(find.text('Criar conta'), findsNothing);
   });
 
-  testWidgets('preferência de tema em Conta aplica e guarda o tema escuro', (
+  testWidgets('a aplicação é sempre escura e não oferece escolha de tema', (
     tester,
   ) async {
     tester.view
@@ -176,35 +217,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
+    expect(app.darkTheme?.brightness, Brightness.dark);
+
     await tester.tap(find.text('Conta'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('Tema da aplicação'),
-      180,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Tema da aplicação'), findsOneWidget);
-
-    await tester.tap(find.text('Tema da aplicação'));
-    await tester.pumpAndSettle();
-
-    final sheet = find.byType(BottomSheet);
-    expect(find.descendant(of: sheet, matching: find.text('Sistema')), findsOneWidget);
-    expect(find.descendant(of: sheet, matching: find.text('Claro')), findsOneWidget);
-    expect(find.descendant(of: sheet, matching: find.text('Escuro')), findsOneWidget);
-
-    await tester.tap(find.descendant(of: sheet, matching: find.text('Escuro')));
-    await tester.pumpAndSettle();
-
-    expect(state.themeSetting, ThemeSetting.dark);
-    expect(
-      tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
-      ThemeMode.dark,
-    );
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('nacala.theme.v1'), 'dark');
+    // Sem seletor de tema: a identidade é escura por definição.
+    expect(find.text('Tema da aplicação'), findsNothing);
   });
 
   testWidgets('admin tem menu de conta com palavra-passe e logout', (

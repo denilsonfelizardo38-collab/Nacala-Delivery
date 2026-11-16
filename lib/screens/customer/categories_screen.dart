@@ -8,6 +8,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -77,181 +78,182 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Categorias'),
-        actions: const [CartButton(), SizedBox(width: 4)],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          color: AppColors.primary,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
-            children: [
-              Text(
-                'Explore por categoria',
-                style: Theme.of(context).textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Categorias',
+              trailing: Material(
+                color: AppColors.darkCard,
+                shape: const CircleBorder(),
+                child: CartButton(color: context.inkColor),
               ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                color: AppColors.primary,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                  children: [
+                    Text(
+                      'Explore por categoria',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
 
-              const SizedBox(height: 5),
+                    const SizedBox(height: 5),
 
-              Text(
-                'Escolha o tipo de parceiro e veja quem está disponível.',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: context.mutedColor, height: 1.5),
-              ),
+                    Text(
+                      'Escolha o tipo de parceiro e veja quem está disponível.',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: context.mutedColor, height: 1.5),
+                    ),
 
-              const SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-              AsyncSection<List<Category>>(
-                future: _categoriesFuture,
-                onRetry: _refresh,
-                builder: (context, categories) {
-                  return FutureBuilder<List<Establishment>>(
-                    future: _allEstablishmentsFuture,
-                    builder: (context, establishmentsSnapshot) {
-                      if (establishmentsSnapshot.hasError) {
-                        return ErrorState(
-                          message: messageForError(
-                            establishmentsSnapshot.error,
-                          ),
-                          onRetry: _refresh,
-                        );
-                      }
-
-                      final establishments = establishmentsSnapshot.data ?? [];
-
-                      if (categories.isEmpty) {
-                        return const EmptyState(
-                          icon: Icons.category_outlined,
-                          title: 'Sem categorias',
-                          message: 'Ainda não existem categorias configuradas.',
-                        );
-                      }
-
-                      return LayoutBuilder(
-                        builder: (context, constraints) {
-                          final columns = constraints.maxWidth >= 760 ? 4 : 2;
-
-                          const spacing = 12.0;
-
-                          final width =
-                              (constraints.maxWidth - spacing * (columns - 1)) /
-                              columns;
-
-                          final visible = [
-                            for (final category in categories)
-                              if (category.establishmentCount > 0) category,
-                          ];
-
-                          if (visible.isEmpty) {
-                            return const EmptyState(
-                              icon: Icons.category_outlined,
-                              title: 'Sem categorias com parceiros',
-                              message:
-                                  'Ainda não há estabelecimentos disponíveis. '
-                                  'As categorias aparecem quando um parceiro é aprovado.',
-                            );
-                          }
-
-                          return Wrap(
-                            spacing: spacing,
-                            runSpacing: spacing,
-                            children: [
-                              for (final category in visible)
-                                SizedBox(
-                                  width: width,
-                                  child: _CategoryCard(
-                                    category: category,
-                                    imageUrl: _imageFor(
-                                      category,
-                                      establishments,
-                                    ),
-                                    selected: _selectedSlug == category.slug,
-                                    onTap: () => _select(category),
-                                  ),
+                    AsyncSection<List<Category>>(
+                      future: _categoriesFuture,
+                      onRetry: _refresh,
+                      builder: (context, categories) {
+                        return FutureBuilder<List<Establishment>>(
+                          future: _allEstablishmentsFuture,
+                          builder: (context, establishmentsSnapshot) {
+                            if (establishmentsSnapshot.hasError) {
+                              return ErrorState(
+                                message: messageForError(
+                                  establishmentsSnapshot.error,
                                 ),
-                            ],
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
+                                onRetry: _refresh,
+                              );
+                            }
 
-              const SizedBox(height: 28),
+                            final establishments =
+                                establishmentsSnapshot.data ?? [];
 
-              Row(
-                children: [
-                  Expanded(
-                    child: SectionTitle(
+                            if (categories.isEmpty) {
+                              return const EmptyState(
+                                icon: Icons.category_outlined,
+                                title: 'Sem categorias',
+                                message: 'Ainda não existem categorias configuradas.',
+                              );
+                            }
+
+                            return LayoutBuilder(
+                              builder: (context, constraints) {
+                                final columns = constraints.maxWidth >= 760
+                                    ? 4
+                                    : 2;
+
+                                const spacing = 12.0;
+
+                                final width =
+                                    (constraints.maxWidth -
+                                        spacing * (columns - 1)) /
+                                    columns;
+
+                                final visible = [
+                                  for (final category in categories)
+                                    if (category.establishmentCount > 0)
+                                      category,
+                                ];
+
+                                if (visible.isEmpty) {
+                                  return const EmptyState(
+                                    icon: Icons.category_outlined,
+                                    title: 'Sem categorias com parceiros',
+                                    message:
+                                        'Ainda não há estabelecimentos disponíveis. '
+                                        'As categorias aparecem quando um parceiro é aprovado.',
+                                  );
+                                }
+
+                                return Wrap(
+                                  spacing: spacing,
+                                  runSpacing: spacing,
+                                  children: [
+                                    for (final category in visible)
+                                      SizedBox(
+                                        width: width,
+                                        child: _CategoryCard(
+                                          category: category,
+                                          imageUrl: _imageFor(
+                                            category,
+                                            establishments,
+                                          ),
+                                          selected:
+                                              _selectedSlug == category.slug,
+                                          onTap: () => _select(category),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+
+                    JbSectionHeader(
                       title: _selectedSlug == null
                           ? 'Todos os parceiros'
                           : 'Parceiros na categoria',
-                      subtitle: 'Toque num estabelecimento para ver o menu',
+                      actionLabel: _selectedSlug == null
+                          ? null
+                          : 'Limpar filtro',
+                      onAction: _selectedSlug == null
+                          ? null
+                          : () {
+                              setState(() {
+                                _selectedSlug = null;
+                                _establishmentsFuture = AppScope.of(context).api
+                                    .establishments();
+                              });
+                            },
                     ),
-                  ),
-                  if (_selectedSlug != null)
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _selectedSlug = null;
-                          _establishmentsFuture = AppScope.of(context).api
-                              .establishments();
-                        });
+
+                    AsyncSection<List<Establishment>>(
+                      future: _establishmentsFuture,
+                      onRetry: _refresh,
+                      builder: (context, establishments) {
+                        if (establishments.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.storefront_outlined,
+                            title: 'Sem parceiros',
+                            message: 'Não há estabelecimentos aprovados nesta categoria.',
+                          );
+                        }
+
+                        return Column(
+                          children: [
+                            for (final establishment in establishments)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: StoreRow(
+                                  establishment: establishment,
+                                  isFavorite: AppScope.of(
+                                    context,
+                                  ).isFavoriteEstablishment(establishment.id),
+                                  onFavoriteToggle: () =>
+                                      toggleFavorite(context, establishment.id),
+                                  onTap: () => Navigator.of(context).pushNamed(
+                                    '/store',
+                                    arguments: establishment.id,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
                       },
-                      child: Text(
-                        'Limpar filtro',
-                        style: TextStyle(
-                          color: context.accentColor,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
                     ),
-                ],
+                  ],
+                ),
               ),
-
-              const SizedBox(height: 12),
-
-              AsyncSection<List<Establishment>>(
-                future: _establishmentsFuture,
-                onRetry: _refresh,
-                builder: (context, establishments) {
-                  if (establishments.isEmpty) {
-                    return const EmptyState(
-                      icon: Icons.storefront_outlined,
-                      title: 'Sem parceiros',
-                      message:
-                          'Não há estabelecimentos aprovados nesta categoria.',
-                    );
-                  }
-
-                  return Column(
-                    children: [
-                      for (final establishment in establishments)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: EstablishmentTile(
-                            establishment: establishment,
-                            isFavorite: AppScope.of(context)
-                                .isFavoriteEstablishment(establishment.id),
-                            onFavoriteToggle: () =>
-                                toggleFavorite(context, establishment.id),
-                            onTap: () => Navigator.of(
-                              context,
-                            ).pushNamed('/store', arguments: establishment.id),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -300,7 +302,7 @@ class _CategoryCard extends StatelessWidget {
             width: double.infinity,
             height: 105,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               child: Stack(
                 fit: StackFit.expand,
                 children: [

@@ -5,6 +5,7 @@ import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 class AdminOrdersScreen extends StatefulWidget {
   const AdminOrdersScreen({super.key});
@@ -52,21 +53,26 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pedidos da plataforma'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
+        bottom: false,
         child: Column(
           children: [
+            JbPageHeader(
+              title: 'Pedidos da plataforma',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+            ),
             SizedBox(
               height: 40,
               child: ListView.separated(

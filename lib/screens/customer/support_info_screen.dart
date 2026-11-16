@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 /// Ecrãs informativos da conta: métodos de pagamento (estado real da
 /// integração), ajuda e suporte, termos e política de privacidade.
@@ -221,32 +222,43 @@ class _InfoScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
       body: SafeArea(
-        top: false,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        bottom: false,
+        child: Column(
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Icon(icon, color: AppColors.primary, size: 28),
+            JbPageHeader(
+              title: title,
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
             ),
-            const SizedBox(height: 16),
-            ...children,
-            const SizedBox(height: 24),
-            Text(
-              'NACALA DELIVERY · pedido feito, entrega garantida',
-              style: TextStyle(
-                color: context.mutedColor.withValues(alpha: 0.6),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
+            Expanded(
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(icon, color: AppColors.primary, size: 28),
+                  ),
+                  const SizedBox(height: 16),
+                  ...children,
+                  const SizedBox(height: 24),
+                  Text(
+                    'NACALA DELIVERY · pedido feito, entrega garantida',
+                    style: TextStyle(
+                      color: context.mutedColor.withValues(alpha: 0.6),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -289,7 +301,7 @@ class _OptionRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: isInDark ? AppColors.darkCard : Colors.white,
         border: Border.all(color: context.lineColor),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
@@ -298,7 +310,7 @@ class _OptionRow extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: fg, size: 21),
           ),
@@ -362,7 +374,7 @@ class _InfoParagraph extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.cardColor,
         border: Border.all(color: context.lineColor),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -409,7 +421,7 @@ class _SupportEmailRow extends StatelessWidget {
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [

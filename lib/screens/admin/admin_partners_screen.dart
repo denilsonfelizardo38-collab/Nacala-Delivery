@@ -7,6 +7,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 import 'admin_create_partner_screen.dart';
 
 class AdminPartnersScreen extends StatefulWidget {
@@ -84,96 +85,108 @@ class _AdminPartnersScreenState extends State<AdminPartnersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Parceiros'),
-        actions: [
-          IconButton(
-            tooltip: 'Registar parceiro',
-            onPressed: _createPartner,
-            icon: const Icon(Icons.add_business_rounded),
-          ),
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: () async => _reload(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            children: [
-              FilledButton.icon(
-                onPressed: _createPartner,
-                icon: const Icon(Icons.add_business_rounded, size: 18),
-                label: const Text('Registar parceiro'),
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Parceiros',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Registar parceiro',
+                    onPressed: _createPartner,
+                    icon: const Icon(Icons.add_business_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              SearchField(
-                controller: _search,
-                hintText: 'Pesquisar parceiros',
-                onChanged: (value) => setState(() => _query = value.trim()),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => _reload(),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _createPartner,
+                      icon: const Icon(Icons.add_business_rounded, size: 18),
+                      label: const Text('Registar parceiro'),
+                    ),
+                    const SizedBox(height: 14),
+                    SearchField(
+                      controller: _search,
+                      hintText: 'Pesquisar parceiros',
+                      onChanged: (value) =>
+                          setState(() => _query = value.trim()),
+                    ),
+                    const SizedBox(height: 14),
+                    AsyncSection<List<Establishment>>(
+                      future: _future,
+                      onRetry: _reload,
+                      builder: (context, partners) {
+                        final filtered = _query.isEmpty
+                            ? partners
+                            : partners
+                                  .where(
+                                    (partner) =>
+                                        partner.name.toLowerCase().contains(
+                                          _query.toLowerCase(),
+                                        ) ||
+                                        partner.categoryName
+                                            .toLowerCase()
+                                            .contains(_query.toLowerCase()),
+                                  )
+                                  .toList();
+                        if (partners.isEmpty) {
+                          return EmptyState(
+                            icon: Icons.storefront_outlined,
+                            title: 'Sem parceiros',
+                            message:
+                                'Ainda não existem estabelecimentos registados. '
+                                'Registe o primeiro parceiro para abrir o catálogo.',
+                            actionLabel: 'Registar parceiro',
+                            onAction: _createPartner,
+                          );
+                        }
+                        if (filtered.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.search_off_rounded,
+                            title: 'Sem resultados',
+                            message: 'Nenhum parceiro corresponde à pesquisa.',
+                            compact: true,
+                          );
+                        }
+                        return Column(
+                          children: [
+                            for (final partner in filtered)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _PartnerAdminCard(
+                                  partner: partner,
+                                  busy: _busyId == partner.id,
+                                  onApprove: () => _action(partner, true),
+                                  onSuspend: () => _action(partner, false),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 14),
-              AsyncSection<List<Establishment>>(
-                future: _future,
-                onRetry: _reload,
-                builder: (context, partners) {
-                  final filtered = _query.isEmpty
-                      ? partners
-                      : partners
-                            .where(
-                              (partner) =>
-                                  partner.name.toLowerCase().contains(
-                                    _query.toLowerCase(),
-                                  ) ||
-                                  partner.categoryName.toLowerCase().contains(
-                                    _query.toLowerCase(),
-                                  ),
-                            )
-                            .toList();
-                  if (partners.isEmpty) {
-                    return EmptyState(
-                      icon: Icons.storefront_outlined,
-                      title: 'Sem parceiros',
-                      message:
-                          'Ainda não existem estabelecimentos registados. '
-                          'Registe o primeiro parceiro para abrir o catálogo.',
-                      actionLabel: 'Registar parceiro',
-                      onAction: _createPartner,
-                    );
-                  }
-                  if (filtered.isEmpty) {
-                    return const EmptyState(
-                      icon: Icons.search_off_rounded,
-                      title: 'Sem resultados',
-                      message: 'Nenhum parceiro corresponde à pesquisa.',
-                      compact: true,
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final partner in filtered)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _PartnerAdminCard(
-                            partner: partner,
-                            busy: _busyId == partner.id,
-                            onApprove: () => _action(partner, true),
-                            onSuspend: () => _action(partner, false),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -238,6 +251,11 @@ class _PartnerAdminCard extends StatelessWidget {
           const SizedBox(height: 8),
           InfoRow(icon: Icons.location_on_outlined, text: partner.address),
           InfoRow(icon: Icons.phone_outlined, text: partner.phone),
+          if (partner.nuit != null && partner.nuit!.isNotEmpty)
+            InfoRow(
+              icon: Icons.receipt_long_outlined,
+              text: 'NUIT ${partner.nuit}',
+            ),
           InfoRow(
             icon: Icons.delivery_dining_rounded,
             text:

@@ -7,6 +7,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 class PartnerDashboardScreen extends StatefulWidget {
   const PartnerDashboardScreen({super.key});
@@ -63,33 +64,50 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Painel do parceiro'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: () async => _reload(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            children: [
-              AsyncSection<PartnerDashboardData>(
-                future: _future,
-                onRetry: _reload,
-                loadingHeight: 320,
-                builder: (context, data) => _content(data),
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Painel do parceiro',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Notificações',
+                    onPressed: () =>
+                        Navigator.of(context).pushNamed('/notifications'),
+                    icon: const Icon(Icons.notifications_none_rounded),
+                  ),
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => _reload(),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  children: [
+                    AsyncSection<PartnerDashboardData>(
+                      future: _future,
+                      onRetry: _reload,
+                      loadingHeight: 320,
+                      builder: (context, data) => _content(data),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -249,14 +267,11 @@ class _PartnerDashboardScreenState extends State<PartnerDashboardScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        SectionTitle(
+        JbSectionHeader(
           title: 'Pedidos recentes',
-          subtitle: 'Últimos pedidos recebidos neste estabelecimento',
           actionLabel: 'Ver todos',
           onAction: () => Navigator.of(context).pushNamed('/partner/orders'),
         ),
-        const SizedBox(height: 10),
         if (data.recentOrders.isEmpty)
           const EmptyState(
             icon: Icons.receipt_long_outlined,
@@ -324,7 +339,7 @@ class _RecentOrder extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
             child: const Icon(

@@ -20,27 +20,30 @@ abstract final class AppSpacing {
 }
 
 /// Raios de borda da aplicação.
+///
+/// Escala do sistema visual: 10 (sm) · 14 (md) · 20 (lg) · 28 (xl) e
+/// `pill` para botões/chips totalmente arredondados.
 abstract final class AppRadius {
-  static const double xs = 8;
-  static const double sm = 12;
+  static const double xs = 10;
+  static const double sm = 10;
   static const double md = 14;
-  static const double lg = 16;
-  static const double xl = 20;
-  static const double xxl = 24;
+  static const double lg = 20;
+  static const double xl = 28;
+  static const double xxl = 28;
   static const double pill = 999;
 }
 
 /// Alturas e dimensões padrão de componentes interativos.
 abstract final class AppSizes {
   /// Altura padrão dos campos de formulário e botões primários.
-  static const double input = 52;
-  static const double button = 52;
+  static const double input = 48;
+  static const double button = 48;
 
   /// Área mínima de toque acessível (Material).
   static const double touchTarget = 44;
 
   /// Altura da barra de navegação inferior.
-  static const double navBar = 70;
+  static const double navBar = 74;
 }
 
 /// Durações padrão das animações.
@@ -52,17 +55,17 @@ abstract final class AppDuration {
 
 /// Estilos de sombra reutilizáveis.
 abstract final class AppShadows {
-  /// Sombra suave padrão de cartões.
+  /// Sombra suave padrão de cartões (sobre fundo preto).
   static const card = BoxShadow(
-    color: Color(0x14000000),
-    blurRadius: 12,
-    offset: Offset(0, 4),
+    color: Color(0x66000000),
+    blurRadius: 16,
+    offset: Offset(0, 6),
   );
 
   /// Sombra de elementos flutuantes (diálogos, folhas inferiores).
   static const elevated = BoxShadow(
-    color: Color(0x1F000000),
-    blurRadius: 24,
-    offset: Offset(0, 8),
+    color: Color(0x99000000),
+    blurRadius: 28,
+    offset: Offset(0, 10),
   );
 }

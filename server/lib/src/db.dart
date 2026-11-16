@@ -367,6 +367,178 @@ const migrations = <Migration>[
         'CREATE INDEX idx_audit_created ON audit_logs(created_at)',
       ],
       disableForeignKeys: true),
+  // Candidaturas (estabelecimentos e entregadores), funcionários com
+  // permissões, notificações persistentes e metadados de localização.
+  Migration(7, [
+    '''
+    CREATE TABLE applications (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('establishment','delivery')),
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','approved','rejected','changes_requested')),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      whatsapp TEXT,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      admin_note TEXT,
+      reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      reviewed_at TEXT,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+    ''',
+    'CREATE UNIQUE INDEX idx_applications_email ON applications(email)',
+    'CREATE UNIQUE INDEX idx_applications_phone ON applications(phone)',
+    'CREATE INDEX idx_applications_status ON applications(kind, status)',
+    '''
+    CREATE TABLE employees (
+      id TEXT PRIMARY KEY,
+      establishment_id TEXT REFERENCES establishments(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      level TEXT NOT NULL DEFAULT 'staff'
+        CHECK (level IN ('super_admin','admin','staff')),
+      permissions TEXT NOT NULL DEFAULT '[]',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL
+    )
+    ''',
+    'CREATE INDEX idx_employees_establishment ON employees(establishment_id)',
+    '''
+    CREATE TABLE notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      data TEXT NOT NULL DEFAULT '{}',
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    )
+    ''',
+    'CREATE INDEX idx_notifications_user ON notifications(user_id, is_read, created_at)',
+    'ALTER TABLE users ADD COLUMN approval_status TEXT NOT NULL DEFAULT \'approved\'',
+    'ALTER TABLE users ADD COLUMN application_id TEXT',
+    'ALTER TABLE establishments ADD COLUMN latitude REAL',
+    'ALTER TABLE establishments ADD COLUMN longitude REAL',
+    'ALTER TABLE establishments ADD COLUMN whatsapp TEXT',
+    'ALTER TABLE establishments ADD COLUMN photos TEXT',
+  ]),
+  // Registo de clientes: WhatsApp opcional e código de recuperação de
+  // palavra-passe (não há SMTP/SMS externos — o código é devolvido uma
+  // vez no registo e guardado apenas como hash PBKDF2).
+  Migration(8, [
+    'ALTER TABLE users ADD COLUMN whatsapp TEXT',
+    'ALTER TABLE users ADD COLUMN recovery_code_hash TEXT',
+    'ALTER TABLE users ADD COLUMN recovery_code_salt TEXT',
+  ]),
+  // Reconstrói `users`: o CHECK da migração 1 só previa
+  // customer/partner/delivery/admin e o SQLite não permite alterar um CHECK
+  // com ALTER TABLE — sem isto, as contas de funcionário
+  // (`role = 'employee'`) seriam rejeitadas ao INSERT.
+  Migration(
+      9,
+      [
+        '''
+    CREATE TABLE users_new (
+      id TEXT PRIMARY KEY,
+      role TEXT NOT NULL CHECK (role IN
+        ('customer','partner','delivery','admin','employee')),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      phone TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      token_version INTEGER NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      avatar_url TEXT,
+      approval_status TEXT NOT NULL DEFAULT 'approved',
+      application_id TEXT,
+      whatsapp TEXT,
+      recovery_code_hash TEXT,
+      recovery_code_salt TEXT
+    )
+    ''',
+        '''
+    INSERT INTO users_new (
+      id, role, name, email, phone, password_hash, password_salt,
+      token_version, is_active, created_at, avatar_url, approval_status,
+      application_id, whatsapp, recovery_code_hash, recovery_code_salt)
+    SELECT
+      id, role, name, email, phone, password_hash, password_salt,
+      token_version, is_active, created_at, avatar_url, approval_status,
+      application_id, whatsapp, recovery_code_hash, recovery_code_salt
+    FROM users
+    ''',
+        'DROP TABLE users',
+        'ALTER TABLE users_new RENAME TO users',
+        'CREATE INDEX idx_users_role ON users(role)',
+      ],
+      disableForeignKeys: true),
+  // Mensagens e chamadas entre cliente, parceiro e estafeta (fase 13).
+  Migration(10, [
+    '''
+    CREATE TABLE conversations (
+      id TEXT PRIMARY KEY,
+      order_id TEXT REFERENCES orders(id) ON DELETE SET NULL,
+      customer_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      partner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      courier_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active','closed','archived')),
+      last_message_at TEXT,
+      created_at TEXT NOT NULL
+    )
+    ''',
+    'CREATE INDEX idx_conversations_customer ON conversations(customer_id)',
+    'CREATE INDEX idx_conversations_partner ON conversations(partner_id)',
+    'CREATE INDEX idx_conversations_courier ON conversations(courier_id)',
+    'CREATE INDEX idx_conversations_order ON conversations(order_id)',
+    '''
+    CREATE TABLE messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id)
+        ON DELETE CASCADE,
+      sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body TEXT NOT NULL DEFAULT '',
+      type TEXT NOT NULL DEFAULT 'text'
+        CHECK (type IN ('text','image','location','order_status')),
+      read_at TEXT,
+      created_at TEXT NOT NULL
+    )
+    ''',
+    'CREATE INDEX idx_messages_conversation ON messages(conversation_id, created_at)',
+    'CREATE INDEX idx_messages_sender ON messages(sender_id)',
+    '''
+    CREATE TABLE call_logs (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+      caller_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      callee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL DEFAULT 'voice'
+        CHECK (type IN ('voice','video')),
+      status TEXT NOT NULL DEFAULT 'initiated'
+        CHECK (status IN ('initiated','answered','missed','declined','ended')),
+      started_at TEXT NOT NULL,
+      answered_at TEXT,
+      ended_at TEXT,
+      duration_seconds INTEGER NOT NULL DEFAULT 0 CHECK (duration_seconds >= 0)
+    )
+    ''',
+    'CREATE INDEX idx_call_logs_caller ON call_logs(caller_id)',
+    'CREATE INDEX idx_call_logs_callee ON call_logs(callee_id)',
+    'CREATE INDEX idx_call_logs_conversation ON call_logs(conversation_id)',
+  ]),
+  // NUIT do contribuinte (parceiros): adiciona a coluna sem tocar nas linhas
+  // existentes — candidaturas antigas continuam válidas com `nuit` nulo.
+  Migration(11, [
+    'ALTER TABLE establishments ADD COLUMN nuit TEXT',
+  ]),
 ];
 
 /// Gera identificadores opacos para as linhas.

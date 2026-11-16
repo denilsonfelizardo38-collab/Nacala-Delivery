@@ -10,6 +10,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 import '../../widgets/live_delivery_map.dart';
 
 class TrackingScreen extends StatefulWidget {
@@ -82,6 +83,56 @@ class _TrackingScreenState extends State<TrackingScreen> {
     final order = _order;
     if (order == null || order.isFinal) return;
     _poll = Timer(const Duration(seconds: 12), () => _load(silent: true));
+  }
+
+  /// Abre o chat com o parceiro (dono do estabelecimento) ou com o estafeta
+  /// atribuído ao pedido, se houver um.
+  void _openChat() async {
+    final order = _order;
+    if (order == null) return;
+    final state = AppScope.of(context);
+    final api = state.api;
+    String? otherUserId;
+    String? otherName;
+    String? otherRole;
+    // Prioridade: estafeta atribuído, senão o parceiro dono do estabelecimento.
+    final delivery = order.delivery;
+    if (delivery != null &&
+        delivery.courierPhone != null &&
+        delivery.courierName != null) {
+      // Busca o utilizador do estafeta pelo telefone (simplificação: usa o
+      // próprio número como identificador de contacto; o servidor resolve).
+      otherUserId = delivery.courierPhone;
+      otherName = delivery.courierName;
+      otherRole = 'delivery';
+    } else {
+      otherUserId = order.establishment.ownerUserId;
+      otherName = order.establishment.name;
+      otherRole = 'partner';
+    }
+    if (otherUserId == null || otherUserId.isEmpty) {
+      showAppSnack(context, 'Não foi possível iniciar a conversa.');
+      return;
+    }
+    try {
+      final conversation = await api.createConversation(
+        otherUserId: otherUserId,
+        orderId: order.id,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushNamed(
+        '/chat',
+        arguments: {
+          'id': conversation.id,
+          'order_id': order.id,
+          'other_user_id': otherUserId,
+          'other_user_name': otherName,
+          'other_role': otherRole,
+        },
+      );
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
   }
 
   Future<void> _cancel() async {
@@ -181,18 +232,67 @@ class _TrackingScreenState extends State<TrackingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Acompanhar pedido'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _loading ? null : () => _load(),
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Acompanhar pedido',
+              subtitle: _order?.number,
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Tooltip(
+                    message: 'Mensagens',
+                    child: Material(
+                      color: AppColors.darkCard,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _openChat,
+                        child: SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Icon(
+                            Icons.message_rounded,
+                            size: 21,
+                            color: context.inkColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Atualizar',
+                    child: Material(
+                      color: AppColors.darkCard,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _loading ? null : () => _load(),
+                        child: SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Icon(
+                            Icons.refresh_rounded,
+                            size: 21,
+                            color: _loading ? context.mutedColor : context.inkColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: _buildBody()),
+          ],
+        ),
       ),
-      body: SafeArea(top: false, child: _buildBody()),
     );
   }
 
@@ -311,7 +411,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                         height: 42,
                         decoration: BoxDecoration(
                           color: AppColors.primarySoft,
-                          borderRadius: BorderRadius.circular(13),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(
                           Icons.delivery_dining_rounded,
@@ -397,7 +497,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(9),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             '${item.quantity}×',
@@ -618,7 +718,7 @@ class _OrderHero extends StatelessWidget {
             AppColors.primaryPressed,
           ],
         ),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: AppColors.primary.withValues(alpha: .2),
@@ -663,7 +763,7 @@ class _OrderHero extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .16),
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: Colors.white.withValues(alpha: .2)),
                 ),
                 child: const Icon(
@@ -774,7 +874,7 @@ class _TrackingSection extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: context.cardColor,
-        borderRadius: BorderRadius.circular(19),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.lineColor.withValues(alpha: .8)),
         boxShadow: [
           BoxShadow(
@@ -796,7 +896,7 @@ class _TrackingSection extends StatelessWidget {
                 height: 35,
                 decoration: BoxDecoration(
                   color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: AppColors.primary, size: 18),
               ),
@@ -968,7 +1068,7 @@ class _RoutePoint extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
             color: isDestination ? AppColors.primarySoft : context.cardColor,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: context.lineColor),
           ),
           child: Icon(icon, size: 19, color: color),
@@ -1046,7 +1146,7 @@ class _ReviewDialogState extends State<_ReviewDialog> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,

@@ -8,6 +8,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 import '../../widgets/password_dialog.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -161,51 +162,71 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Painel de administração'),
-        actions: [
-          PopupMenuButton<String>(
-            tooltip: 'Conta',
-            icon: const Icon(Icons.account_circle_outlined),
-            onSelected: (value) {
-              if (value == 'password') {
-                _changePassword();
-              } else if (value == 'logout') {
-                _logout();
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'password',
-                child: Text('Alterar palavra-passe'),
-              ),
-              PopupMenuItem(value: 'logout', child: Text('Terminar sessão')),
-            ],
-          ),
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: () async => _load(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            children: [
-              AsyncSection<(AdminSummary, List<Category>)>(
-                future: _future,
-                onRetry: _load,
-                loadingHeight: 360,
-                builder: (context, data) => _content(data.$1, data.$2),
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Painel de administração',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Notificações',
+                    onPressed: () =>
+                        Navigator.of(context).pushNamed('/notifications'),
+                    icon: const Icon(Icons.notifications_none_rounded),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Conta',
+                    icon: const Icon(Icons.account_circle_outlined),
+                    onSelected: (value) {
+                      if (value == 'password') {
+                        _changePassword();
+                      } else if (value == 'logout') {
+                        _logout();
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'password',
+                        child: Text('Alterar palavra-passe'),
+                      ),
+                      PopupMenuItem(
+                        value: 'logout',
+                        child: Text('Terminar sessão'),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => _load(),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  children: [
+                    AsyncSection<(AdminSummary, List<Category>)>(
+                      future: _future,
+                      onRetry: _load,
+                      loadingHeight: 360,
+                      builder: (context, data) => _content(data.$1, data.$2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -281,18 +302,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             );
           },
         ),
-        const SizedBox(height: 24),
-        SectionTitle(
+        JbSectionHeader(
           title: 'Aprovações pendentes',
-          subtitle: summary.pendingEstablishments.isEmpty
-              ? 'Nenhum parceiro à espera de aprovação'
-              : '${summary.pendingEstablishments.length} '
-                    '${plural(summary.pendingEstablishments.length, 'parceiro')} '
-                    'por aprovar',
+          count: summary.pendingEstablishments.length,
           actionLabel: 'Ver parceiros',
           onAction: () => Navigator.of(context).pushNamed('/admin/partners'),
         ),
-        const SizedBox(height: 10),
         if (summary.pendingEstablishments.isEmpty)
           AppCard(
             child: Row(
@@ -323,14 +338,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 onReject: () => _partnerAction(establishment, false),
               ),
             ),
-        const SizedBox(height: 24),
-        SectionTitle(
+        JbSectionHeader(
           title: 'Pedidos recentes',
-          subtitle: 'Últimos 10 pedidos da plataforma',
+          count: summary.recentOrders.length,
           actionLabel: 'Ver todos',
           onAction: () => Navigator.of(context).pushNamed('/admin/orders'),
         ),
-        const SizedBox(height: 10),
         if (summary.recentOrders.isEmpty)
           const EmptyState(
             icon: Icons.receipt_long_outlined,
@@ -344,14 +357,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               padding: const EdgeInsets.only(bottom: 8),
               child: _AdminOrderRow(order: order),
             ),
-        const SizedBox(height: 24),
-        SectionTitle(
+        JbSectionHeader(
           title: 'Categorias',
-          subtitle: '${categories.length} categoria(s) no catálogo',
+          count: categories.length,
           actionLabel: 'Adicionar',
           onAction: _createCategory,
         ),
-        const SizedBox(height: 10),
         AppCard(
           padding: EdgeInsets.zero,
           child: Column(
@@ -521,7 +532,7 @@ class _AdminOrderRow extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
             child: const Icon(

@@ -7,6 +7,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -108,98 +109,115 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Utilizadores'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: () async => _reload(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            children: [
-              SizedBox(
-                height: 40,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _roles.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final entry = _roles[index];
-                    final selected = _role == entry.$1;
-                    return FilterChipPill(
-                      label: entry.$2,
-                      selected: selected,
-                      selectedColor: AppColors.primary,
-                      onTap: () => _selectRole(entry.$1),
-                    );
-                  },
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Utilizadores',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => _reload(),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  children: [
+                    SizedBox(
+                      height: 40,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _roles.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final entry = _roles[index];
+                          final selected = _role == entry.$1;
+                          return FilterChipPill(
+                            label: entry.$2,
+                            selected: selected,
+                            selectedColor: AppColors.primary,
+                            onTap: () => _selectRole(entry.$1),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SearchField(
+                      controller: _search,
+                      hintText: 'Pesquisar por nome, email ou telemóvel',
+                      onChanged: (value) =>
+                          setState(() => _query = value.trim()),
+                    ),
+                    const SizedBox(height: 14),
+                    AsyncSection<List<AdminUser>>(
+                      future: _future,
+                      onRetry: _reload,
+                      builder: (context, users) {
+                        final query = _query.toLowerCase();
+                        final filtered = query.isEmpty
+                            ? users
+                            : users
+                                  .where(
+                                    (user) =>
+                                        user.name.toLowerCase().contains(
+                                          query,
+                                        ) ||
+                                        user.email.toLowerCase().contains(
+                                          query,
+                                        ) ||
+                                        user.phone.contains(query),
+                                  )
+                                  .toList();
+                        if (users.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.people_outline_rounded,
+                            title: 'Sem utilizadores',
+                            message: 'Não há contas neste filtro.',
+                          );
+                        }
+                        if (filtered.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.search_off_rounded,
+                            title: 'Sem resultados',
+                            message: 'Nenhuma conta corresponde à pesquisa.',
+                            compact: true,
+                          );
+                        }
+                        return Column(
+                          children: [
+                            for (final user in filtered)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _UserCard(
+                                  user: user,
+                                  busy: _busyId == user.id,
+                                  onRole: (role) => _changeRole(user, role),
+                                  onActive: (active) =>
+                                      _toggleActive(user, active),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              SearchField(
-                controller: _search,
-                hintText: 'Pesquisar por nome, email ou telemóvel',
-                onChanged: (value) => setState(() => _query = value.trim()),
-              ),
-              const SizedBox(height: 14),
-              AsyncSection<List<AdminUser>>(
-                future: _future,
-                onRetry: _reload,
-                builder: (context, users) {
-                  final query = _query.toLowerCase();
-                  final filtered = query.isEmpty
-                      ? users
-                      : users
-                            .where(
-                              (user) =>
-                                  user.name.toLowerCase().contains(query) ||
-                                  user.email.toLowerCase().contains(query) ||
-                                  user.phone.contains(query),
-                            )
-                            .toList();
-                  if (users.isEmpty) {
-                    return const EmptyState(
-                      icon: Icons.people_outline_rounded,
-                      title: 'Sem utilizadores',
-                      message: 'Não há contas neste filtro.',
-                    );
-                  }
-                  if (filtered.isEmpty) {
-                    return const EmptyState(
-                      icon: Icons.search_off_rounded,
-                      title: 'Sem resultados',
-                      message: 'Nenhuma conta corresponde à pesquisa.',
-                      compact: true,
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final user in filtered)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _UserCard(
-                            user: user,
-                            busy: _busyId == user.id,
-                            onRole: (role) => _changeRole(user, role),
-                            onActive: (active) => _toggleActive(user, active),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -24,6 +24,18 @@ Response jsonResponse(Object? data, {int status = 200}) => Response(
       headers: {'content-type': 'application/json; charset=utf-8'},
     );
 
+/// Resposta 404 em JSON (a omissão do shelf_router devolve texto puro e o
+/// cliente Flutter falha ao decodificar, mostrando "Resposta inválida").
+Response _routeNotFoundJson(Request request) => jsonResponse(
+      {
+        'error': {
+          'code': 'route_not_found',
+          'message': 'Recurso não encontrado.',
+        },
+      },
+      status: 404,
+    );
+
 class Api {
   Api({
     required this.db,
@@ -46,7 +58,7 @@ class Api {
       .addMiddleware(_requestLogger())
       .addHandler(_router.call);
 
-  late final Router _router = Router()
+  late final Router _router = Router(notFoundHandler: _routeNotFoundJson)
     ..get('/health', _health)
     ..get('/uploads/<filename>', _productImage)
     ..get('/api/categories', _categories)
@@ -61,6 +73,8 @@ class Api {
     ..patch('/api/auth/profile', _updateProfile)
     ..post('/api/auth/avatar', _uploadAvatar)
     ..post('/api/auth/change-password', _changePassword)
+    ..post('/api/auth/recover', _recover)
+    ..post('/api/auth/recovery-code', _regenerateRecoveryCode)
     ..post('/api/auth/logout', _logout)
     ..get('/api/addresses', _listAddresses)
     ..post('/api/addresses', _createAddress)
@@ -98,6 +112,7 @@ class Api {
     ..get('/api/admin/summary', _adminSummary)
     ..get('/api/admin/partners', _adminPartners)
     ..post('/api/admin/partners', _adminCreatePartner)
+    ..post('/api/admin/partner-images', _adminUploadPartnerImage)
     ..post('/api/admin/partners/<id>/approve', _adminApprovePartner)
     ..post('/api/admin/partners/<id>/reject', _adminRejectPartner)
     ..get('/api/admin/users', _adminUsers)
@@ -108,7 +123,33 @@ class Api {
     ..patch('/api/admin/categories/<id>', _adminUpdateCategory)
     ..delete('/api/admin/categories/<id>', _adminDeleteCategory)
     ..delete('/api/admin/establishments/<id>', _adminDeleteEstablishment)
-    ..delete('/api/admin/users/<id>', _adminDeleteUser);
+    ..delete('/api/admin/users/<id>', _adminDeleteUser)
+    // Candidaturas públicas (estabelecimento / entregador).
+    ..post('/api/applications', _createApplication)
+    ..post('/api/applications/images', _uploadApplicationImage)
+    ..get('/api/applications/me', _myApplication)
+    // Admin: gestão de candidaturas.
+    ..get('/api/admin/applications', _adminApplications)
+    ..post('/api/admin/applications/<id>/approve', _adminApproveApplication)
+    ..post('/api/admin/applications/<id>/reject', _adminRejectApplication)
+    ..post('/api/admin/applications/<id>/changes', _adminRequestChanges)
+    // Admin: funcionários e permissões.
+    ..get('/api/admin/employees', _adminEmployees)
+    ..post('/api/admin/employees', _adminCreateEmployee)
+    ..patch('/api/admin/employees/<id>', _adminUpdateEmployee)
+    ..delete('/api/admin/employees/<id>', _adminDeleteEmployee)
+    // Notificações persistentes.
+    ..get('/api/notifications', _listNotifications)
+    ..post('/api/notifications/read', _markNotificationsRead)
+    ..get('/api/admin/notifications', _adminNotifications)
+    // Chat e chamadas (FASE 13).
+    ..get('/api/conversations', _listConversations)
+    ..post('/api/conversations', _createConversation)
+    ..get('/api/conversations/<id>/messages', _listMessages)
+    ..post('/api/conversations/<id>/messages', _sendMessage)
+    ..post('/api/conversations/<id>/read', _markMessagesRead)
+    ..get('/api/call-logs', _listCallLogs)
+    ..post('/api/call-logs', _logCall);
 
   // ---------------------------------------------------------------- middleware
 
@@ -376,6 +417,61 @@ class Api {
     return user;
   }
 
+  /// Admin **ou** funcionário com a permissão indicada (FASE 10).
+  ///
+  /// As permissões ficam na tabela `employees` e são aplicadas **no
+  /// servidor**: a interface apenas esconde o que o backend recusa mesmo
+  /// assim. Administradores têm acesso total.
+  AuthUser requirePermission(Request request, String permission) {
+    final user = requireUser(request);
+    if (user.role == 'admin') return user;
+    if (user.role != 'employee') {
+      throw ApiError(
+        403,
+        'forbidden',
+        'Não tem permissão para esta operação.',
+      );
+    }
+    final rows = db.select(
+      'SELECT permissions FROM employees WHERE user_id = ?',
+      [user.id],
+    );
+    final permissions = rows.isEmpty
+        ? const <String>[]
+        : _decodeList(rows.first['permissions']);
+    if (!permissions.contains(permission)) {
+      throw ApiError(
+        403,
+        'missing_permission',
+        'A sua conta não tem a permissão "$permission".',
+      );
+    }
+    return user;
+  }
+
+  /// Papel **e** conta aprovada: parceiros e estafetas só usam o painel
+  /// depois de o administrador aprovar a candidatura
+  /// (`users.approval_status = 'approved'`).
+  ///
+  /// Candidaturas pendentes/recusadas continuam a poder iniciar sessão (para
+  /// acompanhar o estado em `/api/applications/me`), mas não passam daqui.
+  AuthUser requireApprovedRole(Request request, String role) {
+    final user = requireRole(request, [role]);
+    final rows = db.select(
+      'SELECT approval_status FROM users WHERE id = ?',
+      [user.id],
+    );
+    final status = rows.isEmpty ? null : rows.first['approval_status'];
+    if (status != 'approved') {
+      throw ApiError(
+        403,
+        'pending_approval',
+        'A sua candidatura ainda não foi aprovada pela plataforma.',
+      );
+    }
+    return user;
+  }
+
   AuthUser _userFromToken(String token) {
     final claims = jwt.verify(token);
     final rows = db.select(
@@ -405,10 +501,29 @@ class Api {
         'name': row['name'],
         'email': row['email'],
         'phone': row['phone'],
+        'whatsapp': row['whatsapp'],
         'avatar_url': row['avatar_url'],
         'is_active': row['is_active'] == 1,
+        // Estado da candidatura: parceiros/estafetas pendentes usam isto
+        // para abrir o ecrã de estado em vez do painel bloqueado.
+        'approval_status': row['approval_status'],
+        // Funcionário: as permissões vão na sessão para a aplicação
+        // mostrar apenas os separadores permitidos — cada rota continua
+        // validada no servidor por `requirePermission`.
+        if (row['role'] == 'employee')
+          'permissions': _permissionsForUser(row['id'] as String),
         'created_at': row['created_at'],
       };
+
+  /// Permissões da linha `employees` para o utilizador dado (vazio se não
+  /// for funcionário ou não tiver linha).
+  List<String> _permissionsForUser(String userId) {
+    final rows = db.select(
+      'SELECT permissions FROM employees WHERE user_id = ?',
+      [userId],
+    );
+    return rows.isEmpty ? const [] : _decodeList(rows.first['permissions']);
+  }
 
   void audit(
     String? actorId,
@@ -463,7 +578,10 @@ class Api {
       'description': row['description'],
       'phone': row['phone'],
       'address': row['address'],
+      'owner_user_id': row['owner_user_id'],
       'image_url': row['image_url'],
+      // Número de identificação tributária do contribuinte (FASE 13).
+      'nuit': row['nuit'],
       'delivery_fee_cents': row['delivery_fee_cents'],
       'prep_minutes': row['prep_minutes'],
       'opens_at': row['opens_at'],
@@ -476,6 +594,10 @@ class Api {
       'category_id': row['category_id'],
       'category_name': row['category_name'],
       'category_slug': row['category_slug'],
+      // Localização no mapa (FASE 11): nulos quando o parceiro ainda não
+      // marcou o ponto — o cliente degradar sem mapa em vez de quebrar.
+      'latitude': row['latitude'],
+      'longitude': row['longitude'],
     };
   }
 
@@ -793,6 +915,68 @@ class Api {
       [status, nowIso(), rejectionReason, cancellationReason, orderId],
     );
     addEvent(orderId, status, actorId, note);
+
+    // Notificação persistente ao cliente (FASE 12): cada mudança de estado
+    // da encomenda fica no centro de notificações. Quem cancela a própria
+    // encomenda não recebe aviso do que já sabe fazer.
+    final orderRows = db.select(
+      'SELECT customer_id, number FROM orders WHERE id = ?',
+      [orderId],
+    );
+    if (orderRows.isNotEmpty) {
+      final customerId = orderRows.first['customer_id'] as String?;
+      if (customerId != null && customerId != actorId) {
+        final (title, body) = _orderStatusNotification(
+          status,
+          '${orderRows.first['number']}',
+          note,
+        );
+        _notify(customerId, 'order_$status', title, body, data: {
+          'order_id': orderId,
+          'status': status,
+        });
+      }
+    }
+  }
+
+  /// Texto da notificação de mudança de estado de uma encomenda.
+  (String, String) _orderStatusNotification(
+    String status,
+    String number,
+    String? note,
+  ) {
+    final suffix = (note == null || note.isEmpty) ? '' : ' $note';
+    return switch (status) {
+      'confirmed' => (
+        'Encomenda confirmada',
+        'O estabelecimento aceitou o teu pedido #$number.$suffix',
+      ),
+      'preparing' => (
+        'Encomenda em preparação',
+        'O estabelecimento está a preparar o teu pedido #$number.$suffix',
+      ),
+      'ready' => (
+        'Encomenda pronta',
+        'O pedido #$number está pronto para sair.$suffix',
+      ),
+      'on_the_way' => (
+        'Encomenda a caminho',
+        'O estafeta está a caminho com o teu pedido #$number.$suffix',
+      ),
+      'delivered' => (
+        'Encomenda entregue',
+        'O teu pedido #$number foi entregue. Bom apetite!',
+      ),
+      'rejected' => (
+        'Encomenda recusada',
+        'O estabelecimento recusou o pedido #$number.$suffix',
+      ),
+      'cancelled' => (
+        'Encomenda cancelada',
+        'O pedido #$number foi cancelado.$suffix',
+      ),
+      _ => ('Atualização do pedido', 'O pedido #$number foi atualizado.'),
+    };
   }
 
   Map<String, dynamic> authResponse(Row user) => {
@@ -822,13 +1006,6 @@ class Api {
     _recordRateLimitHit(request, bucket: 'register', window: window);
     final body = await readBody(request);
     final name = requiredString(body, 'name', min: 2, max: 80, label: 'nome');
-    final email = requiredString(
-      body,
-      'email',
-      min: 5,
-      max: 120,
-      label: 'email',
-    ).toLowerCase();
     final phone = requiredString(
       body,
       'phone',
@@ -844,9 +1021,35 @@ class Api {
       label: 'palavra-passe',
     );
 
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      throw ApiError(422, 'invalid_email', 'Indique um email válido.');
+    // E-mail opcional no registo de clientes: a coluna `users.email` é
+    // NOT NULL UNIQUE e o SQLite não permite afrouxar isso por migração,
+    // por isso, quando omitido, deriva-se um endereço interno estável a
+    // partir do telefone (nunca recebe correspondência — não há SMTP).
+    final rawEmail = body['email'];
+    final String email;
+    if (rawEmail is String && rawEmail.trim().isNotEmpty) {
+      email = rawEmail.trim().toLowerCase();
+      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+        throw ApiError(422, 'invalid_email', 'Indique um email válido.');
+      }
+    } else {
+      email = '$phone@clientes.nacala.delivery';
     }
+
+    // WhatsApp opcional (pode diferir do telemóvel principal).
+    final rawWhatsapp = body['whatsapp'];
+    String? whatsapp;
+    if (rawWhatsapp is String && rawWhatsapp.trim().isNotEmpty) {
+      whatsapp = rawWhatsapp.replaceAll(RegExp(r'[^0-9]'), '');
+      if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(whatsapp)) {
+        throw ApiError(
+          422,
+          'invalid_whatsapp',
+          'Indique um número de WhatsApp moçambicano válido (ex.: 84 123 4567).',
+        );
+      }
+    }
+
     if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(phone)) {
       throw ApiError(
         422,
@@ -876,17 +1079,165 @@ class Api {
     }
 
     final digest = await hashPasswordAsync(password);
+    // Código de recuperação: devolvido uma única vez nesta resposta e
+    // guardado apenas como hash (não há email/SMS para o reenviar).
+    final recoveryCode = generateRecoveryCode();
+    // Hash sobre a forma canónica (sem traço/maiúsculas), para que
+    // `_recover` aceite o código escrito de qualquer forma.
+    final recoveryDigest = await hashPasswordAsync(
+      canonicalRecoveryCode(recoveryCode),
+    );
     final id = newId();
     db.execute(
       '''
-      INSERT INTO users (id, role, name, email, phone, password_hash,
-        password_salt, token_version, is_active, created_at)
-      VALUES (?, 'customer', ?, ?, ?, ?, ?, 0, 1, ?)
+      INSERT INTO users (id, role, name, email, phone, whatsapp,
+        password_hash, password_salt, recovery_code_hash, recovery_code_salt,
+        token_version, is_active, created_at)
+      VALUES (?, 'customer', ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?)
       ''',
-      [id, name, email, phone, digest.hash, digest.salt, nowIso()],
+      [
+        id,
+        name,
+        email,
+        phone,
+        whatsapp,
+        digest.hash,
+        digest.salt,
+        recoveryDigest.hash,
+        recoveryDigest.salt,
+        nowIso(),
+      ],
     );
     final user = db.select('SELECT * FROM users WHERE id = ?', [id]).first;
-    return jsonResponse(authResponse(user), status: 201);
+    return jsonResponse({
+      ...authResponse(user),
+      'recovery_code': recoveryCode,
+    }, status: 201);
+  }
+
+  /// Troca a palavra-passe usando o código de recuperação gerado no
+  /// registo. Em caso de sucesso: nova sessão (auto-login), rotação do
+  /// código (o antigo deixa de valer) e invalidação das sessões antigas
+  /// (`token_version + 1`).
+  Future<Response> _recover(Request request) async {
+    const window = Duration(minutes: 10);
+    _checkRateLimit(
+      request,
+      bucket: 'recover',
+      maxAttempts: 5,
+      window: window,
+    );
+    _recordRateLimitHit(request, bucket: 'recover', window: window);
+    final body = await readBody(request);
+    final identifier = requiredString(
+      body,
+      'identifier',
+      min: 3,
+      max: 120,
+      label: 'email ou telemóvel',
+    );
+    final code = requiredString(
+      body,
+      'code',
+      min: 6,
+      max: 32,
+      label: 'código de recuperação',
+    );
+    final password = requiredString(
+      body,
+      'password',
+      min: 8,
+      max: 200,
+      label: 'palavra-passe',
+    );
+    if (!RegExp(r'[A-Za-z]').hasMatch(password) ||
+        !RegExp(r'[0-9]').hasMatch(password)) {
+      throw ApiError(
+        422,
+        'weak_password',
+        'A palavra-passe deve ter letras e números (mínimo 8 caracteres).',
+      );
+    }
+
+    final digits = identifier.replaceAll(RegExp(r'[^0-9]'), '');
+    final rows = db.select(
+      'SELECT * FROM users WHERE lower(email) = ? OR phone = ?',
+      [identifier.toLowerCase(), digits],
+    );
+    final row = rows.isEmpty ? null : rows.first;
+    final storedHash = row?['recovery_code_hash'] as String?;
+    final storedSalt = row?['recovery_code_salt'] as String?;
+    final valid =
+        row != null &&
+        storedHash != null &&
+        storedSalt != null &&
+        await verifyPasswordAsync(
+          canonicalRecoveryCode(code),
+          storedHash,
+          storedSalt,
+        );
+    if (row == null || !valid) {
+      // Mensagem única para "não existe conta", "sem código" e "código
+      // errado": não se revela qual dos casos falhou.
+      throw ApiError(
+        422,
+        'invalid_recovery',
+        'Identificador ou código de recuperação inválido.',
+      );
+    }
+
+    final digest = await hashPasswordAsync(password);
+    final rotatedCode = generateRecoveryCode();
+    final rotatedDigest = await hashPasswordAsync(
+      canonicalRecoveryCode(rotatedCode),
+    );
+    final userId = row['id'] as String;
+    db.execute(
+      '''
+      UPDATE users SET password_hash = ?, password_salt = ?,
+        recovery_code_hash = ?, recovery_code_salt = ?,
+        token_version = token_version + 1
+      WHERE id = ?
+      ''',
+      [
+        digest.hash,
+        digest.salt,
+        rotatedDigest.hash,
+        rotatedDigest.salt,
+        userId,
+      ],
+    );
+    audit(userId, 'auth.recover', 'user', userId);
+    final updated = db.select('SELECT * FROM users WHERE id = ?', [userId]).first;
+    return jsonResponse({
+      ...authResponse(updated),
+      'recovery_code': rotatedCode,
+    });
+  }
+
+  /// Emite um novo código de recuperação para a conta autenticada (o
+  /// anterior deixa de valer). Feito a partir da área de conta — também
+  /// serve de substituto quando o utilizador perdeu o código original.
+  Future<Response> _regenerateRecoveryCode(Request request) async {
+    const window = Duration(minutes: 10);
+    _checkRateLimit(
+      request,
+      bucket: 'recovery-code',
+      maxAttempts: 5,
+      window: window,
+    );
+    _recordRateLimitHit(request, bucket: 'recovery-code', window: window);
+    final user = requireUser(request);
+    final code = generateRecoveryCode();
+    // Igual ao registo: hash sobre a forma canónica do código.
+    final digest = await hashPasswordAsync(canonicalRecoveryCode(code));
+    db.execute(
+      'UPDATE users SET recovery_code_hash = ?, recovery_code_salt = ? '
+      'WHERE id = ?',
+      [digest.hash, digest.salt, user.id],
+    );
+    audit(user.id, 'auth.recovery_code.regenerate', 'user', user.id);
+    return jsonResponse({'recovery_code': code});
   }
 
   Future<Response> _login(Request request) async {
@@ -994,11 +1345,37 @@ class Api {
         throw ApiError(409, 'email_taken', 'Este email já está em uso.');
       }
     }
+    // WhatsApp: chave ausente → mantém o valor atual; vazia → limpa;
+    // preenchida → valida o formato moçambicano.
+    final hasWhatsappKey = body.containsKey('whatsapp');
+    String? whatsapp;
+    if (hasWhatsappKey) {
+      final raw = (body['whatsapp'] as String?)?.trim() ?? '';
+      if (raw.isNotEmpty) {
+        whatsapp = raw.replaceAll(RegExp(r'[^0-9]'), '');
+        if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(whatsapp)) {
+          throw ApiError(
+            422,
+            'invalid_whatsapp',
+            'Indique um número de WhatsApp moçambicano válido.',
+          );
+        }
+      }
+    }
+    final sets = <String>['name = ?', 'phone = ?'];
+    final args = <Object?>[name, phone];
+    if (email.isNotEmpty) {
+      sets.add('email = ?');
+      args.add(email);
+    }
+    if (hasWhatsappKey) {
+      sets.add('whatsapp = ?');
+      args.add(whatsapp);
+    }
+    args.add(user.id);
     db.execute(
-      email.isEmpty
-          ? 'UPDATE users SET name = ?, phone = ? WHERE id = ?'
-          : 'UPDATE users SET name = ?, phone = ?, email = ? WHERE id = ?',
-      email.isEmpty ? [name, phone, user.id] : [name, phone, email, user.id],
+      'UPDATE users SET ${sets.join(', ')} WHERE id = ?',
+      args,
     );
     final row = db.select('SELECT * FROM users WHERE id = ?', [user.id]).first;
     return jsonResponse({'user': userJson(row)});
@@ -1687,6 +2064,18 @@ class Api {
       }
       addEvent(id, 'pending', user.id, 'Pedido recebido pela plataforma.');
       db.execute('COMMIT');
+      // Avisa o dono do estabelecimento: novo pedido (som próprio no cliente).
+      final ownerId = establishment['owner_user_id'] as String?;
+      if (ownerId != null && ownerId != user.id) {
+        _notify(
+          ownerId,
+          'new_order',
+          'Novo pedido $number',
+          'Novo pedido de ${user.name} no valor de '
+          '${(total / 100).toStringAsFixed(2)} MZN. Toca para aceitar.',
+          data: {'order_id': id, 'status': 'pending'},
+        );
+      }
       final order = loadOrder(id);
       return jsonResponse(
         {'order': orderJson(order)},
@@ -1852,7 +2241,7 @@ class Api {
   // -------------------------------------------------------------------- partner
 
   Future<Response> _partnerSummary(Request request) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final establishmentId = establishment['id'];
     final today = DateTime.now().toUtc();
@@ -1920,7 +2309,7 @@ class Api {
   }
 
   Future<Response> _partnerOrders(Request request) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final status = request.url.queryParameters['status'];
     final where = <String>['establishment_id = ?'];
@@ -1959,7 +2348,7 @@ class Api {
     String id,
     String action,
   ) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final order = loadOrder(id);
     if (order['establishment_id'] != establishment['id']) {
@@ -2051,7 +2440,7 @@ class Api {
       _partnerTransition(request, id, 'ready');
 
   Future<Response> _partnerProducts(Request request) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final rows = db.select(
       'SELECT * FROM products WHERE establishment_id = ? ORDER BY category, name',
@@ -2118,7 +2507,7 @@ class Api {
   }
 
   Future<Response> _partnerUploadProductImage(Request request) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     requirePartnerEstablishment(user);
     final body = await _readBodyLimited(
       request,
@@ -2208,7 +2597,7 @@ class Api {
   }
 
   Future<Response> _partnerCreateProduct(Request request) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final body = await readBody(request);
     final name = requiredString(body, 'name', min: 2, max: 120, label: 'nome');
@@ -2251,7 +2640,7 @@ class Api {
   }
 
   Future<Response> _partnerUpdateProduct(Request request, String id) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final rows = db.select(
       'SELECT * FROM products WHERE id = ? AND establishment_id = ?',
@@ -2325,7 +2714,17 @@ class Api {
         RegExp(r'^/uploads/[a-f0-9]{32}\.(jpg|png|webp)$').hasMatch(uri.path) &&
         !uri.hasQuery &&
         !uri.hasFragment;
-    if (uri == null || text.length > 2048 || (!isHttps && !isUploadedImage)) {
+    // Caminho devolvido pelos uploads desta API, sem origem explícita
+    // (`/uploads/…`): guardado tal e qual e resolvido no cliente.
+    final isStoredPath = uri != null &&
+        !uri.hasScheme &&
+        uri.authority.isEmpty &&
+        RegExp(r'^/uploads/[a-f0-9]{32}\.(jpg|png|webp)$').hasMatch(uri.path) &&
+        !uri.hasQuery &&
+        !uri.hasFragment;
+    if (uri == null ||
+        text.length > 2048 ||
+        (!isHttps && !isUploadedImage && !isStoredPath)) {
       throw ApiError(
         422,
         'invalid_image_url',
@@ -2336,7 +2735,7 @@ class Api {
   }
 
   Future<Response> _partnerDeleteProduct(Request request, String id) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final rows = db.select(
       'SELECT * FROM products WHERE id = ? AND establishment_id = ?',
@@ -2364,7 +2763,7 @@ class Api {
   }
 
   Future<Response> _partnerEstablishment(Request request) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final row = db.select(
       '$_establishmentSelect WHERE e.id = ?',
@@ -2374,7 +2773,7 @@ class Api {
   }
 
   Future<Response> _partnerUpdateEstablishment(Request request) async {
-    final user = requireRole(request, ['partner']);
+    final user = requireApprovedRole(request, 'partner');
     final establishment = requirePartnerEstablishment(user);
     final body = await readBody(request);
     final description = body.containsKey('description')
@@ -2422,14 +2821,15 @@ class Api {
   // ------------------------------------------------------------------- delivery
 
   Future<Response> _deliveryAssignments(Request request) async {
-    final user = requireRole(request, ['delivery']);
+    final user = requireApprovedRole(request, 'delivery');
     final rows = db.select(
       '''
       SELECT d.*, o.number, o.status AS order_status, o.total_cents,
         o.address_line, o.address_label, o.phone AS customer_phone,
         o.address_latitude, o.address_longitude, o.note,
+        o.customer_id,
         e.name AS establishment_name, e.address AS establishment_address,
-        e.phone AS establishment_phone
+        e.phone AS establishment_phone, e.owner_user_id AS establishment_owner_id
       FROM delivery_assignments d
       JOIN orders o ON o.id = d.order_id
       JOIN establishments e ON e.id = o.establishment_id
@@ -2466,6 +2866,8 @@ class Api {
             'establishment_name': row['establishment_name'],
             'establishment_address': row['establishment_address'],
             'establishment_phone': row['establishment_phone'],
+            'customer_id': row['customer_id'],
+            'establishment_owner_id': row['establishment_owner_id'],
             'created_at': row['created_at'],
           },
       ],
@@ -2473,7 +2875,7 @@ class Api {
   }
 
   Future<Response> _deliveryHistory(Request request) async {
-    final user = requireRole(request, ['delivery']);
+    final user = requireApprovedRole(request, 'delivery');
     final rows = db.select(
       '''
       SELECT d.*, o.number, o.status AS order_status, o.total_cents,
@@ -2506,7 +2908,7 @@ class Api {
   }
 
   Future<Response> _deliveryAccept(Request request, String id) async {
-    final user = requireRole(request, ['delivery']);
+    final user = requireApprovedRole(request, 'delivery');
     final rows = db.select(
       'SELECT d.*, o.id AS order_id, o.status AS order_status FROM '
       'delivery_assignments d JOIN orders o ON o.id = d.order_id WHERE d.id = ?',
@@ -2553,7 +2955,7 @@ class Api {
   }
 
   Future<Response> _deliveryStart(Request request, String id) async {
-    final user = requireRole(request, ['delivery']);
+    final user = requireApprovedRole(request, 'delivery');
     final rows = db.select(
       'SELECT d.*, o.status AS order_status, o.address_latitude, '
       'o.address_longitude FROM delivery_assignments d '
@@ -2618,7 +3020,7 @@ class Api {
   }
 
   Future<Response> _deliveryLocation(Request request, String id) async {
-    final user = requireRole(request, ['delivery']);
+    final user = requireApprovedRole(request, 'delivery');
     final rows = db.select(
       'SELECT d.id, d.status AS assignment_status, '
       'o.status AS order_status FROM delivery_assignments d '
@@ -2656,7 +3058,7 @@ class Api {
   }
 
   Future<Response> _deliveryDecline(Request request, String id) async {
-    final user = requireRole(request, ['delivery']);
+    final user = requireApprovedRole(request, 'delivery');
     final rows = db.select(
       'SELECT * FROM delivery_assignments WHERE id = ? AND courier_id = ?',
       [id, user.id],
@@ -2680,7 +3082,7 @@ class Api {
   }
 
   Future<Response> _deliveryComplete(Request request, String id) async {
-    final user = requireRole(request, ['delivery']);
+    final user = requireApprovedRole(request, 'delivery');
     final rows = db.select(
       'SELECT d.*, o.status AS order_status FROM delivery_assignments d '
       'JOIN orders o ON o.id = d.order_id WHERE d.id = ? AND d.courier_id = ?',
@@ -2797,7 +3199,7 @@ class Api {
   }
 
   Future<Response> _adminPartners(Request request) async {
-    requireRole(request, ['admin']);
+    requirePermission(request, 'establishments');
     final rows = db.select(
       '$_establishmentSelect ORDER BY e.is_approved, e.name',
     );
@@ -2806,10 +3208,26 @@ class Api {
     });
   }
 
+  /// Fotografia do estabelecimento carregada pela administração (ficheiro,
+  /// em vez de um link externo que o parceiro não controla).
+  Future<Response> _adminUploadPartnerImage(Request request) async {
+    final actor = requirePermission(request, 'establishments');
+    final body = await _readBodyLimited(
+      request,
+      maxBytes: 7 * 1024 * 1024,
+    );
+    final imageUrl = await _saveImageUpload(
+      mimeType: body['mime_type'] as String?,
+      encoded: body['data_base64'] as String?,
+    );
+    audit(actor.id, 'partner.image_uploaded', 'establishment', 'image');
+    return jsonResponse({'image_url': imageUrl}, status: 201);
+  }
+
   /// Registo de um parceiro real pela administração: cria a conta de acesso
   /// (papel `partner`) e o estabelecimento aprovado numa única transação.
   Future<Response> _adminCreatePartner(Request request) async {
-    final actor = requireRole(request, ['admin']);
+    final actor = requirePermission(request, 'establishments');
     final body = await readBody(request);
 
     final name = requiredString(body, 'name', min: 2, max: 80, label: 'nome');
@@ -2851,6 +3269,20 @@ class Api {
 
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       throw ApiError(422, 'invalid_email', 'Indique um email válido.');
+    }
+    final nuit = requiredString(
+      body,
+      'nuit',
+      min: 9,
+      max: 20,
+      label: 'NUIT',
+    ).replaceAll(RegExp(r'[^0-9]'), '');
+    if (!RegExp(r'^[0-9]{9}$').hasMatch(nuit)) {
+      throw ApiError(
+        422,
+        'invalid_nuit',
+        'Indique um NUIT válido (9 dígitos).',
+      );
     }
     if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(phone)) {
       throw ApiError(
@@ -2945,8 +3377,8 @@ class Api {
         '''
         INSERT INTO establishments (id, owner_user_id, category_id, name, slug,
           description, phone, address, image_url, delivery_fee_cents, prep_minutes,
-          opens_at, closes_at, is_open, is_approved, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?)
+          opens_at, closes_at, is_open, is_approved, nuit, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)
         ''',
         [
           establishmentId,
@@ -2962,6 +3394,7 @@ class Api {
           prep,
           opensAt,
           closesAt,
+          nuit,
           now,
         ],
       );
@@ -2989,7 +3422,7 @@ class Api {
   }
 
   Future<Response> _adminApprovePartner(Request request, String id) async {
-    final user = requireRole(request, ['admin']);
+    final user = requirePermission(request, 'establishments');
     final rows = db.select('SELECT * FROM establishments WHERE id = ?', [id]);
     if (rows.isEmpty) {
       throw ApiError(404, 'not_found', 'Parceiro não encontrado.');
@@ -3007,7 +3440,7 @@ class Api {
   }
 
   Future<Response> _adminRejectPartner(Request request, String id) async {
-    final user = requireRole(request, ['admin']);
+    final user = requirePermission(request, 'establishments');
     final rows = db.select('SELECT * FROM establishments WHERE id = ?', [id]);
     if (rows.isEmpty) {
       throw ApiError(404, 'not_found', 'Parceiro não encontrado.');
@@ -3021,7 +3454,7 @@ class Api {
   }
 
   Future<Response> _adminUsers(Request request) async {
-    requireRole(request, ['admin']);
+    requirePermission(request, 'customers');
     final role = request.url.queryParameters['role'];
     final (limit, offset) = _pagination(request, defaultLimit: 200);
     final rows = role == null || role.isEmpty
@@ -3043,13 +3476,30 @@ class Api {
   }
 
   Future<Response> _adminUpdateUser(Request request, String id) async {
-    final actor = requireRole(request, ['admin']);
+    final actor = requirePermission(request, 'customers');
     final rows = db.select('SELECT * FROM users WHERE id = ?', [id]);
     if (rows.isEmpty) {
       throw ApiError(404, 'not_found', 'Utilizador não encontrado.');
     }
+    // Funcionários só gerem contas de clientes/parceiros/estafetas.
+    if (actor.role != 'admin' &&
+        (rows.first['role'] == 'admin' ||
+            rows.first['role'] == 'employee')) {
+      throw ApiError(
+        403,
+        'forbidden',
+        'Contas administrativas só são alteradas por administradores.',
+      );
+    }
     final body = await readBody(request);
     if (body.containsKey('role')) {
+      if (actor.role != 'admin') {
+        throw ApiError(
+          403,
+          'forbidden',
+          'Só administradores alteram o papel das contas.',
+        );
+      }
       if (id == actor.id) {
         throw ApiError(
           422,
@@ -3090,7 +3540,7 @@ class Api {
   }
 
   Future<Response> _adminOrders(Request request) async {
-    requireRole(request, ['admin']);
+    requirePermission(request, 'orders');
     final status = request.url.queryParameters['status'];
     final (limit, offset) = _pagination(request, defaultLimit: 200);
     final rows = status == null || status.isEmpty || status == 'all'
@@ -3140,7 +3590,7 @@ class Api {
   }
 
   Future<Response> _adminCreateCategory(Request request) async {
-    final user = requireRole(request, ['admin']);
+    final user = requirePermission(request, 'products');
     final body = await readBody(request);
     final name = requiredString(body, 'name', min: 2, max: 60, label: 'nome');
     final slug = (body['slug'] as String?)?.trim().isNotEmpty == true
@@ -3193,7 +3643,7 @@ class Api {
   }
 
   Future<Response> _adminUpdateCategory(Request request, String id) async {
-    final user = requireRole(request, ['admin']);
+    final user = requirePermission(request, 'products');
     final rows = db.select('SELECT * FROM categories WHERE id = ?', [id]);
     if (rows.isEmpty) {
       throw ApiError(404, 'not_found', 'Categoria não encontrada.');
@@ -3217,7 +3667,7 @@ class Api {
   }
 
   Future<Response> _adminDeleteCategory(Request request, String id) async {
-    final user = requireRole(request, ['admin']);
+    final user = requirePermission(request, 'products');
     final used = db.select(
       'SELECT 1 FROM establishments WHERE category_id = ? LIMIT 1',
       [id],
@@ -3238,7 +3688,7 @@ class Api {
   /// e as encomendas feitas a essa loja. Pensado para limpar dados de
   /// demonstração semeados no servidor; não toca em nenhum utilizador.
   Future<Response> _adminDeleteEstablishment(Request request, String id) async {
-    final user = requireRole(request, ['admin']);
+    final user = requirePermission(request, 'establishments');
     final rows = db.select(
       'SELECT id, name FROM establishments WHERE id = ?',
       [id],
@@ -3276,7 +3726,7 @@ class Api {
   /// Contas de administração ficam protegidas; clientes com encomendas
   /// no histórico exigem que a loja correspondente seja eliminada antes.
   Future<Response> _adminDeleteUser(Request request, String id) async {
-    final user = requireRole(request, ['admin']);
+    final user = requirePermission(request, 'customers');
     if (id == user.id) {
       throw ApiError(409, 'self_delete', 'Não podes eliminar a tua conta.');
     }
@@ -3292,6 +3742,13 @@ class Api {
         403,
         'admin_protected',
         'As contas de administração não podem ser eliminadas.',
+      );
+    }
+    if (rows.first['role'] == 'employee' && user.role != 'admin') {
+      throw ApiError(
+        403,
+        'forbidden',
+        'Contas de funcionários só são eliminadas por administradores.',
       );
     }
     final hasOrders = db.select(
@@ -3313,4 +3770,1920 @@ class Api {
     });
     return jsonResponse({'ok': true});
   }
+
+  // ------------------------------------- candidaturas (FASE 5/6/7)
+
+  /// Permissões que um administrador pode atribuir a um funcionário. A
+  /// FASE 10 mapeia cada chave para acções concretas do painel; aqui já se
+  /// valida o conjunto para nada chegar malformado à base de dados.
+  static const _employeePermissions = <String>{
+    'orders',
+    'products',
+    'establishments',
+    'customers',
+    'applications',
+    'notifications',
+  };
+
+  /// Níveis de funcionário (o `super_admin` é reservado à configuração
+  /// directa da plataforma e não é criável pela API).
+  static const _employeeLevels = <String>{'admin', 'staff'};
+
+  /// Corpo opcional: rotas administrativas POST/PATCH podem vir sem corpo.
+  Future<Map<String, dynamic>> _optionalBody(Request request) async {
+    try {
+      return await readBody(request);
+    } on ApiError catch (error) {
+      if (error.code == 'invalid_body') return const {};
+      rethrow;
+    }
+  }
+
+  /// Insere uma notificação persistente para [userId].
+  void _notify(
+    String userId,
+    String kind,
+    String title,
+    String body, {
+    Map<String, dynamic> data = const {},
+  }) {
+    db.execute(
+      '''
+      INSERT INTO notifications (id, user_id, kind, title, body, data,
+        is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+      ''',
+      [newId(), userId, kind, title, body, jsonEncode(data), nowIso()],
+    );
+  }
+
+  /// Avisa todos os administradores activos (ex.: nova candidatura).
+  void _notifyAdmins(
+    String kind,
+    String title,
+    String body,
+    Map<String, dynamic> data,
+  ) {
+    final admins = db.select(
+      "SELECT id FROM users WHERE role = 'admin' AND is_active = 1",
+    );
+    for (final admin in admins) {
+      _notify(admin['id'] as String, kind, title, body, data: data);
+    }
+  }
+
+  Map<String, dynamic> _decodeMap(Object? raw) {
+    if (raw is! String || raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return decoded.cast<String, dynamic>();
+    } on FormatException {
+      // Corrompido: devolver vazio em vez de rebentar listagens.
+    }
+    return const {};
+  }
+
+  List<String> _decodeList(Object? raw) {
+    if (raw is! String || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) return [for (final item in decoded) '$item'];
+    } on FormatException {
+      // Idem.
+    }
+    return const [];
+  }
+
+  Map<String, dynamic> applicationJson(Row row) => {
+        'id': row['id'],
+        'kind': row['kind'],
+        'status': row['status'],
+        'name': row['name'],
+        'email': row['email'],
+        'phone': row['phone'],
+        'whatsapp': row['whatsapp'],
+        'payload': _decodeMap(row['payload']),
+        'admin_note': row['admin_note'],
+        'reviewed_at': row['reviewed_at'],
+        'user_id': row['user_id'],
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at'],
+      };
+
+  Map<String, dynamic> employeeJson(Row row) => {
+        'id': row['id'],
+        'user_id': row['user_id'],
+        'establishment_id': row['establishment_id'],
+        'name': row['name'],
+        'email': row['email'],
+        'phone': row['phone'],
+        'level': row['level'],
+        'permissions': _decodeList(row['permissions']),
+        'is_active': row['is_active'] == 1 && row['user_active'] == 1,
+        'created_at': row['created_at'],
+      };
+
+  Map<String, dynamic> notificationJson(Row row, {bool withUser = false}) => {
+        'id': row['id'],
+        'kind': row['kind'],
+        'title': row['title'],
+        'body': row['body'],
+        'data': _decodeMap(row['data']),
+        'is_read': row['is_read'] == 1,
+        'created_at': row['created_at'],
+        if (withUser) ...{
+          'user_id': row['user_id'],
+          'user_name': row['user_name'],
+          'user_email': row['user_email'],
+        },
+      };
+
+  String? _optionalString(dynamic value, {required int max}) {
+    if (value == null) return null;
+    if (value is! String) {
+      throw ApiError(422, 'invalid_payload', 'Dados da candidatura inválidos.');
+    }
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.length > max) {
+      throw ApiError(
+        422,
+        'invalid_payload',
+        'Campo da candidatura demasiado longo.',
+      );
+    }
+    return trimmed;
+  }
+
+  String? _optionalHours(dynamic value) {
+    final text = _optionalString(value, max: 5);
+    if (text == null) return null;
+    if (!RegExp(r'^([01][0-9]|2[0-3]):[0-5][0-9]$').hasMatch(text)) {
+      throw ApiError(422, 'invalid_hours', 'Horário inválido (use HH:MM).');
+    }
+    return text;
+  }
+
+  /// Valida e normaliza o `payload` da candidatura por tipo.
+  ///
+  /// Estabelecimento: nome, categoria (validada contra a tabela), morada,
+  /// coordenadas, horário e taxas — tudo o que a aprovação vai necessitar
+  /// para criar a linha em `establishments`. Entregador: dados livres
+  /// normalizados (a aprovação só activa a conta).
+  Map<String, dynamic> _applicationPayload(
+    Map<String, dynamic> body,
+    String kind,
+  ) {
+    final raw = body['payload'];
+    final Map<String, dynamic> payload;
+    if (raw == null) {
+      payload = const {};
+    } else if (raw is Map<String, dynamic>) {
+      payload = raw;
+    } else if (raw is Map) {
+      payload = raw.cast<String, dynamic>();
+    } else {
+      throw ApiError(422, 'invalid_payload', 'Dados da candidatura inválidos.');
+    }
+    final normalized = Map<String, dynamic>.from(payload);
+
+    if (kind == 'establishment') {
+      final name = _optionalString(payload['establishment_name'], max: 80);
+      if (name == null || name.length < 2) {
+        throw ApiError(
+          422,
+          'invalid_establishment_name',
+          'Indique o nome do estabelecimento.',
+        );
+      }
+      final categoryId = _optionalString(payload['category_id'], max: 60);
+      if (categoryId == null ||
+          db.select('SELECT id FROM categories WHERE id = ?', [categoryId])
+              .isEmpty) {
+        throw ApiError(422, 'invalid_category', 'Categoria inexistente.');
+      }
+      final phone = _optionalString(payload['phone'], max: 20);
+      if (phone != null &&
+          !RegExp(r'^8[2-7][0-9]{7}$')
+              .hasMatch(phone.replaceAll(RegExp(r'[^0-9]'), ''))) {
+        throw ApiError(
+          422,
+          'invalid_phone',
+          'Indique um número de contacto moçambicano válido.',
+        );
+      }
+      final whatsapp = _optionalString(payload['whatsapp'], max: 20);
+      if (whatsapp != null &&
+          !RegExp(r'^8[2-7][0-9]{7}$')
+              .hasMatch(whatsapp.replaceAll(RegExp(r'[^0-9]'), ''))) {
+        throw ApiError(
+          422,
+          'invalid_whatsapp',
+          'Indique um número de WhatsApp moçambicano válido.',
+        );
+      }
+      final (latitude, longitude) = coordinates(payload);
+      normalized['establishment_name'] = name;
+      normalized['category_id'] = categoryId;
+      normalized['description'] =
+          _optionalString(payload['description'], max: 500) ?? '';
+      normalized['address'] = _optionalString(payload['address'], max: 200) ??
+          '';
+      normalized['phone'] = phone;
+      normalized['whatsapp'] = whatsapp;
+      normalized['latitude'] = latitude;
+      normalized['longitude'] = longitude;
+      normalized['delivery_fee_cents'] = intValue(
+        payload['delivery_fee_cents'],
+        min: 0,
+        max: 1000000,
+        fallback: 0,
+      );
+      normalized['prep_minutes'] = intValue(
+        payload['prep_minutes'],
+        min: 5,
+        max: 240,
+        fallback: 30,
+      );
+      normalized['opens_at'] = _optionalHours(payload['opens_at']) ?? '08:00';
+      normalized['closes_at'] = _optionalHours(payload['closes_at']) ?? '21:00';
+      normalized['image_url'] = _optionalString(payload['image_url'], max: 300);
+      normalized['nuit'] = _requiredNuit(payload['nuit']);
+      return normalized;
+    }
+
+    normalized['nuit'] = _requiredNuit(payload['nuit']);
+    normalized['documents'] = _courierDocuments(payload['documents']);
+    normalized['vehicle_type'] = _optionalString(payload['vehicle_type'], max: 40);
+    normalized['address'] = _optionalString(payload['address'], max: 200) ?? '';
+    normalized['notes'] = _optionalString(payload['notes'], max: 500) ?? '';
+    final (latitude, longitude) = coordinates(payload);
+    normalized['latitude'] = latitude;
+    normalized['longitude'] = longitude;
+    return normalized;
+  }
+
+  /// NUIT (Número Único de Identificação Tributária) obrigatório para
+  /// contribuintes: estabelecimentos e entregadores. Aceita separadores
+  /// visuais, mas guarda só os 9 dígitos.
+  String _requiredNuit(Object? value) {
+    final digits = '${value ?? ''}'.replaceAll(RegExp(r'[^0-9]'), '');
+    if (!RegExp(r'^[0-9]{9}$').hasMatch(digits)) {
+      throw ApiError(
+        422,
+        'invalid_nuit',
+        'Indique um NUIT válido (9 dígitos).',
+      );
+    }
+    return digits;
+  }
+
+  /// Documentos obrigatórios do candidato a entregador: selfie, B.I (frente e
+  /// verso) e carta de condução, já carregados em `/api/applications/images`.
+  Map<String, String> _courierDocuments(Object? value) {
+    if (value is! Map) {
+      throw ApiError(
+        422,
+        'missing_documents',
+        'Carregue os documentos obrigatórios: selfie, B.I (frente e verso) e '
+            'carta de condução.',
+      );
+    }
+    const labels = {
+      'selfie': 'a selfie',
+      'bi_front': 'a frente do B.I',
+      'bi_back': 'o verso do B.I',
+      'license': 'a carta de condução',
+    };
+    final documents = <String, String>{};
+    for (final entry in labels.entries) {
+      final raw = value[entry.key];
+      final path = raw is String ? raw.trim() : '';
+      if (!_isStoredImage(path)) {
+        throw ApiError(
+          422,
+          'missing_document',
+          'Falta a fotografia de ${entry.value}.',
+        );
+      }
+      documents[entry.key] = path;
+    }
+    return documents;
+  }
+
+  /// Caminho `/uploads/…` com formato válido e ficheiro efectivamente
+  /// guardado — impede referências a imagens que nunca foram carregadas.
+  bool _isStoredImage(String path) {
+    if (!RegExp(r'^/uploads/[a-f0-9]{32}\.(jpg|png|webp)$').hasMatch(path)) {
+      return false;
+    }
+    final filename = path.substring('/uploads/'.length);
+    return File('${imageDirectory.path}/$filename').existsSync();
+  }
+
+  String _uniqueEstablishmentSlug(String name) {
+    var slug = normalizeText(name)
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    if (slug.isEmpty) slug = 'estabelecimento';
+    var candidate = slug;
+    var suffix = 2;
+    while (db
+        .select('SELECT id FROM establishments WHERE slug = ?', [candidate])
+        .isNotEmpty) {
+      candidate = '$slug-$suffix';
+      suffix++;
+    }
+    return candidate;
+  }
+
+  /// Carrega uma imagem de candidatura (fotos dos documentos do entregador).
+  ///
+  /// O candidato ainda não tem conta, por isso o endpoint é público — mas com
+  /// limite de tentativas por IP e a mesma validação de imagens do resto da
+  /// API (JPEG/PNG/WebP até 5 MB, assinatura verificada).
+  Future<Response> _uploadApplicationImage(Request request) async {
+    const window = Duration(minutes: 10);
+    _checkRateLimit(
+      request,
+      bucket: 'application_image',
+      maxAttempts: 40,
+      window: window,
+    );
+    _recordRateLimitHit(
+      request,
+      bucket: 'application_image',
+      window: window,
+    );
+    final body = await _readBodyLimited(
+      request,
+      maxBytes: 7 * 1024 * 1024,
+    );
+    final imageUrl = await _saveImageUpload(
+      mimeType: body['mime_type'] as String?,
+      encoded: body['data_base64'] as String?,
+    );
+    return jsonResponse({'image_url': imageUrl}, status: 201);
+  }
+
+  /// Candidatura pública (estabelecimento ou entregador).
+  ///
+  /// Cria a linha em `applications` e, para quem não tem conta, também uma
+  /// conta de candidatura (`role` partner/delivery com
+  /// `approval_status = 'pending'`) para poder entrar e consultar o estado.
+  /// Reenvio de candidaturas `changes_requested` exige a sessão do dono.
+  Future<Response> _createApplication(Request request) async {
+    const window = Duration(minutes: 10);
+    _checkRateLimit(
+      request,
+      bucket: 'application',
+      maxAttempts: 5,
+      window: window,
+    );
+    _recordRateLimitHit(request, bucket: 'application', window: window);
+    final body = await readBody(request);
+
+    final kind = requiredString(
+      body,
+      'kind',
+      max: 20,
+      label: 'tipo de candidatura',
+    );
+    if (kind != 'establishment' && kind != 'delivery') {
+      throw ApiError(422, 'invalid_kind', 'Tipo de candidatura inválido.');
+    }
+    final name = requiredString(body, 'name', min: 2, max: 80, label: 'nome');
+    final phone = requiredString(
+      body,
+      'phone',
+      min: 9,
+      max: 20,
+      label: 'telemóvel',
+    ).replaceAll(RegExp(r'[^0-9]'), '');
+    if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(phone)) {
+      throw ApiError(
+        422,
+        'invalid_phone',
+        'Indique um número moçambicano válido (ex.: 84 123 4567).',
+      );
+    }
+    final password = requiredString(
+      body,
+      'password',
+      min: 8,
+      max: 200,
+      label: 'palavra-passe',
+    );
+    if (!RegExp(r'[A-Za-z]').hasMatch(password) ||
+        !RegExp(r'[0-9]').hasMatch(password)) {
+      throw ApiError(
+        422,
+        'weak_password',
+        'A palavra-passe deve ter letras e números (mínimo 8 caracteres).',
+      );
+    }
+
+    final rawEmail = body['email'];
+    final String email;
+    if (rawEmail is String && rawEmail.trim().isNotEmpty) {
+      email = rawEmail.trim().toLowerCase();
+      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+        throw ApiError(422, 'invalid_email', 'Indique um email válido.');
+      }
+    } else {
+      final domain = kind == 'establishment'
+          ? 'estabelecimentos'
+          : 'entregadores';
+      email = '$phone@$domain.nacala.delivery';
+    }
+
+    final rawWhatsapp = body['whatsapp'];
+    String? whatsapp;
+    if (rawWhatsapp is String && rawWhatsapp.trim().isNotEmpty) {
+      whatsapp = rawWhatsapp.replaceAll(RegExp(r'[^0-9]'), '');
+      if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(whatsapp)) {
+        throw ApiError(
+          422,
+          'invalid_whatsapp',
+          'Indique um número de WhatsApp moçambicano válido '
+              '(ex.: 84 123 4567).',
+        );
+      }
+    }
+
+    final payload = _applicationPayload(body, kind);
+
+    // Sessão opcional: candidato com conta pendente reenvia a própria
+    // candidatura; uma conta de cliente candidata-se mantendo a conta.
+    AuthUser? actor;
+    try {
+      actor = optionalUser(request);
+    } on ApiError {
+      actor = null; // conta inativa/removida: trata como anónimo
+    } on JWTException {
+      actor = null; // token expirado num pedido público
+    }
+
+    Row? existing;
+    if (actor != null) {
+      final own = db.select(
+        'SELECT * FROM applications WHERE user_id = ? '
+        'ORDER BY created_at DESC LIMIT 1',
+        [actor.id],
+      );
+      if (own.isNotEmpty) {
+        existing = own.first;
+      } else if (actor.role != 'customer') {
+        // Uma conta tem um só papel: parceiro/estafeta/admin/funcionário
+        // não cria uma segunda identidade por cima.
+        throw ApiError(
+          409,
+          'account_has_role',
+          'Esta conta já tem um papel na plataforma. Cria uma nova conta '
+              'para te candidatares.',
+        );
+      }
+    }
+    if (existing == null) {
+      final byContact = db.select(
+        'SELECT * FROM applications WHERE email = ? OR phone = ?',
+        [email, phone],
+      );
+      if (byContact.isNotEmpty) existing = byContact.first;
+    }
+
+    if (existing != null) {
+      final status = existing['status'] as String;
+      if (status == 'pending') {
+        throw ApiError(
+          409,
+          'already_applied',
+          'Já existe uma candidatura em análise. Entra na tua conta para '
+              'acompanhar o estado.',
+        );
+      }
+      if (status == 'approved') {
+        throw ApiError(
+          409,
+          'already_registered',
+          'Esta candidatura já foi aprovada.',
+        );
+      }
+      if (status == 'rejected') {
+        throw ApiError(
+          409,
+          'application_rejected',
+          'A candidatura foi recusada. Contacta a equipa da plataforma.',
+        );
+      }
+      // `changes_requested` → só o dono, com sessão, pode reenviar.
+      if (existing['kind'] != kind) {
+        throw ApiError(
+          409,
+          'kind_mismatch',
+          'A candidatura existente é de outro tipo de conta.',
+        );
+      }
+      if (actor == null || actor.id != existing['user_id']) {
+        throw ApiError(
+          403,
+          'login_required',
+          'Entra na tua conta para reenviar a candidatura corrigida.',
+        );
+      }
+      return _resubmitApplication(
+        actor,
+        application: existing,
+        name: name,
+        email: email,
+        phone: phone,
+        whatsapp: whatsapp,
+        password: password,
+        payload: payload,
+      );
+    }
+
+    final reuseCustomerAccount = actor != null;
+    if (actor == null) {
+      final registered = db.select(
+        'SELECT id FROM users WHERE email = ? OR phone = ?',
+        [email, phone],
+      );
+      if (registered.isNotEmpty) {
+        throw ApiError(
+          409,
+          'already_registered',
+          'Já existe uma conta com este email ou telemóvel. Entra na tua '
+              'conta para candidatar-te.',
+        );
+      }
+    } else {
+      final registered = db.select(
+        'SELECT id FROM users WHERE (email = ? OR phone = ?) AND id != ?',
+        [email, phone, actor.id],
+      );
+      if (registered.isNotEmpty) {
+        throw ApiError(
+          409,
+          'already_registered',
+          'Já existe uma conta com este email ou telemóvel.',
+        );
+      }
+    }
+
+    final digest = await hashPasswordAsync(password);
+    final id = newId();
+    final now = nowIso();
+    final applicantUserId = reuseCustomerAccount ? actor.id : newId();
+
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      if (!reuseCustomerAccount) {
+        // Conta de candidatura: entra para consultar o estado; o painel
+        // fica bloqueado no servidor até `approval_status = 'approved'`.
+        db.execute(
+          '''
+          INSERT INTO users (id, role, name, email, phone, whatsapp,
+            password_hash, password_salt, token_version, is_active,
+            approval_status, application_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 'pending', ?, ?)
+          ''',
+          [
+            applicantUserId,
+            kind == 'establishment' ? 'partner' : 'delivery',
+            name,
+            email,
+            phone,
+            whatsapp,
+            digest.hash,
+            digest.salt,
+            id,
+            now,
+          ],
+        );
+      }
+      db.execute(
+        '''
+        INSERT INTO applications (id, kind, status, name, email, phone,
+          whatsapp, password_hash, password_salt, payload, user_id,
+          created_at, updated_at)
+        VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        [
+          id,
+          kind,
+          name,
+          email,
+          phone,
+          whatsapp,
+          digest.hash,
+          digest.salt,
+          jsonEncode(payload),
+          applicantUserId,
+          now,
+          now,
+        ],
+      );
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+
+    audit(actor?.id, 'application.create', 'application', id, {
+      'kind': kind,
+      'email': email,
+    });
+    _notifyAdmins(
+      'application_new',
+      kind == 'establishment'
+          ? 'Nova candidatura de estabelecimento'
+          : 'Nova candidatura de entregador',
+      '$name candidatou-se. Revê os dados em Gestão de Registos.',
+      {'application_id': id, 'kind': kind},
+    );
+
+    final row =
+        db.select('SELECT * FROM applications WHERE id = ?', [id]).first;
+    return jsonResponse({'application': applicationJson(row)}, status: 201);
+  }
+
+  /// Reenvio de uma candidatura `changes_requested` pelo próprio dono.
+  Future<Response> _resubmitApplication(
+    AuthUser actor, {
+    required Row application,
+    required String name,
+    required String email,
+    required String phone,
+    required String? whatsapp,
+    required String password,
+    required Map<String, dynamic> payload,
+  }) async {
+    final id = application['id'] as String;
+    final ownerUserId = application['user_id'] as String?;
+
+    final appClash = db.select(
+      'SELECT id FROM applications WHERE (email = ? OR phone = ?) AND id != ?',
+      [email, phone, id],
+    );
+    if (appClash.isNotEmpty) {
+      throw ApiError(
+        409,
+        'already_registered',
+        'Já existe uma conta ou candidatura com este email ou telemóvel.',
+      );
+    }
+    if (ownerUserId != null) {
+      final userClash = db.select(
+        'SELECT id FROM users WHERE (email = ? OR phone = ?) AND id != ?',
+        [email, phone, ownerUserId],
+      );
+      if (userClash.isNotEmpty) {
+        throw ApiError(
+          409,
+          'already_registered',
+          'Já existe uma conta com este email ou telemóvel.',
+        );
+      }
+    }
+
+    final digest = await hashPasswordAsync(password);
+    final now = nowIso();
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      db.execute(
+        '''
+        UPDATE applications SET name = ?, email = ?, phone = ?, whatsapp = ?,
+          payload = ?, password_hash = ?, password_salt = ?,
+          status = 'pending', updated_at = ?
+        WHERE id = ?
+        ''',
+        [
+          name,
+          email,
+          phone,
+          whatsapp,
+          jsonEncode(payload),
+          digest.hash,
+          digest.salt,
+          now,
+          id,
+        ],
+      );
+      // Sincroniza apenas a conta criada pela própria candidatura (nunca
+      // uma conta de cliente — o papel dela não muda com um reenvio).
+      if (ownerUserId != null) {
+        final users = db.select(
+          'SELECT * FROM users WHERE id = ?',
+          [ownerUserId],
+        );
+        if (users.isNotEmpty && users.first['application_id'] == id) {
+          db.execute(
+            '''
+            UPDATE users SET name = ?, email = ?, phone = ?, whatsapp = ?,
+              password_hash = ?, password_salt = ?, approval_status = 'pending'
+            WHERE id = ?
+            ''',
+            [
+              name,
+              email,
+              phone,
+              whatsapp,
+              digest.hash,
+              digest.salt,
+              ownerUserId,
+            ],
+          );
+        }
+      }
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+
+    audit(actor.id, 'application.resubmit', 'application', id, {
+      'kind': application['kind'],
+    });
+    _notifyAdmins(
+      'application_new',
+      'Candidatura reenviada',
+      '$name corrigiu a candidatura e reenviou para revisão.',
+      {'application_id': id},
+    );
+
+    final updated =
+        db.select('SELECT * FROM applications WHERE id = ?', [id]).first;
+    return jsonResponse({'application': applicationJson(updated)});
+  }
+
+  /// Candidatura da conta autenticada (para o candidato consultar o estado).
+  Future<Response> _myApplication(Request request) async {
+    final user = requireUser(request);
+    final rows = db.select(
+      'SELECT * FROM applications WHERE user_id = ? '
+      'ORDER BY created_at DESC LIMIT 1',
+      [user.id],
+    );
+    if (rows.isEmpty) {
+      throw ApiError(
+        404,
+        'not_found',
+        'Não existe nenhuma candidatura associada a esta conta.',
+      );
+    }
+    return jsonResponse({'application': applicationJson(rows.first)});
+  }
+
+  Future<Response> _adminApplications(Request request) async {
+    requirePermission(request, 'applications');
+    const statuses = {'pending', 'approved', 'rejected', 'changes_requested'};
+    const kinds = {'establishment', 'delivery'};
+    final query = request.url.queryParameters;
+    final status = (query['status'] ?? '').trim();
+    final kind = (query['kind'] ?? '').trim();
+    if (status.isNotEmpty && !statuses.contains(status)) {
+      throw ApiError(422, 'invalid_status', 'Estado de candidatura inválido.');
+    }
+    if (kind.isNotEmpty && !kinds.contains(kind)) {
+      throw ApiError(422, 'invalid_kind', 'Tipo de candidatura inválido.');
+    }
+    final where = <String>[];
+    final args = <Object?>[];
+    if (status.isNotEmpty) {
+      where.add('status = ?');
+      args.add(status);
+    }
+    if (kind.isNotEmpty) {
+      where.add('kind = ?');
+      args.add(kind);
+    }
+    final rows = db.select(
+      'SELECT * FROM applications '
+      '${where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}'} '
+      'ORDER BY created_at DESC',
+      args,
+    );
+    final counts = db.select(
+      'SELECT status, COUNT(*) AS total FROM applications GROUP BY status',
+    );
+    return jsonResponse({
+      'applications': [for (final row in rows) applicationJson(row)],
+      'counts': {
+        for (final row in counts) row['status'] as String: row['total'],
+      },
+    });
+  }
+
+  Future<Response> _adminApproveApplication(Request request, String id) async {
+    final actor = requirePermission(request, 'applications');
+    final body = await _optionalBody(request);
+    final note = (body['note'] as String?)?.trim();
+    final rows = db.select('SELECT * FROM applications WHERE id = ?', [id]);
+    if (rows.isEmpty) {
+      throw ApiError(404, 'not_found', 'Candidatura inexistente.');
+    }
+    final application = rows.first;
+    final status = application['status'] as String;
+    if (status == 'approved') {
+      throw ApiError(409, 'already_approved', 'Candidatura já aprovada.');
+    }
+    if (status == 'rejected') {
+      throw ApiError(
+        409,
+        'already_reviewed',
+        'Candidatura já avaliada (recusada).',
+      );
+    }
+
+    final kind = application['kind'] as String;
+    final payload = _decodeMap(application['payload']);
+    final userId = application['user_id'];
+    if (userId is! String) {
+      throw ApiError(
+        409,
+        'application_unlinked',
+        'Candidatura sem conta associada.',
+      );
+    }
+    if (db.select('SELECT id FROM users WHERE id = ?', [userId]).isEmpty) {
+      throw ApiError(
+        409,
+        'application_unlinked',
+        'Candidatura sem conta associada.',
+      );
+    }
+
+    final applicantPhone = application['phone'] as String;
+    final now = nowIso();
+    String? establishmentId;
+
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      if (kind == 'establishment') {
+        final categoryId = payload['category_id'] as String? ?? '';
+        if (db
+            .select('SELECT id FROM categories WHERE id = ?', [categoryId])
+            .isEmpty) {
+          throw ApiError(
+            422,
+            'invalid_category',
+            'A categoria da candidatura já não existe.',
+          );
+        }
+        final establishmentName =
+            (payload['establishment_name'] as String? ?? '').trim();
+        if (establishmentName.length < 2) {
+          throw ApiError(
+            422,
+            'invalid_establishment_name',
+            'Nome do estabelecimento em falta na candidatura.',
+          );
+        }
+        final contactPhone =
+            (payload['phone'] as String? ?? '').replaceAll(
+              RegExp(r'[^0-9]'),
+              '',
+            );
+        establishmentId = newId();
+        db.execute(
+          '''
+          INSERT INTO establishments (id, owner_user_id, category_id, name,
+            slug, description, phone, address, image_url, delivery_fee_cents,
+            prep_minutes, opens_at, closes_at, is_open, is_approved,
+            latitude, longitude, whatsapp, nuit, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?)
+          ''',
+          [
+            establishmentId,
+            userId,
+            categoryId,
+            establishmentName,
+            _uniqueEstablishmentSlug(establishmentName),
+            payload['description'] ?? '',
+            contactPhone.isEmpty ? applicantPhone : contactPhone,
+            payload['address'] ?? '',
+            payload['image_url'],
+            intValue(
+              payload['delivery_fee_cents'],
+              min: 0,
+              max: 1000000,
+              fallback: 0,
+            ),
+            intValue(
+              payload['prep_minutes'],
+              min: 5,
+              max: 240,
+              fallback: 30,
+            ),
+            payload['opens_at'] ?? '08:00',
+            payload['closes_at'] ?? '21:00',
+            payload['latitude'],
+            payload['longitude'],
+            payload['whatsapp'],
+            payload['nuit'],
+            now,
+          ],
+        );
+      }
+
+      // Conta: papel final e aprovação (levanta o bloqueio do painel).
+      db.execute(
+        '''
+        UPDATE users SET role = ?, approval_status = 'approved',
+          application_id = ?
+        WHERE id = ?
+        ''',
+        [kind == 'establishment' ? 'partner' : 'delivery', id, userId],
+      );
+      db.execute(
+        '''
+        UPDATE applications SET status = 'approved', admin_note = ?,
+          reviewed_by = ?, reviewed_at = ?, updated_at = ?
+        WHERE id = ?
+        ''',
+        [note, actor.id, now, now, id],
+      );
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+
+    audit(actor.id, 'application.approve', 'application', id, {'kind': kind});
+    _notify(
+      userId,
+      'application_approved',
+      'Candidatura aprovada',
+      kind == 'establishment'
+          ? 'O teu estabelecimento foi aprovado. Entra na tua conta para '
+                'publicar produtos.'
+          : 'A tua candidatura de entregador foi aprovada. Entra na tua '
+                'conta para aceitar entregas.',
+      data: {'application_id': id},
+    );
+
+    final updated =
+        db.select('SELECT * FROM applications WHERE id = ?', [id]).first;
+    return jsonResponse({
+      'application': applicationJson(updated),
+      if (establishmentId != null) 'establishment_id': establishmentId,
+    });
+  }
+
+  Future<Response> _adminRejectApplication(Request request, String id) async {
+    final actor = requirePermission(request, 'applications');
+    final body = await _optionalBody(request);
+    final note = (body['note'] as String?)?.trim();
+    final rows = db.select('SELECT * FROM applications WHERE id = ?', [id]);
+    if (rows.isEmpty) {
+      throw ApiError(404, 'not_found', 'Candidatura inexistente.');
+    }
+    final application = rows.first;
+    final status = application['status'] as String;
+    if (status == 'approved') {
+      throw ApiError(
+        409,
+        'already_approved',
+        'Candidatura já aprovada; elimina a conta se for caso disso.',
+      );
+    }
+    if (status == 'rejected') {
+      throw ApiError(409, 'already_reviewed', 'Candidatura já recusada.');
+    }
+
+    final userId = application['user_id'] as String?;
+    final now = nowIso();
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      db.execute(
+        '''
+        UPDATE applications SET status = 'rejected', admin_note = ?,
+          reviewed_by = ?, reviewed_at = ?, updated_at = ?
+        WHERE id = ?
+        ''',
+        [
+          (note == null || note.isEmpty) ? 'Candidatura recusada.' : note,
+          actor.id,
+          now,
+          now,
+          id,
+        ],
+      );
+      // Conta criada pela candidatura fica bloqueada no painel, mas
+      // mantém o acesso para consultar o estado e o motivo.
+      if (userId != null) {
+        final users = db.select(
+          'SELECT * FROM users WHERE id = ? AND application_id = ?',
+          [userId, id],
+        );
+        if (users.isNotEmpty) {
+          db.execute(
+            "UPDATE users SET approval_status = 'rejected' WHERE id = ?",
+            [userId],
+          );
+        }
+      }
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+
+    audit(actor.id, 'application.reject', 'application', id, {
+      'kind': application['kind'],
+      if (note != null && note.isNotEmpty) 'note': note,
+    });
+    if (userId != null) {
+      _notify(
+        userId,
+        'application_rejected',
+        'Candidatura recusada',
+        (note == null || note.isEmpty)
+            ? 'A tua candidatura não foi aprovada. Contacta a equipa da '
+                  'plataforma para saber mais.'
+            : note,
+        data: {'application_id': id},
+      );
+    }
+
+    final updated =
+        db.select('SELECT * FROM applications WHERE id = ?', [id]).first;
+    return jsonResponse({'application': applicationJson(updated)});
+  }
+
+  Future<Response> _adminRequestChanges(Request request, String id) async {
+    final actor = requirePermission(request, 'applications');
+    final body = await _optionalBody(request);
+    final note = (body['note'] as String?)?.trim() ?? '';
+    if (note.isEmpty) {
+      throw ApiError(
+        422,
+        'missing_note',
+        'Indique o que o candidato deve corrigir.',
+      );
+    }
+    final rows = db.select('SELECT * FROM applications WHERE id = ?', [id]);
+    if (rows.isEmpty) {
+      throw ApiError(404, 'not_found', 'Candidatura inexistente.');
+    }
+    final application = rows.first;
+    final status = application['status'] as String;
+    if (status == 'approved' || status == 'rejected') {
+      throw ApiError(
+        409,
+        'already_reviewed',
+        'A candidatura já foi avaliada em definitivo.',
+      );
+    }
+
+    final userId = application['user_id'] as String?;
+    final now = nowIso();
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      db.execute(
+        '''
+        UPDATE applications SET status = 'changes_requested', admin_note = ?,
+          reviewed_by = ?, reviewed_at = ?, updated_at = ?
+        WHERE id = ?
+        ''',
+        [note, actor.id, now, now, id],
+      );
+      // O candidato continua a poder entrar para corrigir e reenviar.
+      if (userId != null) {
+        final users = db.select(
+          'SELECT * FROM users WHERE id = ? AND application_id = ?',
+          [userId, id],
+        );
+        if (users.isNotEmpty) {
+          db.execute(
+            "UPDATE users SET approval_status = 'pending' WHERE id = ?",
+            [userId],
+          );
+        }
+      }
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+
+    audit(actor.id, 'application.changes', 'application', id, {
+      'kind': application['kind'],
+      'note': note,
+    });
+    if (userId != null) {
+      _notify(
+        userId,
+        'application_changes',
+        'Precisamos de mais informações',
+        note,
+        data: {'application_id': id},
+      );
+    }
+
+    final updated =
+        db.select('SELECT * FROM applications WHERE id = ?', [id]).first;
+    return jsonResponse({'application': applicationJson(updated)});
+  }
+
+  // ------------------------------------- funcionários (FASE 10)
+
+  List<String> _parsePermissions(dynamic raw) {
+    if (raw == null) return const [];
+    if (raw is! List) {
+      throw ApiError(422, 'invalid_permissions', 'Permissões inválidas.');
+    }
+    final result = <String>{};
+    for (final item in raw) {
+      final key = item is String ? item.trim() : '';
+      if (!_employeePermissions.contains(key)) {
+        throw ApiError(
+          422,
+          'invalid_permissions',
+          'Permissão desconhecida: $item.',
+        );
+      }
+      result.add(key);
+    }
+    return result.toList()..sort();
+  }
+
+  static const _employeeSelect = '''
+    SELECT e.*, u.name, u.email, u.phone, u.is_active AS user_active
+    FROM employees e
+    JOIN users u ON u.id = e.user_id
+  ''';
+
+  Future<Response> _adminEmployees(Request request) async {
+    requireRole(request, ['admin']);
+    final rows = db.select('$_employeeSelect ORDER BY e.created_at DESC');
+    return jsonResponse({
+      'employees': [for (final row in rows) employeeJson(row)],
+    });
+  }
+
+  Future<Response> _adminCreateEmployee(Request request) async {
+    final actor = requireRole(request, ['admin']);
+    final body = await readBody(request);
+    final name = requiredString(body, 'name', min: 2, max: 80, label: 'nome');
+    final email = requiredString(
+      body,
+      'email',
+      min: 5,
+      max: 120,
+      label: 'email',
+    ).toLowerCase();
+    final phone = requiredString(
+      body,
+      'phone',
+      min: 9,
+      max: 20,
+      label: 'telemóvel',
+    ).replaceAll(RegExp(r'[^0-9]'), '');
+    final password = requiredString(
+      body,
+      'password',
+      min: 8,
+      max: 200,
+      label: 'palavra-passe',
+    );
+    final level = requiredString(body, 'level', max: 20, label: 'nível');
+    final permissions = _parsePermissions(body['permissions']);
+    final establishmentId =
+        (body['establishment_id'] as String?)?.trim() ?? '';
+
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      throw ApiError(422, 'invalid_email', 'Indique um email válido.');
+    }
+    if (!RegExp(r'^8[2-7][0-9]{7}$').hasMatch(phone)) {
+      throw ApiError(
+        422,
+        'invalid_phone',
+        'Indique um número moçambicano válido (ex.: 84 123 4567).',
+      );
+    }
+    if (!RegExp(r'[A-Za-z]').hasMatch(password) ||
+        !RegExp(r'[0-9]').hasMatch(password)) {
+      throw ApiError(
+        422,
+        'weak_password',
+        'A palavra-passe deve ter letras e números (mínimo 8 caracteres).',
+      );
+    }
+    if (!_employeeLevels.contains(level)) {
+      throw ApiError(
+        422,
+        'invalid_level',
+        'Nível inválido (use admin ou staff).',
+      );
+    }
+    if (establishmentId.isNotEmpty &&
+        db
+            .select('SELECT id FROM establishments WHERE id = ?', [
+              establishmentId,
+            ])
+            .isEmpty) {
+      throw ApiError(
+        422,
+        'invalid_establishment',
+        'Estabelecimento inexistente.',
+      );
+    }
+    final duplicate = db.select(
+      'SELECT id FROM users WHERE email = ? OR phone = ?',
+      [email, phone],
+    );
+    if (duplicate.isNotEmpty) {
+      throw ApiError(
+        409,
+        'already_registered',
+        'Já existe uma conta com este email ou telemóvel.',
+      );
+    }
+
+    final digest = await hashPasswordAsync(password);
+    final userId = newId();
+    final employeeId = newId();
+    final now = nowIso();
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      db.execute(
+        '''
+        INSERT INTO users (id, role, name, email, phone, password_hash,
+          password_salt, token_version, is_active, approval_status, created_at)
+        VALUES (?, 'employee', ?, ?, ?, ?, ?, 0, 1, 'approved', ?)
+        ''',
+        [userId, name, email, phone, digest.hash, digest.salt, now],
+      );
+      db.execute(
+        '''
+        INSERT INTO employees (id, user_id, establishment_id, level,
+          permissions, is_active, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+        ''',
+        [
+          employeeId,
+          userId,
+          establishmentId.isEmpty ? null : establishmentId,
+          level,
+          jsonEncode(permissions),
+          actor.id,
+          now,
+        ],
+      );
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+
+    audit(actor.id, 'employee.create', 'employee', employeeId, {
+      'name': name,
+      'email': email,
+      'level': level,
+      'permissions': permissions,
+    });
+    final row = db.select(
+      '$_employeeSelect WHERE e.id = ?',
+      [employeeId],
+    ).first;
+    return jsonResponse({'employee': employeeJson(row)}, status: 201);
+  }
+
+  Future<Response> _adminUpdateEmployee(Request request, String id) async {
+    final actor = requireRole(request, ['admin']);
+    final body = await _optionalBody(request);
+    final rows = db.select(
+      '$_employeeSelect WHERE e.id = ?',
+      [id],
+    );
+    if (rows.isEmpty) {
+      throw ApiError(404, 'not_found', 'Funcionário não encontrado.');
+    }
+    final employee = rows.first;
+    final userId = employee['user_id'] as String;
+    if (userId == actor.id) {
+      throw ApiError(
+        409,
+        'self_modify',
+        'Não podes alterar o teu próprio registo de funcionário.',
+      );
+    }
+
+    final level = body.containsKey('level')
+        ? requiredString(body, 'level', max: 20, label: 'nível')
+        : employee['level'] as String;
+    if (!_employeeLevels.contains(level)) {
+      throw ApiError(
+        422,
+        'invalid_level',
+        'Nível inválido (use admin ou staff).',
+      );
+    }
+    final permissions = body.containsKey('permissions')
+        ? _parsePermissions(body['permissions'])
+        : _decodeList(employee['permissions']);
+    var active = employee['is_active'] == 1 && employee['user_active'] == 1;
+    if (body.containsKey('is_active')) {
+      final raw = body['is_active'];
+      if (raw is! bool) {
+        throw ApiError(422, 'invalid_value', 'Estado inválido.');
+      }
+      active = raw;
+    }
+
+    final activeFlag = active ? 1 : 0;
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      db.execute(
+        'UPDATE employees SET level = ?, permissions = ?, is_active = ? '
+        'WHERE id = ?',
+        [level, jsonEncode(permissions), activeFlag, id],
+      );
+      // A conta de acesso espelha o estado: desactivar corta o login e
+      // invalida as sessões abertas (token_version + 1).
+      db.execute(
+        'UPDATE users SET is_active = ?, '
+        'token_version = token_version + CASE WHEN ? = 0 THEN 1 ELSE 0 END '
+        'WHERE id = ?',
+        [activeFlag, activeFlag, userId],
+      );
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+
+    audit(actor.id, 'employee.update', 'employee', id, {
+      'level': level,
+      'permissions': permissions,
+      'is_active': active,
+    });
+    final updated = db.select(
+      '$_employeeSelect WHERE e.id = ?',
+      [id],
+    ).first;
+    return jsonResponse({'employee': employeeJson(updated)});
+  }
+
+  Future<Response> _adminDeleteEmployee(Request request, String id) async {
+    final actor = requireRole(request, ['admin']);
+    final rows = db.select(
+      '$_employeeSelect WHERE e.id = ?',
+      [id],
+    );
+    if (rows.isEmpty) {
+      throw ApiError(404, 'not_found', 'Funcionário não encontrado.');
+    }
+    final employee = rows.first;
+    final userId = employee['user_id'] as String;
+    if (userId == actor.id) {
+      throw ApiError(
+        409,
+        'self_delete',
+        'Não podes eliminar o teu próprio registo.',
+      );
+    }
+    final hasOrders = db.select(
+      'SELECT 1 FROM orders WHERE customer_id = ? LIMIT 1',
+      [userId],
+    );
+    if (hasOrders.isNotEmpty) {
+      throw ApiError(
+        409,
+        'user_has_orders',
+        'Esta conta tem encomendas no histórico e não pode ser eliminada.',
+      );
+    }
+    // A remoção da conta remove também a linha de funcionários (CASCADE).
+    db.execute('DELETE FROM users WHERE id = ?', [userId]);
+    audit(actor.id, 'employee.delete', 'employee', id, {
+      'name': employee['name'],
+      'email': employee['email'],
+    });
+    return jsonResponse({'ok': true});
+  }
+
+  // ------------------------------------- notificações (FASE 12)
+
+  Future<Response> _listNotifications(Request request) async {
+    final user = requireUser(request);
+    final limit = intValue(
+      request.url.queryParameters['limit'],
+      min: 1,
+      max: 100,
+      fallback: 50,
+    );
+    final rows = db.select(
+      'SELECT * FROM notifications WHERE user_id = ? '
+      'ORDER BY created_at DESC, id DESC LIMIT ?',
+      [user.id, limit],
+    );
+    final unread = db
+        .select(
+          'SELECT COUNT(*) AS total FROM notifications '
+          'WHERE user_id = ? AND is_read = 0',
+          [user.id],
+        )
+        .first['total'];
+    return jsonResponse({
+      'notifications': [for (final row in rows) notificationJson(row)],
+      'unread_count': unread,
+    });
+  }
+
+  Future<Response> _markNotificationsRead(Request request) async {
+    final user = requireUser(request);
+    final body = await _optionalBody(request);
+    final rawIds = body['ids'];
+    if (rawIds != null) {
+      if (rawIds is! List) {
+        throw ApiError(422, 'invalid_ids', 'Lista de notificações inválida.');
+      }
+      final ids = <String>[];
+      for (final item in rawIds) {
+        if (item is! String || item.isEmpty) {
+          throw ApiError(
+            422,
+            'invalid_ids',
+            'Lista de notificações inválida.',
+          );
+        }
+        ids.add(item);
+      }
+      if (ids.isEmpty) return jsonResponse({'updated': 0});
+      final placeholders = List.filled(ids.length, '?').join(', ');
+      final args = <Object?>[user.id, ...ids];
+      final pending = db
+          .select(
+            'SELECT COUNT(*) AS total FROM notifications '
+            'WHERE user_id = ? AND is_read = 0 AND id IN ($placeholders)',
+            args,
+          )
+          .first['total'];
+      db.execute(
+        'UPDATE notifications SET is_read = 1 '
+        'WHERE user_id = ? AND id IN ($placeholders)',
+        args,
+      );
+      return jsonResponse({'updated': pending});
+    }
+    final pending = db
+        .select(
+          'SELECT COUNT(*) AS total FROM notifications '
+          'WHERE user_id = ? AND is_read = 0',
+          [user.id],
+        )
+        .first['total'];
+    db.execute(
+      'UPDATE notifications SET is_read = 1 WHERE user_id = ?',
+      [user.id],
+    );
+    return jsonResponse({'updated': pending});
+  }
+
+  Future<Response> _adminNotifications(Request request) async {
+    requirePermission(request, 'notifications');
+    final query = request.url.queryParameters;
+    final targetUser = (query['user_id'] ?? '').trim();
+    final limit = intValue(
+      query['limit'],
+      min: 1,
+      max: 200,
+      fallback: 100,
+    );
+    final where = <String>[];
+    final args = <Object?>[];
+    if (targetUser.isNotEmpty) {
+      where.add('n.user_id = ?');
+      args.add(targetUser);
+    }
+    args.add(limit);
+    final rows = db.select(
+      'SELECT n.*, u.name AS user_name, u.email AS user_email '
+      'FROM notifications n JOIN users u ON u.id = n.user_id '
+      '${where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}'} '
+      'ORDER BY n.created_at DESC LIMIT ?',
+      args,
+    );
+    return jsonResponse({
+      'notifications': [
+        for (final row in rows) notificationJson(row, withUser: true),
+      ],
+    });
+  }
+
+  // ============================================================ CHAT (FASE 13)
+
+  /// Lista as conversas do utilizador autenticado (cliente, parceiro ou
+  /// estafeta), com a última mensagem e o nome do outro participante.
+  Future<Response> _listConversations(Request request) async {
+    final user = requireUser(request);
+    final rows = db.select(
+      '''
+      SELECT c.*,
+        (SELECT m.body FROM messages m
+          WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1)
+          AS last_body,
+        (SELECT m.created_at FROM messages m
+          WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1)
+          AS last_created,
+        (SELECT m.sender_id FROM messages m
+          WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1)
+          AS last_sender_id,
+        (SELECT COUNT(*) FROM messages m
+          WHERE m.conversation_id = c.id AND m.sender_id != ? AND m.read_at IS NULL)
+          AS unread_count
+      FROM conversations c
+      WHERE c.customer_id = ? OR c.partner_id = ? OR c.courier_id = ?
+      ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+      ''',
+      [user.id, user.id, user.id, user.id],
+    );
+    return jsonResponse({
+      'conversations': [
+        for (final row in rows) conversationJson(row, currentUserId: user.id),
+      ],
+    });
+  }
+
+  /// Cria (ou reutiliza) uma conversa entre dois utilizadores, opcionalmente
+  /// ligada a uma encomenda. Participantes válidos:
+  /// cliente↔parceiro, cliente↔estafeta, parceiro↔estafeta.
+  Future<Response> _createConversation(Request request) async {
+    final user = requireUser(request);
+    final body = await _optionalBody(request);
+    final otherId = (body['other_user_id'] ?? '').toString().trim();
+    final orderId = (body['order_id'] ?? '').toString().trim();
+    if (otherId.isEmpty) {
+      throw ApiError(422, 'missing_other_user', 'Informe o outro participante.');
+    }
+    if (otherId == user.id) {
+      throw ApiError(422, 'self_conversation', 'Não podes criar conversa contigo.');
+    }
+    // Valida que o outro utilizador existe e está ativo.
+    final other = db.select('SELECT id, role FROM users WHERE id = ?', [otherId]);
+    if (other.isEmpty) {
+      throw ApiError(404, 'user_not_found', 'Utilizador não encontrado.');
+    }
+    // Valida a combinação de papéis.
+    final allowed = <String, Set<String>>{
+      'customer': {'partner', 'delivery'},
+      'partner': {'customer', 'delivery'},
+      'delivery': {'customer', 'partner'},
+    };
+    final myAllowed = allowed[user.role];
+    if (myAllowed == null || !myAllowed.contains(other.first['role'] as String)) {
+      throw ApiError(403, 'forbidden_pair', 'Esta combinação de participantes não é permitida.');
+    }
+    // Se houver encomenda, valida que pertence ao cliente e ao parceiro da conversa.
+    if (orderId.isNotEmpty) {
+      final order = db.select('SELECT * FROM orders WHERE id = ?', [orderId]);
+      if (order.isEmpty) {
+        throw ApiError(404, 'order_not_found', 'Encomenda não encontrada.');
+      }
+      final orderRow = order.first;
+      final customerId = orderRow['customer_id'] as String;
+      final establishmentId = orderRow['establishment_id'] as String;
+      // O cliente da conversa deve ser o dono da encomenda.
+      if (user.role == 'customer' && user.id != customerId) {
+        throw ApiError(403, 'forbidden_order', 'Esta encomenda não é tua.');
+      }
+      // O parceiro deve ser o dono do estabelecimento da encomenda.
+      final establishment = db.select(
+        'SELECT owner_user_id FROM establishments WHERE id = ?',
+        [establishmentId],
+      );
+      if (establishment.isEmpty) {
+        throw ApiError(404, 'establishment_not_found', 'Estabelecimento não encontrado.');
+      }
+      final ownerId = establishment.first['owner_user_id'] as String?;
+      if (user.role == 'partner' && ownerId != user.id) {
+        throw ApiError(403, 'forbidden_order', 'Este estabelecimento não é teu.');
+      }
+    }
+    // Reutiliza conversa existente entre os dois (mesma ordem, se indicada).
+    final existing = db.select(
+      '''
+      SELECT * FROM conversations
+      WHERE ((customer_id = ? AND partner_id = ?)
+         OR (customer_id = ? AND partner_id = ?)
+         OR (customer_id = ? AND courier_id = ?)
+         OR (customer_id = ? AND courier_id = ?)
+         OR (partner_id = ? AND courier_id = ?)
+         OR (partner_id = ? AND courier_id = ?))
+        AND (order_id IS NULL OR order_id = ?)
+      ''',
+      [
+        user.id, otherId,
+        otherId, user.id,
+        user.id, otherId,
+        otherId, user.id,
+        user.id, otherId,
+        otherId, user.id,
+        orderId.isEmpty ? null : orderId,
+      ],
+    );
+    if (existing.isNotEmpty) {
+      final row = existing.first;
+      return jsonResponse({'conversation': conversationJson(row, currentUserId: user.id)});
+    }
+    final id = newId();
+    final now = nowIso();
+    // Determina papéis com base no utilizador autenticado e no outro.
+    String? customerId, partnerId, courierId;
+    if (user.role == 'customer') {
+      customerId = user.id;
+      if (other.first['role'] == 'partner') partnerId = otherId;
+      if (other.first['role'] == 'delivery') courierId = otherId;
+    } else if (user.role == 'partner') {
+      partnerId = user.id;
+      if (other.first['role'] == 'customer') customerId = otherId;
+      if (other.first['role'] == 'delivery') courierId = otherId;
+    } else if (user.role == 'delivery') {
+      courierId = user.id;
+      if (other.first['role'] == 'customer') customerId = otherId;
+      if (other.first['role'] == 'partner') partnerId = otherId;
+    }
+    db.execute(
+      '''
+      INSERT INTO conversations (id, order_id, customer_id, partner_id,
+        courier_id, status, last_message_at, created_at)
+      VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+      ''',
+      [id, orderId.isEmpty ? null : orderId, customerId, partnerId, courierId,
+        now, now],
+    );
+    audit(user.id, 'conversation.create', 'conversation', id, {
+      'other_user_id': otherId,
+      'order_id': orderId.isEmpty ? null : orderId,
+    });
+    final row = db.select('SELECT * FROM conversations WHERE id = ?', [id]).first;
+    return jsonResponse({'conversation': conversationJson(row, currentUserId: user.id)}, status: 201);
+  }
+
+  /// Lista as mensagens de uma conversa (apenas participantes).
+  Future<Response> _listMessages(Request request) async {
+    final user = requireUser(request);
+    final conversationId = request.params['id'] ?? '';
+    final limit = intValue(request.url.queryParameters['limit'], min: 1, max: 200, fallback: 50);
+    final before = request.url.queryParameters['before'];
+    final conversation = db.select('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+    if (conversation.isEmpty) {
+      throw ApiError(404, 'conversation_not_found', 'Conversa não encontrada.');
+    }
+    final row = conversation.first;
+    if (row['customer_id'] != user.id &&
+        row['partner_id'] != user.id &&
+        row['courier_id'] != user.id) {
+      throw ApiError(403, 'forbidden', 'Não és participante desta conversa.');
+    }
+    final where = <String>['conversation_id = ?'];
+    final args = <Object?>[conversationId];
+    if (before != null && before.isNotEmpty) {
+      where.add('created_at < ?');
+      args.add(before);
+    }
+    args.add(limit);
+    final rows = db.select(
+      'SELECT * FROM messages WHERE ${where.join(' AND ')} '
+      'ORDER BY created_at DESC, id DESC LIMIT ?',
+      args,
+    );
+    return jsonResponse({
+      'messages': [for (final r in rows.reversed) messageJson(r)],
+    });
+  }
+
+  /// Envia uma mensagem numa conversa (apenas participantes).
+  Future<Response> _sendMessage(Request request) async {
+    final user = requireUser(request);
+    final conversationId = request.params['id'] ?? '';
+    final body = await _optionalBody(request);
+    final text = (body['body'] ?? '').toString().trim();
+    final type = (body['type'] ?? 'text').toString();
+    if (!{'text', 'image', 'location', 'order_status'}.contains(type)) {
+      throw ApiError(422, 'invalid_type', 'Tipo de mensagem inválido.');
+    }
+    if (type == 'text' && text.isEmpty) {
+      throw ApiError(422, 'empty_body', 'Escreve uma mensagem.');
+    }
+    final conversation = db.select('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+    if (conversation.isEmpty) {
+      throw ApiError(404, 'conversation_not_found', 'Conversa não encontrada.');
+    }
+    final row = conversation.first;
+    if (row['customer_id'] != user.id &&
+        row['partner_id'] != user.id &&
+        row['courier_id'] != user.id) {
+      throw ApiError(403, 'forbidden', 'Não és participante desta conversa.');
+    }
+    final id = newId();
+    final now = nowIso();
+    db.execute(
+      '''
+      INSERT INTO messages (id, conversation_id, sender_id, body, type, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ''',
+      [id, conversationId, user.id, text, type, now],
+    );
+    db.execute(
+      'UPDATE conversations SET last_message_at = ? WHERE id = ?',
+      [now, conversationId],
+    );
+    // Notificação persistente para o(s) outro(s) participante(s).
+    final others = <String>[];
+    final cId = row['customer_id'] as String?;
+    final pId = row['partner_id'] as String?;
+    final dId = row['courier_id'] as String?;
+    for (final id in [cId, pId, dId]) {
+      if (id != null && id != user.id) others.add(id);
+    }
+    final senderName = user.name;
+    for (final otherId in others) {
+      _notify(
+        otherId,
+        'chat_message',
+        'Nova mensagem de $senderName',
+        text.isNotEmpty ? text : '[anexo]',
+        data: {'conversation_id': conversationId, 'sender_id': user.id},
+      );
+    }
+    audit(user.id, 'message.send', 'message', id, {
+      'conversation_id': conversationId,
+      'type': type,
+    });
+    final msg = db.select('SELECT * FROM messages WHERE id = ?', [id]).first;
+    return jsonResponse({'message': messageJson(msg)}, status: 201);
+  }
+
+  /// Marca mensagens de uma conversa como lidas pelo utilizador autenticado.
+  Future<Response> _markMessagesRead(Request request) async {
+    final user = requireUser(request);
+    final conversationId = request.params['id'] ?? '';
+    final conversation = db.select('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+    if (conversation.isEmpty) {
+      throw ApiError(404, 'conversation_not_found', 'Conversa não encontrada.');
+    }
+    final row = conversation.first;
+    if (row['customer_id'] != user.id &&
+        row['partner_id'] != user.id &&
+        row['courier_id'] != user.id) {
+      throw ApiError(403, 'forbidden', 'Não és participante desta conversa.');
+    }
+    final now = nowIso();
+    db.execute(
+      'UPDATE messages SET read_at = ? WHERE conversation_id = ? AND sender_id != ? AND read_at IS NULL',
+      [now, conversationId, user.id],
+    );
+    return jsonResponse({'ok': true});
+  }
+
+  /// Lista o histórico de chamadas do utilizador autenticado.
+  Future<Response> _listCallLogs(Request request) async {
+    final user = requireUser(request);
+    final limit = intValue(request.url.queryParameters['limit'], min: 1, max: 100, fallback: 50);
+    final rows = db.select(
+      '''
+      SELECT cl.*, u.name AS caller_name, u2.name AS callee_name
+      FROM call_logs cl
+      JOIN users u ON u.id = cl.caller_id
+      JOIN users u2 ON u2.id = cl.callee_id
+      WHERE cl.caller_id = ? OR cl.callee_id = ?
+      ORDER BY cl.started_at DESC LIMIT ?
+      ''',
+      [user.id, user.id, limit],
+    );
+    return jsonResponse({
+      'call_logs': [
+        for (final r in rows) {
+          {
+            'id': r['id'],
+            'conversation_id': r['conversation_id'],
+            'caller_id': r['caller_id'],
+            'caller_name': r['caller_name'],
+            'callee_id': r['callee_id'],
+            'callee_name': r['callee_name'],
+            'type': r['type'],
+            'status': r['status'],
+            'started_at': r['started_at'],
+            'answered_at': r['answered_at'],
+            'ended_at': r['ended_at'],
+            'duration_seconds': r['duration_seconds'],
+          }
+        },
+      ],
+    });
+  }
+
+  /// Regista uma chamada (iniciada, atendida, recusada, perdida, terminada).
+  Future<Response> _logCall(Request request) async {
+    final user = requireUser(request);
+    final body = await _optionalBody(request);
+    final calleeId = (body['callee_id'] ?? '').toString().trim();
+    final conversationId = (body['conversation_id'] ?? '').toString().trim();
+    final type = (body['type'] ?? 'voice').toString();
+    final status = (body['status'] ?? 'initiated').toString();
+    if (calleeId.isEmpty) {
+      throw ApiError(422, 'missing_callee', 'Informe o destinatário.');
+    }
+    if (calleeId == user.id) {
+      throw ApiError(422, 'self_call', 'Não podes ligar para ti mesmo.');
+    }
+    if (!{'voice', 'video'}.contains(type)) {
+      throw ApiError(422, 'invalid_type', 'Tipo de chamada inválido.');
+    }
+    if (!{'initiated', 'answered', 'missed', 'declined', 'ended'}.contains(status)) {
+      throw ApiError(422, 'invalid_status', 'Estado de chamada inválido.');
+    }
+    final callee = db.select('SELECT id FROM users WHERE id = ? AND is_active = 1', [calleeId]);
+    if (callee.isEmpty) {
+      throw ApiError(404, 'user_not_found', 'Destinatário não encontrado.');
+    }
+    if (conversationId.isNotEmpty) {
+      final conversation = db.select('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+      if (conversation.isEmpty) {
+        throw ApiError(404, 'conversation_not_found', 'Conversa não encontrada.');
+      }
+      final row = conversation.first;
+      if (row['customer_id'] != user.id &&
+          row['partner_id'] != user.id &&
+          row['courier_id'] != user.id) {
+        throw ApiError(403, 'forbidden', 'Não és participante desta conversa.');
+      }
+    }
+    final id = newId();
+    final now = nowIso();
+    db.execute(
+      '''
+      INSERT INTO call_logs (id, conversation_id, caller_id, callee_id, type,
+        status, started_at, answered_at, ended_at, duration_seconds)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ''',
+      [id, conversationId.isEmpty ? null : conversationId, user.id, calleeId,
+        type, status, now, null, null, 0],
+    );
+    audit(user.id, 'call.log', 'call_log', id, {
+      'callee_id': calleeId,
+      'type': type,
+      'status': status,
+    });
+    return jsonResponse({'call_log': {
+      'id': id,
+      'caller_id': user.id,
+      'callee_id': calleeId,
+      'type': type,
+      'status': status,
+      'started_at': now,
+    }}, status: 201);
+  }
+
+  /// Dados resumidos de uma conversa para o ecrã de lista.
+  Map<String, dynamic> conversationJson(Row row, {required String currentUserId}) {
+    final customerId = row['customer_id'] as String?;
+    final partnerId = row['partner_id'] as String?;
+    final courierId = row['courier_id'] as String?;
+    final participants = <String>[];
+    if (customerId != null) participants.add(customerId);
+    if (partnerId != null && partnerId != customerId) participants.add(partnerId);
+    if (courierId != null && courierId != customerId && courierId != partnerId) {
+      participants.add(courierId);
+    }
+    final otherId = participants.where((id) => id != currentUserId).firstOrNull;
+    String? otherName;
+    if (otherId != null) {
+      final u = db.select('SELECT name FROM users WHERE id = ?', [otherId]);
+      if (u.isNotEmpty) otherName = u.first['name'] as String?;
+    }
+    return {
+      'id': row['id'],
+      'order_id': row['order_id'],
+      'customer_id': customerId,
+      'partner_id': partnerId,
+      'courier_id': courierId,
+      'status': row['status'],
+      'last_message_at': row['last_message_at'],
+      'created_at': row['created_at'],
+      'last_body': row['last_body'],
+      'last_sender_id': row['last_sender_id'],
+      'unread_count': row['unread_count'],
+      'other_user_id': otherId,
+      'other_user_name': otherName,
+    };
+  }
+
+  /// Dados de uma mensagem para o cliente.
+  Map<String, dynamic> messageJson(Row row) => {
+    'id': row['id'],
+    'conversation_id': row['conversation_id'],
+    'sender_id': row['sender_id'],
+    'body': row['body'],
+    'type': row['type'],
+    'read_at': row['read_at'],
+    'created_at': row['created_at'],
+  };
 }
+
+

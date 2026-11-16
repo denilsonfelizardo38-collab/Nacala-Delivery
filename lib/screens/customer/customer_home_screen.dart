@@ -3,16 +3,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/api_client.dart';
-import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/address_dialog.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
+/// Página inicial no padrão Já Bazou: `hero` com marca, saudação
+/// display gigante e pesquisa em cápsula; chips de filtro; pílulas de
+/// categoria; e um feed de secções derivadas dos dados existentes —
+/// Favoritas, Entrega grátis, Melhor avaliados, Explorar produtos e
+/// Todas as lojas (linhas `srow`).
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
 
@@ -27,8 +31,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Future<List<Category>>? _categoriesFuture;
   Future<List<Establishment>>? _allEstablishmentsFuture;
-  Future<List<Establishment>>? _establishmentsFuture;
-  String? _selectedCategory;
+  Future<List<Product>>? _productsFuture;
+  String? _selectedCategory; // slug
+  bool _openOnly = false;
+  bool _freeOnly = false;
+
+  /// Paginação do feed ("Ver mais"): lojas e produtos de cada vez.
+  int _storeLimit = 10;
+  int _productLimit = 12;
 
   String _query = '';
   SearchResult? _searchResult;
@@ -37,6 +47,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   bool get _searchMode => _query.trim().length >= 2;
 
+  /// Feed completo: sem categoria nem filtros activos (as secções
+  /// derivadas só fazem sentido nesse modo).
+  bool get _fullFeed =>
+      !_searchMode && _selectedCategory == null && !_openOnly && !_freeOnly;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -44,9 +59,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     _initialized = true;
     final api = AppScope.of(context).api;
     _categoriesFuture = api.categories();
-    final establishments = api.establishments();
-    _allEstablishmentsFuture = establishments;
-    _establishmentsFuture = establishments;
+    _allEstablishmentsFuture = api.establishments();
+    _productsFuture = api.products();
   }
 
   @override
@@ -58,21 +72,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   Future<void> _refresh() async {
     final api = AppScope.of(context).api;
-    final categories = api.categories();
-    final allEstablishments = api.establishments();
-    final establishments = _selectedCategory == null
-        ? allEstablishments
-        : api.establishments(category: _selectedCategory);
     setState(() {
-      _categoriesFuture = categories;
-      _allEstablishmentsFuture = allEstablishments;
-      _establishmentsFuture = establishments;
+      _categoriesFuture = api.categories();
+      _allEstablishmentsFuture = api.establishments();
+      _productsFuture = api.products();
     });
     try {
       await Future.wait<Object>([
-        categories,
-        allEstablishments,
-        establishments,
+        _categoriesFuture!,
+        _allEstablishmentsFuture!,
+        _productsFuture!,
       ]);
     } on Exception {
       // O erro é apresentado pelo AsyncSection.
@@ -80,11 +89,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   void _selectCategory(String? slug) {
-    if (_selectedCategory == slug) return;
+    final next = _selectedCategory == slug ? null : slug;
     setState(() {
-      _selectedCategory = slug;
-      _establishmentsFuture = AppScope.of(context).api
-          .establishments(category: slug);
+      _selectedCategory = next;
+      _storeLimit = 10;
     });
   }
 
@@ -127,10 +135,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   void _openNotifications(AppState state) {
     if (state.isGuest || !state.isSignedIn) {
-      showAppSnack(
-        context,
-        'Entra ou cria uma conta para ver as tuas notificações.',
-      );
+      // Sem sessão: levar directamente à escolha de tipo de conta.
+      Navigator.of(context).pushNamed('/roles', arguments: 'login');
       return;
     }
     Navigator.of(context).pushNamed('/notifications');
@@ -138,36 +144,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   void _openStore(String id) {
     Navigator.of(context).pushNamed('/store', arguments: id);
-  }
-
-  /// A morada define a disponibilidade e a taxa antes do checkout, por isso
-  /// pede-se aqui, no início — não apenas no finalizar pedido.
-  Future<void> _setDeliveryLocation() async {
-    final state = AppScope.of(context);
-    if (state.isGuest || !state.isSignedIn) {
-      showAppSnack(
-        context,
-        'Entra ou cria uma conta para guardar a morada de entrega.',
-      );
-      return;
-    }
-    final input = await showAddressDialog(context);
-    if (input == null || !mounted) return;
-    try {
-      await state.addAddress(
-        label: input.label,
-        line: input.line,
-        reference: input.reference,
-        isDefault: input.isDefault,
-        latitude: input.latitude,
-        longitude: input.longitude,
-      );
-      if (!mounted) return;
-      setState(() {});
-      showAppSnack(context, 'Morada adicionada.');
-    } on ApiException catch (error) {
-      if (mounted) showAppSnack(context, error.message, error: true);
-    }
   }
 
   @override
@@ -182,11 +158,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(child: _buildHeader(state)),
+              SliverToBoxAdapter(child: _buildHero(state)),
+              SliverToBoxAdapter(child: _buildChipsRow()),
+              SliverToBoxAdapter(child: _buildPills()),
               if (_searchMode)
                 ..._buildSearchSlivers()
               else
-                ..._buildHomeSlivers(),
+                ..._buildFeedSlivers(state),
               const SliverToBoxAdapter(child: SizedBox(height: 28)),
             ],
           ),
@@ -195,315 +173,394 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
-  Widget _buildHeader(AppState state) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(0, 0, 0, 14),
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-      decoration: BoxDecoration(
-        color: context.isDarkMode ? AppColors.darkCard : AppColors.ink,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  /* ------------------------------- Hero ------------------------------- */
+
+  Widget _buildHero(AppState state) {
+    final first = state.firstName;
+    final guest = !state.isSignedIn;
+    final searchField = SearchField(
+      controller: _searchController,
+      onChanged: _onSearchChanged,
+      hintText: 'Pratos, lojas, farmácias…',
+    );
+    return JbHeroHeader(
+      greeting: first.isEmpty
+          ? 'O que vai pedir hoje?'
+          : '$first, o que vai pedir hoje?',
+      // Sem sessão: os dois CTA de entrada por cima da pesquisa.
+      search: guest
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    const Text(
-                      'NACALA DELIVERY',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 2.0,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      'Olá, ${state.firstName}!',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 23,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'O que deseja pedir hoje?',
-                      style: TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Material(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    shape: const CircleBorder(),
-                    child: IconButton(
-                      tooltip: 'Notificações',
-                      onPressed: () => _openNotifications(state),
-                      icon: const Icon(
-                        Icons.notifications_none_rounded,
-                        color: Colors.white,
-                        size: 21,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    alignment: Alignment.center,
-                    child: const CartButton(color: Colors.white),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 17),
-          Material(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(13),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(13),
-              onTap: _setDeliveryLocation,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on_rounded,
-                      color: AppColors.primary,
-                      size: 17,
-                    ),
-                    const SizedBox(width: 6),
                     Expanded(
-                      child: Text(
-                        state.defaultAddress?.fullLine ??
-                            'Defina a morada de entrega',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
+                      child: _HeroAuthButton(
+                        label: 'Entrar',
+                        primary: true,
+                        onTap: () => Navigator.of(context)
+                            .pushNamed('/roles', arguments: 'login'),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: Colors.white70,
-                      size: 18,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _HeroAuthButton(
+                        label: 'Criar conta',
+                        primary: false,
+                        onTap: () => Navigator.of(context)
+                            .pushNamed('/roles', arguments: 'register'),
+                      ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                searchField,
+              ],
+            )
+          : searchField,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Material(
+            color: AppColors.darkCard,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => _openNotifications(state),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  Icons.notifications_none_rounded,
+                  color: context.inkColor,
+                  size: 21,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 17),
-          SearchField(
-            controller: _searchController,
-            onChanged: _onSearchChanged,
-            hintText: 'Pesquisar lojas ou produtos...',
+          const SizedBox(width: 8),
+          Material(
+            color: AppColors.darkCard,
+            shape: const CircleBorder(),
+            child: CartButton(color: context.inkColor),
           ),
         ],
       ),
     );
   }
 
-  List<Widget> _buildHomeSlivers() {
+  /* --------------------------- Chips e pílulas ------------------------ */
+
+  Widget _buildChipsRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilterIconChip(
+            icon: Icons.store_rounded,
+            label: 'Só abertas',
+            selected: _openOnly,
+            onTap: () => setState(() {
+              _openOnly = !_openOnly;
+              _storeLimit = 10;
+            }),
+          ),
+          FilterIconChip(
+            icon: Icons.delivery_dining_rounded,
+            label: 'Entrega grátis',
+            selected: _freeOnly,
+            onTap: () => setState(() {
+              _freeOnly = !_freeOnly;
+              _storeLimit = 10;
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPills() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 2),
+      child: AsyncSection<List<Category>>(
+        future: _categoriesFuture,
+        loadingHeight: 46,
+        onRetry: _refresh,
+        builder: (context, categories) {
+          final selectedName =
+              _selectedCategory == null
+                  ? 'Tudo'
+                  : categories
+                        .where((c) => c.slug == _selectedCategory)
+                        .map((c) => c.name)
+                        .firstOrNull ??
+                    'Tudo';
+          return CategoryPills(
+            items: [
+              'Tudo',
+              for (final category in categories)
+                if (category.establishmentCount > 0) category.name,
+            ],
+            selected: selectedName,
+            onSelected: (name) {
+              if (name == 'Tudo') {
+                _selectCategory(null);
+                return;
+              }
+              final slug = categories
+                  .where((c) => c.name == name)
+                  .map((c) => c.slug)
+                  .firstOrNull;
+              if (slug != null) _selectCategory(slug);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  /* -------------------------------- Feed ------------------------------ */
+
+  List<Widget> _buildFeedSlivers(AppState state) {
     return [
       SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-          child: FutureBuilder<List<Establishment>>(
-            future: _allEstablishmentsFuture,
-            builder: (context, snapshot) {
-              final establishments = snapshot.data ?? const <Establishment>[];
-              return _PromoCarousel(
-                establishments: establishments.take(3).toList(),
-                onOpenStore: _openStore,
-              );
-            },
-          ),
+        child: AsyncSection<List<Establishment>>(
+          future: _allEstablishmentsFuture,
+          onRetry: _refresh,
+          loadingHeight: 260,
+          builder: (context, all) => _buildFeed(context, state, all),
         ),
       ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-          child: SectionTitle(
-            title: 'Categorias',
-            actionLabel: 'Ver todas',
-            onAction: () => Navigator.of(context).pushNamed('/categories'),
-          ),
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-          child: AsyncSection<List<Category>>(
-            future: _categoriesFuture,
-            loadingHeight: 48,
-            onRetry: _refresh,
-            builder: (context, categories) {
-              final visible = [
-                for (final category in categories)
-                  if (category.establishmentCount > 0) category,
-              ];
-              return FutureBuilder<List<Establishment>>(
-                future: _allEstablishmentsFuture,
-                builder: (context, establishmentsSnapshot) => SizedBox(
-                  height: 80,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: visible.length + 1,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final isAll = index == 0;
-                      final category = isAll ? null : visible[index - 1];
-                      final selected = isAll
-                          ? _selectedCategory == null
-                          : _selectedCategory == category!.slug;
-                      return _CategoryChip(
-                        label: isAll ? 'Todas' : category!.name,
-                        icon: isAll
-                            ? Icons.grid_view_rounded
-                            : categoryIconFor(category!.icon),
-                        imageUrl: isAll
-                            ? null
-                            : _categoryImage(
-                                category!,
-                                establishmentsSnapshot.data ?? const [],
-                              ),
-                        selected: selected,
-                        onTap: () =>
-                            _selectCategory(isAll ? null : category!.slug),
-                      );
-                    },
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-          child: FutureBuilder<List<Establishment>>(
-            future: _allEstablishmentsFuture,
-            builder: (context, snapshot) {
-              // Exige pelo menos 5 avaliações: evitar que "5,0" com uma
-              // única avaliação apareça como "mais bem avaliado".
-              final all = snapshot.data ?? const <Establishment>[];
-              final promoIds = {for (final e in all.take(3)) e.id};
-              final rated = [
-                for (final e in all)
-                  if (e.rating > 0 &&
-                      e.reviewCount >= 5 &&
-                      !promoIds.contains(e.id))
-                    e,
-              ]..sort((a, b) => b.rating.compareTo(a.rating));
-              if (rated.isEmpty) {
-                return const SizedBox.shrink();
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SectionTitle(
-                    title: 'Mais bem avaliados',
-                    subtitle: 'Ordenados pelas avaliações reais dos clientes',
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 206,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.zero,
-                      itemCount: rated.length.clamp(0, 6),
-                      separatorBuilder: (_, _) => const SizedBox(width: 10),
-                      itemBuilder: (context, index) => _PopularCard(
-                        establishment: rated[index],
-                        onTap: () => _openStore(rated[index].id),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-          child: SectionTitle(
-            title: _selectedCategory == null
-                ? 'Perto de si'
-                : 'Parceiros nesta categoria',
-            subtitle: 'Estabelecimentos aprovados e disponíveis hoje',
-          ),
-        ),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: AsyncSection<List<Establishment>>(
-            future: _establishmentsFuture,
-            onRetry: _refresh,
-            builder: (context, establishments) {
-              // Sem categoria: os destaques do carrossel ficam por contas
-              // para evitar repetir a mesma loja em secções seguidas.
-              final promoOverlapping =
-                  _selectedCategory == null && establishments.length > 3;
-              final listed = promoOverlapping
-                  ? establishments.skip(3).toList()
-                  : establishments;
-              if (listed.isEmpty) {
-                return const EmptyState(
-                  icon: Icons.storefront_outlined,
-                  title: 'Ainda sem parceiros',
-                  message:
-                      'Não encontrámos estabelecimentos nesta categoria. '
-                      'Experimente outra categoria.',
-                );
-              }
-              return Column(
-                children: [
-                  for (final establishment in listed)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _HomeStoreCard(
-                        establishment: establishment,
-                        onTap: () => _openStore(establishment.id),
-                        isFavorite: AppScope.of(context)
-                            .isFavoriteEstablishment(establishment.id),
-                        onFavoriteToggle: () =>
-                            toggleFavorite(context, establishment.id),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
+      if (_fullFeed)
+        SliverToBoxAdapter(child: _buildProductsSection()),
     ];
   }
+
+  Widget _buildFeed(
+    BuildContext context,
+    AppState state,
+    List<Establishment> all,
+  ) {
+    // Lista principal, filtrada pela categoria e pelos chips.
+    var stores = all
+        .where(
+          (e) =>
+              _selectedCategory == null ||
+              e.categorySlug == _selectedCategory,
+        )
+        .where((e) => !_openOnly || e.isOpen)
+        .where((e) => !_freeOnly || e.deliveryFeeCents == 0)
+        .toList();
+
+    final sections = <Widget>[];
+
+    if (_fullFeed) {
+      // 1) As tuas favoritas — anéis vermelhos.
+      final favorites = [
+        for (final e in all)
+          if (state.favoriteEstablishmentIds.contains(e.id)) e,
+      ];
+      if (favorites.isNotEmpty) {
+        sections.addAll([
+          const JbSectionHeader(title: 'As tuas favoritas'),
+          _favRow(favorites),
+        ]);
+      }
+
+      // 2) Entrega grátis — lojas abertas sem taxa.
+      final free = [
+        for (final e in all)
+          if (e.isOpen && e.deliveryFeeCents == 0) e,
+      ];
+      if (free.isNotEmpty) {
+        sections.addAll([
+          const JbSectionHeader(
+            title: 'Entrega grátis',
+            trailing: Icon(
+              Icons.delivery_dining_rounded,
+              size: 17,
+              color: AppColors.primary,
+            ),
+          ),
+          _favRow(free.take(12).toList()),
+        ]);
+      }
+
+      // 3) Melhor avaliados — cartões horizontais.
+      final rated = [
+        for (final e in all)
+          if (e.rating > 0 && e.reviewCount >= 5) e,
+      ]..sort((a, b) => b.rating.compareTo(a.rating));
+      if (rated.isNotEmpty) {
+        sections.addAll([
+          const JbSectionHeader(title: 'Melhor avaliados'),
+          _storeCardRow(rated.take(6).toList()),
+        ]);
+      }
+    }
+
+    // 4) Todas as lojas (ou a selecção activa) — linhas `srow`.
+    final title = _selectedCategory != null
+        ? (all
+                  .where((e) => e.categorySlug == _selectedCategory)
+                  .map((e) => e.categoryName)
+                  .firstOrNull ??
+              'Lojas')
+        : _openOnly
+        ? 'Só abertas'
+        : _freeOnly
+        ? 'Entrega grátis'
+        : 'Todas as lojas';
+
+    if (stores.isEmpty) {
+      sections.add(
+        const EmptyState(
+          icon: Icons.storefront_outlined,
+          title: 'Ainda sem lojas aqui',
+          message:
+              'Não encontrámos lojas com estes filtros. '
+              'Experimenta desligar os filtros ou escolher outra categoria.',
+        ),
+      );
+    } else {
+      final visible = stores.take(_storeLimit).toList();
+      sections.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              JbSectionHeader(title: title, count: stores.length),
+              for (final establishment in visible)
+                StoreRow(
+                  establishment: establishment,
+                  onTap: () => _openStore(establishment.id),
+                  isFavorite: state.isFavoriteEstablishment(
+                    establishment.id,
+                  ),
+                  onFavoriteToggle: () =>
+                      toggleFavorite(context, establishment.id),
+                ),
+              if (stores.length > _storeLimit)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: OutlinedButton(
+                    onPressed: () =>
+                        setState(() => _storeLimit += 10),
+                    child: Text(
+                      'Ver mais lojas (${stores.length - _storeLimit})',
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: sections);
+  }
+
+  /// Fila horizontal de favoritas/entrega grátis (`.favrow`).
+  Widget _favRow(List<Establishment> items) {
+    return SizedBox(
+      height: 108,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          final e = items[index];
+          return FavChip(
+            name: e.name,
+            imageUrl: e.imageUrl,
+            categorySlug: e.categorySlug,
+            onTap: () => _openStore(e.id),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Fila horizontal de cartões de loja (`.hscroll`).
+  Widget _storeCardRow(List<Establishment> items) {
+    return SizedBox(
+      height: 186,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (context, index) => StoreCardJB(
+          establishment: items[index],
+          onTap: () => _openStore(items[index].id),
+        ),
+      ),
+    );
+  }
+
+  /// "Explorar produtos" (`.pgrid`): grelha 2+ colunas com "Ver mais".
+  Widget _buildProductsSection() {
+    return AsyncSection<List<Product>>(
+      future: _productsFuture,
+      onRetry: _refresh,
+      loadingHeight: 160,
+      builder: (context, products) {
+        if (products.isEmpty) return const SizedBox.shrink();
+        final visible = products.take(_productLimit).toList();
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              JbSectionHeader(
+                title: 'Explorar produtos',
+                count: products.length,
+              ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns =
+                      ((constraints.maxWidth + 12) / 162).floor().clamp(2, 4);
+                  return GridView.count(
+                    crossAxisCount: columns,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.66,
+                    children: [
+                      for (final product in visible)
+                        ProductCardJB(
+                          product: product,
+                          onTap: () =>
+                              _openStore(product.establishmentId),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              if (products.length > _productLimit)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: OutlinedButton(
+                    onPressed: () =>
+                        setState(() => _productLimit += 12),
+                    child: Text(
+                      'Ver mais produtos (${products.length - _productLimit})',
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /* ------------------------------ Pesquisa ---------------------------- */
 
   List<Widget> _buildSearchSlivers() {
     final result = _searchResult;
@@ -513,8 +570,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
           child: Text(
             'Resultados para "${_query.trim()}"',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: context.mutedColor),
+            style: TextStyle(color: context.mutedColor, fontSize: 13),
           ),
         ),
       ),
@@ -536,634 +592,120 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             child: EmptyState(
               icon: Icons.search_off_rounded,
               title: 'Sem resultados',
-              message: 'Tente outra palavra, como "frango", "farmácia" ou "mercado".',
+              message:
+                  'Tente outra palavra, como "frango", "farmácia" ou "mercado".',
             ),
           )
         else ...[
-          if (result.products.isNotEmpty) ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
-                child: SectionTitle(
-                  title: 'Produtos',
-                  subtitle:
-                      '${result.products.length} ${plural(result.products.length, 'resultado')}',
-                ),
-              ),
-            ),
+          if (result.products.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final product in result.products)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _ProductResultTile(
-                          product: product,
-                          onTap: () => _openStore(product.establishmentId),
-                        ),
-                      ),
+                    JbSectionHeader(
+                      title: 'Produtos',
+                      count: result.products.length,
+                    ),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final columns =
+                            ((constraints.maxWidth + 12) / 162)
+                                .floor()
+                                .clamp(2, 4);
+                        return GridView.count(
+                          crossAxisCount: columns,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.66,
+                          children: [
+                            for (final product in result.products)
+                              ProductCardJB(
+                                product: product,
+                                onTap: () =>
+                                    _openStore(product.establishmentId),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
             ),
-          ],
-          if (result.establishments.isNotEmpty) ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                child: SectionTitle(
-                  title: 'Estabelecimentos',
-                  subtitle:
-                      '${result.establishments.length} ${plural(result.establishments.length, 'estabelecimento')}',
-                ),
-              ),
-            ),
+          if (result.establishments.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    JbSectionHeader(
+                      title: 'Estabelecimentos',
+                      count: result.establishments.length,
+                    ),
                     for (final establishment in result.establishments)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: EstablishmentTile(
-                          establishment: establishment,
-                          onTap: () => _openStore(establishment.id),
-                          isFavorite: AppScope.of(context)
-                              .isFavoriteEstablishment(establishment.id),
-                          onFavoriteToggle: () =>
-                              toggleFavorite(context, establishment.id),
-                        ),
+                      StoreRow(
+                        establishment: establishment,
+                        onTap: () => _openStore(establishment.id),
+                        isFavorite: AppScope.of(
+                          context,
+                        ).isFavoriteEstablishment(establishment.id),
+                        onFavoriteToggle: () =>
+                            toggleFavorite(context, establishment.id),
                       ),
                   ],
                 ),
               ),
             ),
-          ],
         ],
     ];
   }
-
-  String? _categoryImage(
-    Category category,
-    List<Establishment> establishments,
-  ) {
-    for (final establishment in establishments) {
-      if (establishment.categorySlug == category.slug &&
-          establishment.imageUrl != null &&
-          establishment.imageUrl!.isNotEmpty) {
-        return establishment.imageUrl;
-      }
-    }
-    return null;
-  }
 }
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
+/// Botão de entrada na Home (convidado): pílula vermelha "Entrar" ou
+/// pílula com contorno "Criar conta", altura confortável ao toque.
+class _HeroAuthButton extends StatelessWidget {
+  const _HeroAuthButton({
     required this.label,
-    required this.icon,
-    required this.imageUrl,
-    required this.selected,
+    required this.primary,
     required this.onTap,
   });
 
   final String label;
-  final IconData icon;
-  final String? imageUrl;
-  final bool selected;
+  final bool primary;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 68,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(28),
-          onTap: onTap,
-          child: Column(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? AppColors.primary
-                      : AppColors.primarySoftStrong,
-                  shape: BoxShape.circle,
-                ),
-                child: imageUrl == null
-                    ? Icon(
-                        icon,
-                        color: selected ? Colors.white : AppColors.primary,
-                        size: 23,
-                      )
-                    : ClipOval(
-                        child: Image.network(
-                          imageUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Icon(
-                            icon,
-                            color: selected ? Colors.white : AppColors.primary,
-                            size: 23,
-                          ),
-                        ),
-                      ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: selected ? AppColors.textOrange : context.inkColor,
-                  fontSize: 10,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
+    return Material(
+      color: primary ? AppColors.primary : AppColors.darkCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
+        side: primary
+            ? BorderSide.none
+            : const BorderSide(color: AppColors.darkBorder),
       ),
-    );
-  }
-}
-
-/// Carrossel de promoções e destaques da página inicial. O primeiro painel
-/// é a marca; seguem-se até três parceiros em destaque (em vez de fixar um
-/// único restaurante numa entrada estática).
-class _PromoCarousel extends StatefulWidget {
-  const _PromoCarousel({
-    required this.establishments,
-    required this.onOpenStore,
-  });
-
-  final List<Establishment> establishments;
-  final void Function(String establishmentId) onOpenStore;
-
-  @override
-  State<_PromoCarousel> createState() => _PromoCarouselState();
-}
-
-class _PromoCarouselState extends State<_PromoCarousel> {
-  final _controller = PageController();
-  int _page = 0;
-
-  @override
-  void didUpdateWidget(covariant _PromoCarousel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_page >= widget.establishments.length + 1) {
-      _page = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final slides = <_PromoSlide>[
-      const _PromoSlide.brand(),
-      for (final establishment in widget.establishments)
-        _PromoSlide(establishment: establishment),
-    ];
-    return Column(
-      children: [
-        ClipRect(
-          child: SizedBox(
-            height: 184,
-            child: PageView.builder(
-              controller: _controller,
-              itemCount: slides.length,
-              onPageChanged: (index) => setState(() => _page = index),
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              itemBuilder: (context, index) {
-                final slide = slides[index];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 0),
-                  child: _PromoCard(
-                    slide: slide,
-                    onTap: slide.establishment == null
-                        ? null
-                        : () => widget.onOpenStore(slide.establishment!.id),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-        if (slides.length > 1) ...[
-          const SizedBox(height: 7),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var index = 0; index < slides.length; index++)
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: index == _page ? 16 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: index == _page
-                        ? AppColors.primary
-                        : AppColors.primary.withValues(alpha: 0.28),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _PromoSlide {
-  const _PromoSlide({this.establishment});
-
-  /// Painel da marca, sem parceiro associado.
-  const _PromoSlide.brand() : establishment = null;
-
-  final Establishment? establishment;
-
-  bool get isBrand => establishment == null;
-}
-
-class _PromoCard extends StatelessWidget {
-  const _PromoCard({required this.slide, required this.onTap});
-
-  final _PromoSlide slide;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final establishment = slide.establishment;
-    final name = establishment?.name ?? 'A cidade à sua porta.';
-    final subtitle = establishment == null
-        ? 'Descubra os parceiros de Nacala-Porto'
-        : '${establishment.categoryName} · ${establishment.prepMinutes} min';
-    final imageUrl = establishment?.imageUrl;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
-      child: AppCard(
-        padding: EdgeInsets.zero,
-        radius: 22,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: SizedBox(
-          height: 184,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (establishment == null)
-                  // Painel da marca: a fotografia da cidade com selo claro.
-                  Image.asset(
-                    'assets/images/login_bg.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        const ColoredBox(color: AppColors.ink),
-                  )
-                else if (imageUrl != null && imageUrl.isNotEmpty)
-                  CoverImage(
-                    imageUrl: imageUrl,
-                    logicalWidth: 360,
-                    fallback: BrandedCover(
-                      categorySlug: establishment.categorySlug,
-                      iconSize: 38,
-                    ),
-                  )
-                else
-                  BrandedCover(
-                    categorySlug: establishment.categorySlug,
-                    iconSize: 38,
-                  ),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0x80002244),
-                        Color(0x22002244),
-                        Color(0xE6051C36),
-                      ],
-                      stops: [0, 0.45, 1],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        establishment == null ? 'Destaques de Nacala' : name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        establishment == null
-                            ? 'Explorar parceiros ›'
-                            : 'Ver menu  ›',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeStoreCard extends StatelessWidget {
-  const _HomeStoreCard({
-    required this.establishment,
-    required this.onTap,
-    required this.isFavorite,
-    required this.onFavoriteToggle,
-  });
-
-  final Establishment establishment;
-  final VoidCallback onTap;
-  final bool isFavorite;
-  final VoidCallback onFavoriteToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final imageUrl = establishment.imageUrl;
-    return AppCard(
-      padding: EdgeInsets.zero,
-      radius: 21,
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 140,
-            width: double.infinity,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(21),
-              ),
-              child: imageUrl == null || imageUrl.isEmpty
-                  ? BrandedCover(
-                      categorySlug: establishment.categorySlug,
-                      iconSize: 42,
-                    )
-                  : CoverImage(
-                      imageUrl: imageUrl,
-                      logicalWidth: 320,
-                      fallback: BrandedCover(
-                        categorySlug: establishment.categorySlug,
-                        iconSize: 42,
-                      ),
-                    ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(15, 12, 15, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        establishment.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(height: 1.25),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    StatusBadge(
-                      status: establishment.isOpen ? 'accepted' : 'cancelled',
-                      label: establishment.isOpen ? 'Aberto' : 'Fechado',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  establishment.categoryName,
-                  style: TextStyle(color: context.mutedColor, fontSize: 11),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  establishment.address,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.mutedColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 4,
-                  children: [
-                    StarRating(
-                      rating: establishment.rating,
-                      count: establishment.reviewCount,
-                    ),
-                    Text(
-                      'Entrega ${formatMoneyCompact(establishment.deliveryFeeCents)}'
-                      ' · ${establishment.prepMinutes} min',
-                      style: TextStyle(color: context.mutedColor, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProductResultTile extends StatelessWidget {
-  const _ProductResultTile({required this.product, required this.onTap});
-
-  final Product product;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          NetworkThumb(
-            imageUrl: product.imageUrl,
-            icon: Icons.restaurant_rounded,
-            size: 46,
-            radius: 12,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  product.establishmentName ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.mutedColor, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            formatMoneyCompact(product.priceCents),
-            style: TextStyle(
-              color: context.accentColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Cartão compacto horizontal da secção "Mais bem avaliados". Mostra
-/// apenas dados que existem no servidor (avaliação e taxa de entrega).
-class _PopularCard extends StatelessWidget {
-  const _PopularCard({required this.establishment, required this.onTap});
-
-  final Establishment establishment;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final imageUrl = establishment.imageUrl;
-    return AppCard(
-      padding: EdgeInsets.zero,
-      radius: 20,
-      onTap: onTap,
-      child: SizedBox(
-        width: 196,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: 104,
-              width: double.infinity,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-                child: imageUrl == null || imageUrl.isEmpty
-                    ? BrandedCover(
-                        categorySlug: establishment.categorySlug,
-                        iconSize: 34,
-                      )
-                    : CoverImage(
-                        imageUrl: imageUrl,
-                        logicalWidth: 196,
-                        fallback: BrandedCover(
-                          categorySlug: establishment.categorySlug,
-                          iconSize: 34,
-                        ),
-                      ),
+          height: 44,
+          child: Center(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    establishment.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    establishment.categoryName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: context.mutedColor, fontSize: 10),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      StarRating(rating: establishment.rating, size: 12),
-                      const Spacer(),
-                      Text(
-                        'Entrega ${formatMoneyCompact(establishment.deliveryFeeCents)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: context.mutedColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

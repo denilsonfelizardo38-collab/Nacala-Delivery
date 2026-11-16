@@ -56,11 +56,46 @@ class LocationService {
     }
   }
 
+  /// Procura coordenadas a partir de um texto livre (FASE 11: "pesquisar uma
+  /// localização" no mapa). Lança [LocationException] com mensagem honesta
+  /// quando não encontra ou não há rede.
+  static Future<Position> coordinatesFromAddress(String query) async {
+    final text = query.trim();
+    if (text.isEmpty) {
+      throw const LocationException('Escreva o que pretende procurar.');
+    }
+    try {
+      final results = await Geocoding().locationFromAddress(text);
+      if (results.isEmpty) {
+        throw const LocationException(
+          'Nenhum local encontrado. Experimente outra descrição.',
+        );
+      }
+      final first = results.first;
+      return Position(
+        latitude: first.latitude,
+        longitude: first.longitude,
+        timestamp: DateTime.now(),
+        accuracy: 0,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+      );
+    } on PlatformException {
+      throw const LocationException(
+        'Não foi possível pesquisar a localização. Verifique a ligação à '
+        'internet.',
+      );
+    }
+  }
+
   static Future<String?> addressFromCoordinates(
     double latitude,
     double longitude,
-  ) async {
-    try {
+  ) async {    try {
       final placemarks = await Geocoding(locale: const Locale('pt', 'MZ'))
           .placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isEmpty) return null;

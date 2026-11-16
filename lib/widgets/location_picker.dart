@@ -11,17 +11,29 @@ const nacalaCenter = LatLng(-14.5428, 40.6729);
 Future<LatLng?> showLocationPicker(
   BuildContext context, {
   LatLng? initialLocation,
+  String title = 'Ponto de entrega',
+  String hint = 'Toque no mapa para marcar o destino.',
 }) {
   return showDialog<LatLng>(
     context: context,
-    builder: (_) => _LocationPickerDialog(initialLocation: initialLocation),
+    builder: (_) => _LocationPickerDialog(
+      initialLocation: initialLocation,
+      title: title,
+      hint: hint,
+    ),
   );
 }
 
 class _LocationPickerDialog extends StatefulWidget {
-  const _LocationPickerDialog({this.initialLocation});
+  const _LocationPickerDialog({
+    this.initialLocation,
+    this.title = 'Ponto de entrega',
+    this.hint = 'Toque no mapa para marcar o destino.',
+  });
 
   final LatLng? initialLocation;
+  final String title;
+  final String hint;
 
   @override
   State<_LocationPickerDialog> createState() => _LocationPickerDialogState();
@@ -29,10 +41,12 @@ class _LocationPickerDialog extends StatefulWidget {
 
 class _LocationPickerDialogState extends State<_LocationPickerDialog> {
   late final MapController _mapController;
+  final _search = TextEditingController();
   late LatLng _center;
   LatLng? _selection;
   bool _mapReady = false;
   bool _locating = false;
+  bool _searching = false;
 
   @override
   void initState() {
@@ -40,6 +54,35 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
     _mapController = MapController();
     _center = widget.initialLocation ?? nacalaCenter;
     _selection = widget.initialLocation;
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// Pesquisa por texto livre (FASE 11) e centra o mapa no resultado.
+  Future<void> _searchLocation() async {
+    if (_searching) return;
+    setState(() => _searching = true);
+    try {
+      final position = await LocationService.coordinatesFromAddress(
+        _search.text,
+      );
+      if (!mounted) return;
+      final point = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _center = point;
+        _selection = point;
+      });
+      if (_mapReady) _mapController.move(point, 15);
+      FocusScope.of(context).unfocus();
+    } on LocationException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
   }
 
   Future<void> _locateMe() async {
@@ -63,15 +106,41 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Ponto de entrega'),
+      title: Text(widget.title),
       content: SizedBox(
         width: 520,
         height: 420,
         child: Column(
           children: [
+            // Pesquisa por texto (FASE 11): nome de rua, bairro ou local.
+            TextField(
+              controller: _search,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Pesquisar rua, bairro ou local…',
+                isDense: true,
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        tooltip: 'Pesquisar',
+                        onPressed: _searchLocation,
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                      ),
+              ),
+              onSubmitted: (_) => _searchLocation(),
+            ),
+            const SizedBox(height: 8),
             Expanded(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 child: FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
@@ -121,7 +190,7 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
                 Expanded(
                   child: Text(
                     _selection == null
-                        ? 'Toque no mapa para marcar o destino.'
+                        ? widget.hint
                         : 'Ponto selecionado. Ajuste tocando no mapa.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),

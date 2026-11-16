@@ -4,8 +4,10 @@ import '../../core/api_client.dart';
 import '../../core/formatters.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
+import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 class PartnerOrdersScreen extends StatefulWidget {
   const PartnerOrdersScreen({super.key});
@@ -83,41 +85,77 @@ class _PartnerOrdersScreenState extends State<PartnerOrdersScreen> {
     _ => 'Pedido atualizado.',
   };
 
+  /// Abre o chat com o cliente de uma ordem específica.
+  Future<void> _openChatWithCustomer(Order order) async {
+    if (order.customerId == null) {
+      showAppSnack(context, 'Não foi possível iniciar a conversa.');
+      return;
+    }
+    final api = AppScope.of(context).api;
+    try {
+      final conversation = await api.createConversation(
+        otherUserId: order.customerId!,
+        orderId: order.id,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushNamed(
+        '/chat',
+        arguments: {
+          'id': conversation.id,
+          'order_id': order.id,
+          'other_user_id': order.customerId,
+          'other_user_name': order.customerName,
+          'other_role': 'customer',
+        },
+      );
+    } on ApiException catch (error) {
+      if (mounted) showAppSnack(context, error.message, error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pedidos do parceiro'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
+        bottom: false,
         child: Column(
           children: [
+            JbPageHeader(
+              title: 'Pedidos do parceiro',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: Row(
-                children: [
-                  for (final filter in _filters) ...[
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _FilterTab(
-                          label: filter.$2,
-                          selected: _status == filter.$1,
-                          onTap: () => _select(filter.$1),
+              child: SizedBox(
+                height: 40,
+                child: Row(
+                  children: [
+                    for (final filter in _filters) ...[
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChipPill(
+                            label: filter.$2,
+                            selected: _status == filter.$1,
+                            onTap: () => _select(filter.$1),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             Expanded(
@@ -151,6 +189,9 @@ class _PartnerOrdersScreenState extends State<PartnerOrdersScreen> {
                                   order: order,
                                   busy: _busyOrderId == order.id,
                                   onAction: (action) => _act(order, action),
+                                  onChatWithCustomer: order.customerId != null
+                                      ? () => _openChatWithCustomer(order)
+                                      : null,
                                 ),
                               ),
                           ],
@@ -168,58 +209,18 @@ class _PartnerOrdersScreenState extends State<PartnerOrdersScreen> {
   }
 }
 
-class _FilterTab extends StatelessWidget {
-  const _FilterTab({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? context.accentColor : context.cardColor,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? context.accentColor : context.lineColor,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : context.inkColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _PartnerOrderCard extends StatelessWidget {
   const _PartnerOrderCard({
     required this.order,
     required this.busy,
     required this.onAction,
+    this.onChatWithCustomer,
   });
 
   final Order order;
   final bool busy;
   final ValueChanged<String> onAction;
+  final VoidCallback? onChatWithCustomer;
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +240,47 @@ class _PartnerOrderCard extends StatelessWidget {
               icon: Icons.person_outline_rounded,
               text: order.customerName!,
             ),
-          InfoRow(icon: Icons.phone_outlined, text: order.phone),
+          Row(
+            children: [
+              Expanded(
+                child: InfoRow(
+                  icon: Icons.phone_outlined,
+                  text: order.phone,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Ligar ao cliente',
+                onPressed: () => launchCall(context, phone: order.phone),
+                icon: const Icon(
+                  Icons.call_rounded,
+                  color: AppColors.success,
+                  size: 20,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Falar por WhatsApp',
+                onPressed: () => launchWhatsApp(
+                  context,
+                  phone: order.phone,
+                  message: 'Olá! Falo sobre o pedido ${order.number}.',
+                ),
+                icon: const Icon(
+                  Icons.chat_rounded,
+                  color: AppColors.success,
+                  size: 20,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Mensagem no app',
+                onPressed: onChatWithCustomer,
+                icon: const Icon(
+                  Icons.message_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
           InfoRow(
             icon: Icons.location_on_outlined,
             text: '${order.addressLabel} · ${order.addressLine}',

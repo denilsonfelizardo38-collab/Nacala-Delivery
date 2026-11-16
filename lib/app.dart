@@ -6,9 +6,12 @@ import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/admin_orders_screen.dart';
 import 'screens/admin/admin_partners_screen.dart';
 import 'screens/admin/admin_users_screen.dart';
+import 'screens/auth/application_screen.dart';
+import 'screens/auth/application_status_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/recovery_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/auth/welcome_screen.dart';
+import 'screens/auth/role_selection_screen.dart';
 import 'screens/customer/account_screen.dart';
 import 'screens/customer/cart_screen.dart';
 import 'screens/customer/categories_screen.dart';
@@ -18,6 +21,8 @@ import 'screens/customer/orders_screen.dart';
 import 'screens/customer/notifications_screen.dart';
 import 'screens/customer/store_screen.dart';
 import 'screens/customer/tracking_screen.dart';
+import 'screens/chat/chat_list_screen.dart';
+import 'screens/chat/chat_screen.dart';
 import 'screens/delivery/delivery_screen.dart';
 import 'screens/partner/partner_dashboard_screen.dart';
 import 'screens/partner/partner_orders_screen.dart';
@@ -30,6 +35,7 @@ import 'state/app_state.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 import 'widgets/common.dart';
+import 'widgets/offline_banner.dart';
 
 class NacalaDeliveryApp extends StatefulWidget {
   const NacalaDeliveryApp({super.key, required this.state});
@@ -42,69 +48,46 @@ class NacalaDeliveryApp extends StatefulWidget {
 
 class _NacalaDeliveryAppState extends State<NacalaDeliveryApp> {
   bool _ready = false;
-  late ThemeSetting _themeSetting = widget.state.themeSetting;
 
   @override
   void initState() {
     super.initState();
-    widget.state.addListener(_onStateChange);
     _start();
-  }
-
-  @override
-  void dispose() {
-    widget.state.removeListener(_onStateChange);
-    super.dispose();
-  }
-
-  /// Reconstrói a raiz apenas quando a preferência de tema muda — as
-  /// restantes notificações (carrinho, sessão) não devem tocar no MaterialApp.
-  void _onStateChange() {
-    final setting = widget.state.themeSetting;
-    if (setting != _themeSetting) {
-      setState(() => _themeSetting = setting);
-    }
   }
 
   Future<void> _start() async {
     await Future.wait([
       widget.state.bootstrap(),
-      Future<void>.delayed(const Duration(milliseconds: 850)),
+      // Duração mínima do splash: a animação de marca (logo + wordmark +
+      // riscos + wipe) completa em 1,85 s — largar antes corta a sequência.
+      Future<void>.delayed(const Duration(milliseconds: 1850)),
     ]);
+    // Sem sessão guardada (ou sessão expirada), a app arranca em modo
+    // convidado: o fluxo é Splash → Home sempre, com os botões ENTRAR /
+    // CRIAR CONTA para quem quiser entrar.
+    if (!widget.state.isSignedIn) {
+      await widget.state.enterGuestMode();
+    }
     if (mounted) setState(() => _ready = true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = switch (_themeSetting) {
-      ThemeSetting.system => ThemeMode.system,
-      ThemeSetting.light => ThemeMode.light,
-      ThemeSetting.dark => ThemeMode.dark,
-    };
-    final isDark = switch (_themeSetting) {
-      ThemeSetting.system =>
-        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-            Brightness.dark,
-      ThemeSetting.light => false,
-      ThemeSetting.dark => true,
-    };
+    // A aplicação é escura por omissão e por opção: a identidade visual
+    // (fundo preto, destaque vermelho) só existe no tema escuro.
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
-          .copyWith(
-            statusBarColor: Colors.transparent,
-            systemNavigationBarColor: isDark ? AppColors.darkBg : Colors.white,
-          ),
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: AppColors.darkBg,
+      ),
       child: AppScope(
         state: widget.state,
         child: MaterialApp(
           title: 'Nacala Delivery',
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(),
+          theme: AppTheme.dark(),
           darkTheme: AppTheme.dark(),
-          // A identidade visual é definida para o tema claro (referências),
-          // mas o utilizador escolhe o tema em «Conta › Tema da aplicação».
-          // A opção «Sistema» segue a definição do telemóvel.
-          themeMode: themeMode,
+          themeMode: ThemeMode.dark,
           // Limita a escala de texto extremas do sistema (acessibilidade)
           // para os ecrãs não partirem o layout; 1.4 continua generoso.
           builder: (context, child) {
@@ -116,7 +99,7 @@ class _NacalaDeliveryAppState extends State<NacalaDeliveryApp> {
                     ? const TextScaler.linear(1.4)
                     : mq.textScaler,
               ),
-              child: child ?? const SizedBox.shrink(),
+              child: NetworkBanner(child: child ?? const SizedBox.shrink()),
             );
           },
           home: _RootGate(ready: _ready),
@@ -144,29 +127,20 @@ class _RootGate extends StatefulWidget {
 }
 
 class _RootGateState extends State<_RootGate> {
-  bool _showLogin = false;
-
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    // Sem sessão iniciada a app mostra a Home em modo convidado (o próprio
+    // shell decide os separadores de cliente). Com sessão, o shell abre o
+    // painel do papel autenticado — o tipo de conta é identificado depois
+    // do login, sem passar por um "welcome" obrigatório.
     final Widget child;
     if (!widget.ready || state.status == SessionStatus.loading) {
       child = const SplashScreen(key: ValueKey('splash'));
     } else if (state.isSignedIn) {
       child = const AppShell(key: ValueKey('shell'));
-    } else if (state.isGuest) {
-      child = const AppShell(key: ValueKey('guest-shell'));
-    } else if (_showLogin) {
-      child = LoginScreen(
-        key: const ValueKey('login'),
-        onBack: () => setState(() => _showLogin = false),
-      );
     } else {
-      child = WelcomeScreen(
-        key: const ValueKey('welcome'),
-        onSignIn: () => setState(() => _showLogin = true),
-        onGuest: () async => state.enterGuestMode(),
-      );
+      child = const AppShell(key: ValueKey('guest-shell'));
     }
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 260),
@@ -182,8 +156,20 @@ Route<dynamic>? _generateRoute(RouteSettings settings) {
       page = const SplashScreen();
     case '/login':
       page = const LoginScreen();
+    case '/recover':
+      page = const RecoveryScreen();
     case '/register':
       page = const RegisterScreen();
+    case '/roles':
+      page = RoleSelectionScreen(
+        intent: RoleSelectionScreen.intentFromArguments(settings.arguments),
+      );
+    case '/establishment/apply':
+      page = const ApplicationScreen(kind: 'establishment');
+    case '/courier/apply':
+      page = const ApplicationScreen(kind: 'delivery');
+    case '/application/status':
+      page = const ApplicationStatusScreen();
     case '/home':
       page = const CustomerHomeScreen();
     case '/categories':
@@ -202,6 +188,10 @@ Route<dynamic>? _generateRoute(RouteSettings settings) {
       page = const CartScreen();
     case '/notifications':
       page = const NotificationsScreen();
+    case '/chat/list':
+      page = const ChatListScreen();
+    case '/chat':
+      page = const ChatScreen();
     case '/checkout':
       page = const CheckoutScreen();
     case '/tracking':

@@ -7,6 +7,7 @@ import '../../state/app_scope.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -80,13 +81,10 @@ class _CartScreenState extends State<CartScreen> {
   void _continue() {
     final state = AppScope.of(context);
     if (state.isCartEmpty) return;
-    if (state.isGuest) {
-      state.exitGuestMode();
-      Navigator.of(context).popUntil((route) => route.isFirst);
-      return;
-    }
+    // Sem sessão (convidado ou recém-sair): escolher tipo de conta para
+    // entrar — o carrinho fica guardado localmente até à login.
     if (!state.isSignedIn) {
-      Navigator.of(context).pushNamed('/login');
+      Navigator.of(context).pushNamed('/roles', arguments: 'login');
       return;
     }
     Navigator.of(context).pushNamed('/checkout');
@@ -99,101 +97,53 @@ class _CartScreenState extends State<CartScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        elevation: 0,
-        titleSpacing: 20,
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'O meu carrinho',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-            ),
-            SizedBox(height: 2),
-            Text(
-              'NACALA DELIVERY',
-              style: TextStyle(
-                color: AppColors.textOrange,
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.8,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          if (!empty)
-            IconButton(
-              tooltip: 'Esvaziar carrinho',
-              onPressed: _clearCart,
-              icon: const Icon(Icons.delete_outline_rounded),
-            ),
-          const SizedBox(width: 6),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: empty
-            ? Center(
+        bottom: false,
+        child: Column(
+          children: [
+            // `page-head` do referencial: voltar, "Carrinho" em display
+            // e o nome da loja em mutado por baixo.
+            JbPageHeader(
+              title: 'Carrinho',
+              subtitle: empty ? null : state.cartStore?.name,
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: empty
+                  ? null
+                  : Material(
+                      color: AppColors.darkCard,
+                      shape: const CircleBorder(),
+                      child: IconButton(
+                        tooltip: 'Esvaziar carrinho',
+                        onPressed: _clearCart,
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          color: context.inkColor,
+                        ),
+                      ),
+                    ),
+            ),
+            Expanded(
+              child: empty
+                ? Center(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
-                  child: AppCard(
-                    padding: const EdgeInsets.fromLTRB(24, 30, 24, 26),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 86,
-                          height: 86,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.shopping_bag_outlined,
-                            color: AppColors.primary,
-                            size: 42,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'O carrinho está vazio',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Explore os parceiros de Nacala-Porto e adicione '
-                          'os produtos que precisa.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: context.mutedColor,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: FilledButton.icon(
-                            onPressed: () => Navigator.of(context).pop(),
-                            icon: const Icon(Icons.storefront_rounded),
-                            label: const Text('Ver estabelecimentos'),
-                            style: FilledButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  // `.empty` do referencial: marca circular vermelha,
+                  // título display e acção principal.
+                  child: EmptyState(
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'O carrinho está vazio',
+                    message:
+                        'Explore os parceiros de Nacala-Porto e adicione '
+                        'os produtos que precisa.',
+                    actionLabel: 'Ver estabelecimentos',
+                    onAction: () => Navigator.of(context).pop(),
                   ),
                 ),
               )
             : ListView(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 28),
                 children: [
                   _StoreCard(
                     name: state.cartStore?.name ?? '',
@@ -205,26 +155,32 @@ class _CartScreenState extends State<CartScreen> {
                       Navigator.of(context).pushNamed('/store', arguments: id);
                     },
                   ),
-                  const SizedBox(height: 24),
-                  SectionTitle(
+                  JbSectionHeader(
                     title: 'Os teus artigos',
-                    subtitle:
-                        '${state.cartItemCount} '
-                        '${plural(state.cartItemCount, 'unidade')} no carrinho',
+                    count: state.cartItemCount,
+                    margin: const EdgeInsets.only(top: 16, bottom: 6),
                   ),
-                  const SizedBox(height: 12),
-                  for (final line in state.cart)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _CartLineCard(
-                        line: line,
-                        onIncrement: () => state.increment(line.product.id),
-                        onDecrement: () => state.decrement(line.product.id),
-                        onRemove: () => state.removeLine(line.product.id),
-                        onEditNote: () => _editNote(line.product.id, line.note),
-                      ),
+                  // `.cart-items` do referencial: um único cartão com as
+                  // linhas `.citem` (imagem, nome/preço, stepper).
+                  AppCard(
+                    padding: const EdgeInsets.fromLTRB(13, 2, 13, 2),
+                    radius: 18,
+                    child: Column(
+                      children: [
+                        for (final (index, line) in state.cart.indexed)
+                          _CartLineCard(
+                            line: line,
+                            divider: index < state.cart.length - 1,
+                            onIncrement: () => state.increment(line.product.id),
+                            onDecrement: () => state.decrement(line.product.id),
+                            onRemove: () => state.removeLine(line.product.id),
+                            onEditNote: () =>
+                                _editNote(line.product.id, line.note),
+                          ),
+                      ],
                     ),
-                  const SizedBox(height: 8),
+                  ),
+                  const SizedBox(height: 6),
                   if (!state.isGuest)
                     _CouponCard(
                       controller: _couponController,
@@ -239,32 +195,36 @@ class _CartScreenState extends State<CartScreen> {
                         setState(() => _couponError = null);
                       },
                     ),
-                  const SizedBox(height: 16),
-                  AppCard(
-                    padding: const EdgeInsets.all(18),
+                  const SizedBox(height: 20),
+                  // `.totals` do referencial: bloco simples com linha de
+                  // topo, linhas label/valor e total em display.
+                  Container(
+                    padding: const EdgeInsets.only(top: 14),
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: AppColors.darkElevated),
+                      ),
+                    ),
                     child: Column(
                       children: [
                         PriceLine(
                           label: 'Subtotal',
                           cents: state.cartSubtotalCents,
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
                         PriceLine(
                           label: 'Taxa de entrega',
                           cents: state.cartDeliveryFeeCents,
                         ),
                         if (state.couponDiscountCents > 0) ...[
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           PriceLine(
                             label: 'Desconto (${state.couponCode})',
                             cents: -state.couponDiscountCents,
                             color: context.successColor,
                           ),
                         ],
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 14),
-                          child: Divider(height: 1),
-                        ),
+                        const SizedBox(height: 12),
                         PriceLine(
                           label: 'Total estimado',
                           cents: state.cartTotalCents,
@@ -277,7 +237,7 @@ class _CartScreenState extends State<CartScreen> {
                             color: context.isDarkMode
                                 ? AppColors.darkElevated
                                 : AppColors.bg,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,72 +267,53 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: empty
           ? null
           : Material(
-              color: context.cardColor,
-              elevation: 12,
-              shadowColor: Colors.black.withValues(alpha: 0.10),
+              color: Theme.of(context).scaffoldBackgroundColor,
               child: SafeArea(
                 top: false,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'TOTAL A PAGAR',
-                              style: TextStyle(
-                                color: context.mutedColor,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              formatMoney(state.cartTotalCents),
-                              style: TextStyle(
-                                color: context.accentColor,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  // `.btn.primary.block.big`: acção e total no mesmo
+                  // botão vermelho de largura total.
+                  child: FilledButton(
+                    onPressed: _continue,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(54),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 178,
-                        child: FilledButton.icon(
-                          onPressed: _continue,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(52),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                          ),
-                          icon: const Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 18,
-                          ),
-                          label: Text(
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
                             state.isGuest
                                 ? 'Entrar para pedir'
                                 : 'Finalizar pedido',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
-                              fontSize: 12,
+                              fontSize: 15,
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 10),
+                        Text(
+                          formatMoney(state.cartTotalCents),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -406,7 +347,7 @@ class _StoreCard extends StatelessWidget {
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: NetworkThumb(
               imageUrl: imageUrl,
@@ -459,6 +400,7 @@ class _CartLineCard extends StatelessWidget {
     required this.onDecrement,
     required this.onRemove,
     required this.onEditNote,
+    this.divider = false,
   });
 
   final CartLine line;
@@ -467,12 +409,22 @@ class _CartLineCard extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback onEditNote;
 
+  /// Desenha a linha divisória de 1 px por baixo (`.citem` separadas).
+  final bool divider;
+
   @override
   Widget build(BuildContext context) {
     final note = line.note;
-    return AppCard(
-      padding: const EdgeInsets.all(13),
-      radius: 18,
+    // `.citem` do referencial: imagem de 56 px, nome + preço e stepper.
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
+      decoration: BoxDecoration(
+        border: divider
+            ? const Border(
+                bottom: BorderSide(color: AppColors.darkElevated),
+              )
+            : null,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -482,8 +434,8 @@ class _CartLineCard extends StatelessWidget {
               NetworkThumb(
                 imageUrl: line.product.imageUrl,
                 icon: Icons.restaurant_rounded,
-                size: 68,
-                radius: 14,
+                size: 56,
+                radius: 10,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -492,30 +444,32 @@ class _CartLineCard extends StatelessWidget {
                   children: [
                     Text(
                       line.product.name,
-                      style: Theme.of(context).textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                      ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     Text(
                       '${formatMoney(line.product.priceCents)} / unidade',
                       style: TextStyle(
                         color: context.mutedColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Remover item',
-                onPressed: onRemove,
-                visualDensity: VisualDensity.compact,
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.danger.withValues(alpha: 0.08),
-                  foregroundColor: AppColors.danger,
-                ),
-                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              const SizedBox(width: 8),
+              QuantityStepper(
+                quantity: line.quantity,
+                onIncrement: onIncrement,
+                onDecrement: onDecrement,
               ),
             ],
           ),
@@ -524,10 +478,8 @@ class _CartLineCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
               decoration: BoxDecoration(
-                color: context.isDarkMode
-                    ? AppColors.darkElevated
-                    : AppColors.bg,
-                borderRadius: BorderRadius.circular(11),
+                color: AppColors.darkElevated,
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
@@ -547,11 +499,8 @@ class _CartLineCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 8),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            runSpacing: 6,
+          const SizedBox(height: 2),
+          Row(
             children: [
               TextButton.icon(
                 onPressed: onEditNote,
@@ -560,24 +509,26 @@ class _CartLineCard extends StatelessWidget {
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   minimumSize: const Size(0, 42),
-                  padding: const EdgeInsets.symmetric(horizontal: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                 ),
               ),
-              QuantityStepper(
-                quantity: line.quantity,
-                onIncrement: onIncrement,
-                onDecrement: onDecrement,
+              const Spacer(),
+              IconButton(
+                tooltip: 'Remover item',
+                onPressed: onRemove,
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  foregroundColor: AppColors.danger,
+                ),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Text(
-                  formatMoney(line.totalCents),
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: context.inkColor,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
+              const SizedBox(width: 2),
+              Text(
+                formatMoney(line.totalCents),
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -650,7 +601,7 @@ class _CouponCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.successSoft,
-                      borderRadius: BorderRadius.circular(11),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -700,11 +651,11 @@ class _CouponCard extends StatelessWidget {
                           ? AppColors.darkElevated
                           : AppColors.bg,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(color: context.lineColor),
                       ),
                     ),
@@ -725,7 +676,7 @@ class _CouponCard extends StatelessWidget {
                           : Colors.white,
                       minimumSize: const Size.fromHeight(50),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                     child: loading

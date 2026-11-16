@@ -8,7 +8,11 @@ import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../widgets/cart_button.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
+/// Pedidos no padrão Já Bazou: `page-head` com título display e duas
+/// secções — "A decorrer" (pedidos activos) e "Anteriores" (entregues,
+/// cancelados e rejeitados), em vez de filtros separados.
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
@@ -18,14 +22,7 @@ class OrdersScreen extends StatefulWidget {
 
 class _OrdersScreenState extends State<OrdersScreen> {
   bool _initialized = false;
-  String _status = 'in_progress';
   Future<List<Order>>? _future;
-
-  static const _filters = [
-    ('in_progress', 'Em curso'),
-    ('completed', 'Entregues'),
-    ('all', 'Todos'),
-  ];
 
   @override
   void didChangeDependencies() {
@@ -33,25 +30,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
     if (_initialized) return;
     _initialized = true;
     final state = AppScope.of(context);
-    if (!state.isGuest) _future = state.api.orders(status: _status);
+    if (state.isSignedIn) _future = state.api.orders(status: 'all');
   }
 
-  void _leaveGuestMode() {
-    AppScope.of(context).exitGuestMode();
-    Navigator.of(context).popUntil((route) => route.isFirst);
+  /// Convidado: escolher tipo de conta para entrar e ver os pedidos.
+  void _openRoles() {
+    Navigator.of(context).pushNamed('/roles', arguments: 'login');
   }
 
   void _reload() {
     setState(() {
-      _future = AppScope.of(context).api.orders(status: _status);
-    });
-  }
-
-  void _select(String status) {
-    if (_status == status) return;
-    setState(() {
-      _status = status;
-      _future = AppScope.of(context).api.orders(status: status);
+      _future = AppScope.of(context).api.orders(status: 'all');
     });
   }
 
@@ -62,25 +51,30 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (AppScope.of(context).isGuest) {
+    if (!AppScope.of(context).isSignedIn) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          title: const Text('Meus pedidos'),
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: EmptyState(
-              icon: Icons.receipt_long_outlined,
-              title: 'Os pedidos são da tua conta',
-              message:
-                  'Explora o catálogo como convidado. Para acompanhar pedidos, '
-                  'entra ou cria uma conta.',
-              actionLabel: 'Entrar ou criar conta',
-              onAction: _leaveGuestMode,
-            ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              const JbPageHeader(title: 'Meus pedidos'),
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: EmptyState(
+                      icon: Icons.receipt_long_outlined,
+                      title: 'Os pedidos são da tua conta',
+                      message:
+                          'Explora o catálogo como convidado. Para acompanhar pedidos, '
+                          'entra ou cria uma conta.',
+                      actionLabel: 'Entrar ou criar conta',
+                      onAction: _openRoles,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -88,55 +82,79 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: const Text('Meus pedidos'),
-        actions: const [CartButton(), SizedBox(width: 8)],
-      ),
       body: SafeArea(
-        top: false,
+        bottom: false,
         child: Column(
           children: [
-            _buildIntro(context),
-            _buildFilters(),
+            JbPageHeader(
+              title: 'Meus pedidos',
+              trailing: Material(
+                color: AppColors.darkCard,
+                shape: const CircleBorder(),
+                child: CartButton(color: context.inkColor),
+              ),
+            ),
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.primary,
                 onRefresh: () async => _reload(),
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 5, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
                   children: [
                     AsyncSection<List<Order>>(
                       future: _future,
                       onRetry: _reload,
                       builder: (context, orders) {
-                        if (orders.isEmpty) {
-                          return _buildEmptyState();
-                        }
+                        if (orders.isEmpty) return _buildEmptyState();
+                        // Divisão do referencial: activos vs. histórico.
+                        final active = [
+                          for (final order in orders)
+                            if (!order.isFinal) order,
+                        ];
+                        final past = [
+                          for (final order in orders)
+                            if (order.isFinal) order,
+                        ];
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 13),
-                              child: Text(
-                                '${orders.length} ${orders.length == 1 ? 'pedido encontrado' : 'pedidos encontrados'}',
-                                style: TextStyle(
-                                  color: context.mutedColor,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.2,
+                            if (active.isNotEmpty) ...[
+                              JbSectionHeader(
+                                title: 'A decorrer',
+                                count: active.length,
+                                margin: const EdgeInsets.only(
+                                  top: 6,
+                                  bottom: 8,
                                 ),
                               ),
-                            ),
-                            for (final order in orders)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 13),
-                                child: _OrderCard(
-                                  order: order,
-                                  onTap: () => _open(order),
+                              for (final order in active)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 13),
+                                  child: _OrderCard(
+                                    order: order,
+                                    onTap: () => _open(order),
+                                  ),
+                                ),
+                            ],
+                            if (past.isNotEmpty) ...[
+                              JbSectionHeader(
+                                title: 'Anteriores',
+                                count: past.length,
+                                margin: const EdgeInsets.only(
+                                  top: 18,
+                                  bottom: 8,
                                 ),
                               ),
+                              for (final order in past)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 13),
+                                  child: _OrderCard(
+                                    order: order,
+                                    onTap: () => _open(order),
+                                  ),
+                                ),
+                            ],
                           ],
                         );
                       },
@@ -151,106 +169,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildIntro(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 2, 20, 19),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(18, 17, 16, 17),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.primary, AppColors.primaryPressed],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.18),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'As tuas encomendas',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  SizedBox(height: 5),
-                  Text(
-                    'Consulta o estado e acompanha cada entrega.',
-                    style: TextStyle(
-                      color: AppColors.primarySoft,
-                      fontSize: 11,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.17),
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-              ),
-              child: const Icon(
-                Icons.local_shipping_outlined,
-                color: Colors.white,
-                size: 25,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilters() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: Row(
-        children: [
-          for (final filter in _filters)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: FilterChipPill(
-                  label: filter.$2,
-                  selected: _status == filter.$1,
-                  onTap: () => _select(filter.$1),
-                  radius: 13,
-                  dense: true,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildEmptyState() {
-    final inProgress = _status == 'in_progress';
     return Container(
       margin: const EdgeInsets.only(top: 18),
       padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
       decoration: BoxDecoration(
         color: context.cardColor,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: context.lineColor),
       ),
       child: Column(
@@ -270,7 +195,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
           const SizedBox(height: 17),
           Text(
-            inProgress ? 'Ainda não tens pedidos em curso' : 'Nada por aqui',
+            'Ainda não tens pedidos',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.inkColor,
@@ -280,9 +205,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            inProgress
-                ? 'Quando fizeres um pedido, poderás acompanhar o progresso e a entrega nesta página.'
-                : 'Os teus pedidos vão aparecer aqui assim que forem criados.',
+            'Os teus pedidos vão aparecer aqui assim que forem criados.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.mutedColor,
@@ -306,20 +229,20 @@ class _OrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: context.cardColor,
-      borderRadius: BorderRadius.circular(19),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(19),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(19),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(color: context.lineColor),
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(
-                color: AppColors.ink.withValues(alpha: 0.025),
+                color: Color(0x66000000),
                 blurRadius: 14,
-                offset: const Offset(0, 5),
+                offset: Offset(0, 5),
               ),
             ],
           ),

@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 import '../../widgets/password_dialog.dart';
 
 class PartnerProfileScreen extends StatefulWidget {
@@ -107,138 +108,154 @@ class _PartnerProfileScreenState extends State<PartnerProfileScreen> {
     final state = AppScope.of(context);
     final user = state.user;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Perfil do parceiro'),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: () async => _reload(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            children: [
-              AsyncSection<Establishment>(
-                future: _future,
-                onRetry: _reload,
-                loadingHeight: 280,
-                builder: (context, establishment) =>
-                    _establishmentCard(establishment),
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Perfil do parceiro',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Atualizar',
+                    onPressed: _reload,
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              const SectionTitle(title: 'Conta de acesso'),
-              const SizedBox(height: 10),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: Column(
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => _reload(),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
                   children: [
-                    ListTile(
-                      leading: UserAvatar(name: user?.name ?? '?', size: 40),
-                      title: Text(
-                        user?.name ?? '',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    AsyncSection<Establishment>(
+                      future: _future,
+                      onRetry: _reload,
+                      loadingHeight: 280,
+                      builder: (context, establishment) =>
+                          _establishmentCard(establishment),
+                    ),
+                    const JbSectionHeader(title: 'Conta de acesso'),
+                    AppCard(
+                      padding: EdgeInsets.zero,
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: UserAvatar(
+                              name: user?.name ?? '?',
+                              size: 40,
+                            ),
+                            title: Text(
+                              user?.name ?? '',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: Text(
+                              user?.email ?? '',
+                              style: TextStyle(
+                                color: context.mutedColor,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          Divider(height: 1, color: context.lineColor),
+                          ListTile(
+                            leading: const Icon(Icons.badge_outlined, size: 20),
+                            title: const Text(
+                              'Papel',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            trailing: Text(
+                              user?.roleLabel ?? '',
+                              style: TextStyle(
+                                color: context.mutedColor,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          Divider(height: 1, color: context.lineColor),
+                          ListTile(
+                            leading: const Icon(Icons.phone_outlined, size: 20),
+                            title: const Text(
+                              'Telemóvel',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            trailing: Text(
+                              user?.phone ?? '',
+                              style: TextStyle(
+                                color: context.mutedColor,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      subtitle: Text(
-                        user?.email ?? '',
-                        style: TextStyle(
-                          color: context.mutedColor,
-                          fontSize: 11,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _editProfile,
+                            icon: const Icon(Icons.edit_outlined, size: 17),
+                            label: const Text('Editar conta'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _changePassword,
+                            icon: const Icon(
+                              Icons.lock_outline_rounded,
+                              size: 17,
+                            ),
+                            label: const Text('Palavra-passe'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const JbSectionHeader(title: 'Aplicação'),
+                    AppCard(
+                      padding: EdgeInsets.zero,
+                      child: ListTile(
+                        leading: const Icon(
+                          Icons.info_outline_rounded,
+                          size: 20,
+                        ),
+                        title: const Text(
+                          'Versão da aplicação',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                        subtitle: const Text(
+                          appVersion,
+                          style: TextStyle(fontSize: 11),
                         ),
                       ),
                     ),
-                    Divider(height: 1, color: context.lineColor),
-                    ListTile(
-                      leading: const Icon(Icons.badge_outlined, size: 20),
-                      title: const Text(
-                        'Papel',
-                        style: TextStyle(fontSize: 13),
-                      ),
-                      trailing: Text(
-                        user?.roleLabel ?? '',
-                        style: TextStyle(
-                          color: context.mutedColor,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Divider(height: 1, color: context.lineColor),
-                    ListTile(
-                      leading: const Icon(Icons.phone_outlined, size: 20),
-                      title: const Text(
-                        'Telemóvel',
-                        style: TextStyle(fontSize: 13),
-                      ),
-                      trailing: Text(
-                        user?.phone ?? '',
-                        style: TextStyle(
-                          color: context.mutedColor,
-                          fontSize: 12,
-                        ),
+                    const SizedBox(height: 20),
+                    OutlinedButton.icon(
+                      onPressed: _logout,
+                      icon: const Icon(Icons.logout_rounded, size: 18),
+                      label: const Text('Terminar sessão'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: context.dangerColor,
+                        side: BorderSide(color: context.dangerColor),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _editProfile,
-                      icon: const Icon(Icons.edit_outlined, size: 17),
-                      label: const Text('Editar conta'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _changePassword,
-                      icon: const Icon(Icons.lock_outline_rounded, size: 17),
-                      label: const Text('Palavra-passe'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const SectionTitle(title: 'Aplicação'),
-              const SizedBox(height: 10),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: ListTile(
-                  leading: const Icon(Icons.info_outline_rounded, size: 20),
-                  title: const Text(
-                    'Versão da aplicação',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                  subtitle: const Text(
-                    appVersion,
-                    style: TextStyle(fontSize: 11),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: _logout,
-                icon: const Icon(Icons.logout_rounded, size: 18),
-                label: const Text('Terminar sessão'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: context.dangerColor,
-                  side: BorderSide(color: context.dangerColor),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

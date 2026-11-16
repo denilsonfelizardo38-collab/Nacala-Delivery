@@ -6,10 +6,12 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/api_client.dart';
 import '../../core/formatters.dart';
+import '../../data/api_service.dart';
 import '../../models/models.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/jb.dart';
 
 class PartnerProductsScreen extends StatefulWidget {
   const PartnerProductsScreen({super.key});
@@ -26,12 +28,27 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
   String? _busyId;
   bool _savingProduct = false;
 
+  /// Categoria do estabelecimento (ex.: `restaurantes`) — usada para
+  /// sugerir as categorias de menu adequadas no formulário de produto.
+  String? _categorySlug;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
-    _future = AppScope.of(context).api.partnerProducts();
+    final api = AppScope.of(context).api;
+    _future = api.partnerProducts();
+    _loadCategory(api);
+  }
+
+  Future<void> _loadCategory(NacalaApi api) async {
+    try {
+      final establishment = await api.partnerEstablishment();
+      if (mounted) setState(() => _categorySlug = establishment.categorySlug);
+    } on ApiException {
+      // Sem categoria conhecida o formulário mantém o campo livre.
+    }
   }
 
   @override
@@ -50,7 +67,10 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
     final api = AppScope.of(context).api;
     final input = await showDialog<_ProductInput>(
       context: context,
-      builder: (_) => _ProductDialog(product: product),
+      builder: (_) => _ProductDialog(
+        product: product,
+        categorySlug: _categorySlug,
+      ),
     );
     if (input == null || !mounted) return;
     setState(() => _savingProduct = true);
@@ -113,19 +133,27 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
     final api = AppScope.of(context).api;
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Desativar produto',
+      title: 'Eliminar produto',
       message:
-          'O produto "${product.name}" deixa de aparecer no menu. '
-          'Os pedidos anteriores mantêm o registo.',
-      confirmLabel: 'Desativar',
+          'O produto "${product.name}" deixa de aparecer no menu. Se já '
+          'foi usado em encomendas, fica apenas desativado para preservar '
+          'o histórico.',
+      confirmLabel: 'Eliminar',
       destructive: true,
     );
     if (!confirmed) return;
     setState(() => _busyId = product.id);
     try {
-      await api.deleteProduct(product.id);
+      // O servidor decide: apaga se nunca foi encomendado, caso contrário
+      // apenas desativa (`deactivated: true`) — o aviso reflete o resultado.
+      final deactivated = await api.deleteProduct(product.id);
       if (!mounted) return;
-      showAppSnack(context, 'Produto desativado.');
+      showAppSnack(
+        context,
+        deactivated
+            ? 'Produto desativado (já tinha encomendas).'
+            : 'Produto eliminado.',
+      );
       _reload();
     } on ApiException catch (error) {
       if (mounted) showAppSnack(context, error.message, error: true);
@@ -137,90 +165,102 @@ class _PartnerProductsScreenState extends State<PartnerProductsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Produtos'),
-        actions: [
-          IconButton(
-            tooltip: 'Novo produto',
-            onPressed: _savingProduct ? null : () => _openEditor(),
-            icon: const Icon(Icons.add_rounded),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
       body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: () async => _reload(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            children: [
-              if (_savingProduct) ...[
-                const LinearProgressIndicator(),
-                const SizedBox(height: 12),
-              ],
-              SearchField(
-                controller: _search,
-                hintText: 'Pesquisar nos seus produtos',
-                onChanged: (value) => setState(() => _query = value.trim()),
+        bottom: false,
+        child: Column(
+          children: [
+            JbPageHeader(
+              title: 'Produtos',
+              onBack: Navigator.of(context).canPop()
+                  ? () => Navigator.of(context).maybePop()
+                  : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Novo produto',
+                    onPressed: _savingProduct ? null : () => _openEditor(),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              AsyncSection<List<Product>>(
-                future: _future,
-                onRetry: _reload,
-                builder: (context, products) {
-                  final filtered = _query.isEmpty
-                      ? products
-                      : products
-                            .where(
-                              (product) =>
-                                  product.name.toLowerCase().contains(
-                                    _query.toLowerCase(),
-                                  ) ||
-                                  product.category.toLowerCase().contains(
-                                    _query.toLowerCase(),
-                                  ),
-                            )
-                            .toList();
-                  if (products.isEmpty) {
-                    return EmptyState(
-                      icon: Icons.inventory_2_outlined,
-                      title: 'Ainda sem produtos',
-                      message:
-                          'Crie o primeiro produto para começar a receber '
-                          'pedidos.',
-                      actionLabel: 'Criar produto',
-                      onAction: () => _openEditor(),
-                    );
-                  }
-                  if (filtered.isEmpty) {
-                    return const EmptyState(
-                      icon: Icons.search_off_rounded,
-                      title: 'Sem resultados',
-                      message: 'Nenhum produto corresponde à pesquisa.',
-                      compact: true,
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final product in filtered)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _ProductTile(
-                            product: product,
-                            busy: _busyId == product.id,
-                            onEdit: () => _openEditor(product),
-                            onToggle: () => _toggleAvailability(product),
-                            onDelete: () => _remove(product),
-                          ),
-                        ),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => _reload(),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                  children: [
+                    if (_savingProduct) ...[
+                      const LinearProgressIndicator(),
+                      const SizedBox(height: 12),
                     ],
-                  );
-                },
+                    SearchField(
+                      controller: _search,
+                      hintText: 'Pesquisar nos seus produtos',
+                      onChanged: (value) =>
+                          setState(() => _query = value.trim()),
+                    ),
+                    const SizedBox(height: 14),
+                    AsyncSection<List<Product>>(
+                      future: _future,
+                      onRetry: _reload,
+                      builder: (context, products) {
+                        final filtered = _query.isEmpty
+                            ? products
+                            : products
+                                  .where(
+                                    (product) =>
+                                        product.name.toLowerCase().contains(
+                                          _query.toLowerCase(),
+                                        ) ||
+                                        product.category.toLowerCase().contains(
+                                          _query.toLowerCase(),
+                                        ),
+                                  )
+                                  .toList();
+                        if (products.isEmpty) {
+                          return EmptyState(
+                            icon: Icons.inventory_2_outlined,
+                            title: 'Ainda sem produtos',
+                            message:
+                                'Crie o primeiro produto para começar a receber '
+                                'pedidos.',
+                            actionLabel: 'Criar produto',
+                            onAction: () => _openEditor(),
+                          );
+                        }
+                        if (filtered.isEmpty) {
+                          return const EmptyState(
+                            icon: Icons.search_off_rounded,
+                            title: 'Sem resultados',
+                            message: 'Nenhum produto corresponde à pesquisa.',
+                            compact: true,
+                          );
+                        }
+                        return Column(
+                          children: [
+                            for (final product in filtered)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _ProductTile(
+                                  product: product,
+                                  busy: _busyId == product.id,
+                                  onEdit: () => _openEditor(product),
+                                  onToggle: () => _toggleAvailability(product),
+                                  onDelete: () => _remove(product),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -340,7 +380,7 @@ class _ProductTile extends StatelessWidget {
                           Icons.delete_outline_rounded,
                           size: 15,
                         ),
-                        label: const Text('Desativar'),
+                        label: const Text('Eliminar'),
                         style: TextButton.styleFrom(
                           minimumSize: const Size(0, 40),
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -380,9 +420,28 @@ class _ProductInput {
   final XFile? imageFile;
 }
 
+/// Sugestões de "categoria do menu" por tipo de estabelecimento — o
+/// formulário adaptativo mostra estas opções em vez de exigir texto livre.
+const _menuCategorySuggestions = <String, List<String>>{
+  'restaurantes': ['Pratos', 'Entradas', 'Bebidas', 'Sobremesas'],
+  'mercados': ['Mercearia', 'Frescos', 'Bebidas', 'Higiene'],
+  'farmacias': ['Medicamentos', 'Vitaminas', 'Higiene', 'Dermocosmética'],
+  'lojas': ['Mercearia', 'Bebidas', 'Higiene', 'Diversos'],
+  'padarias': ['Pão', 'Pastelaria', 'Bolos', 'Bebidas'],
+  'bebidas': ['Refrigerantes', 'Sucos', 'Águas', 'Cervejas'],
+  'talhos': ['Frescos', 'Congelados', 'Processados'],
+  'peixarias': ['Frescos', 'Congelados', 'Processados'],
+};
+
+/// Valor sentinela do dropdown para escrever uma categoria própria.
+const _otherCategory = '__outra__';
+
 class _ProductDialog extends StatefulWidget {
-  const _ProductDialog({this.product});
+  const _ProductDialog({this.product, this.categorySlug});
   final Product? product;
+
+  /// Categoria do estabelecimento (chave de [_menuCategorySuggestions]).
+  final String? categorySlug;
 
   @override
   State<_ProductDialog> createState() => _ProductDialogState();
@@ -394,12 +453,19 @@ class _ProductDialogState extends State<_ProductDialog> {
   late final TextEditingController _description;
   late final TextEditingController _price;
   late final TextEditingController _category;
+  late final TextEditingController _customCategory;
   late final TextEditingController _stock;
   final ImagePicker _imagePicker = ImagePicker();
   late String? _imageUrl;
   XFile? _imageFile;
   Uint8List? _imageBytes;
   late bool _available;
+
+  /// Categorias sugeridas para este estabelecimento (vazio → campo livre).
+  late final List<String> _suggestions;
+
+  /// Seleção actual do dropdown (`_otherCategory` → campo próprio).
+  late String? _categoryChoice;
 
   @override
   void initState() {
@@ -411,9 +477,23 @@ class _ProductDialogState extends State<_ProductDialog> {
       text: product == null ? '' : formatMoneyPlain(product.priceCents),
     );
     _category = TextEditingController(text: product?.category ?? 'Geral');
+    _customCategory = TextEditingController(text: product?.category ?? '');
     _stock = TextEditingController(text: product?.stock?.toString() ?? '');
     _imageUrl = product?.imageUrl;
     _available = product?.isAvailable ?? true;
+
+    _suggestions =
+        _menuCategorySuggestions[widget.categorySlug] ?? const <String>[];
+    final current = product?.category ?? '';
+    if (_suggestions.isEmpty) {
+      _categoryChoice = null;
+    } else if (current.isEmpty) {
+      // Produto novo: começa já numa categoria típica do tipo de loja.
+      _categoryChoice = _suggestions.first;
+    } else {
+      // Mantém a categoria actual (mesmo que seja própria/legada).
+      _categoryChoice = current;
+    }
   }
 
   @override
@@ -422,6 +502,7 @@ class _ProductDialogState extends State<_ProductDialog> {
     _description.dispose();
     _price.dispose();
     _category.dispose();
+    _customCategory.dispose();
     _stock.dispose();
     super.dispose();
   }
@@ -476,15 +557,25 @@ class _ProductDialogState extends State<_ProductDialog> {
       showAppSnack(context, 'Indique um preço válido.', error: true);
       return;
     }
+    // Resolução da categoria: modo sugestão (dropdown) vs. categoria
+    // própria ("Outra categoria…") vs. campo livre (sem sugestões).
+    String category;
+    if (_suggestions.isEmpty) {
+      category = _category.text.trim().isEmpty
+          ? 'Geral'
+          : _category.text.trim();
+    } else if (_categoryChoice == _otherCategory) {
+      category = _customCategory.text.trim();
+    } else {
+      category = _categoryChoice ?? _suggestions.first;
+    }
     final stockText = _stock.text.trim();
     Navigator.of(context).pop(
       _ProductInput(
         name: _name.text.trim(),
         description: _description.text.trim(),
         priceCents: cents,
-        category: _category.text.trim().isEmpty
-            ? 'Geral'
-            : _category.text.trim(),
+        category: category,
         isAvailable: _available,
         stock: stockText.isEmpty ? null : int.tryParse(stockText),
         imageUrl: _imageUrl,
@@ -627,14 +718,80 @@ class _ProductDialogState extends State<_ProductDialog> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _category,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Categoria do menu',
-                    hintText: 'Ex.: Pratos, Bebidas',
+                if (_suggestions.isEmpty)
+                  TextFormField(
+                    controller: _category,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Categoria do menu',
+                      hintText: 'Ex.: Pratos, Bebidas',
+                    ),
+                  )
+                else ...[
+                  DropdownButtonFormField<String>(
+                    // O valor é escolhido pelo utilizador (nunca muda por
+                    // fora) — `initialValue` define apenas o ponto de partida.
+                    initialValue: _categoryChoice,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Categoria do menu',
+                    ),
+                    items: [
+                      for (final value in _suggestions)
+                        DropdownMenuItem(
+                          value: value,
+                          child: Text(
+                            value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      // Categoria actual que não está nas sugestões
+                      // (própria/legada) continua seleccionável.
+                      if (_categoryChoice != null &&
+                          _categoryChoice != _otherCategory &&
+                          !_suggestions.contains(_categoryChoice))
+                        DropdownMenuItem(
+                          value: _categoryChoice,
+                          child: Text(
+                            _categoryChoice!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      const DropdownMenuItem(
+                        value: _otherCategory,
+                        child: Text('Outra categoria…'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _categoryChoice = value;
+                        if (value == _otherCategory &&
+                            widget.product != null &&
+                            _customCategory.text.trim().isEmpty) {
+                          _customCategory.text = widget.product!.category;
+                        }
+                      });
+                    },
                   ),
-                ),
+                  if (_categoryChoice == _otherCategory) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _customCategory,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Nova categoria',
+                        hintText: 'Ex.: Pratos do dia',
+                      ),
+                      validator: (value) =>
+                          (value == null || value.trim().length < 2)
+                          ? 'Indique a categoria do menu.'
+                          : null,
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 4),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,

@@ -66,11 +66,25 @@ Future<void> launchWhatsApp(
 }
 
 /// Abre o mapa externo do telemóvel à procura de uma morada.
+///
+/// Quando o estabelecimento tem coordenadas (FASE 11) abre exatamente o
+/// ponto no mapa; caso contrário procura pela morada textual.
 Future<void> openStoreMap(
   BuildContext context, {
   required String address,
+  double? latitude,
+  double? longitude,
 }) async {
-  final url = Uri.parse('geo:0,0?q=${Uri.encodeComponent(address)}');
+  final coordsUsable =
+      latitude != null && longitude != null && !latitude.isNaN && !longitude.isNaN;
+  // `geo:lat,lng?q=lat,lng(rótulo)` abre o ponto exato; sem coordenadas
+  // procura pela morada textual (`q=morada`).
+  final url = coordsUsable
+      ? Uri.parse(
+          'geo:$latitude,$longitude?q=$latitude,$longitude'
+          '(${Uri.encodeComponent(address)})',
+        )
+      : Uri.parse('geo:0,0?q=${Uri.encodeComponent(address)}');
   try {
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -93,7 +107,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.color,
     this.borderColor,
-    this.radius = 16,
+    this.radius = 20,
   });
 
   final Widget child;
@@ -161,11 +175,13 @@ class GoogleSignInButton extends StatelessWidget {
       ),
       label: Text(label),
       style: OutlinedButton.styleFrom(
+        // Botão Google: fundo branco exigido pela marca; tinta escura
+        // para manter o contraste.
         backgroundColor: Colors.white,
-        foregroundColor: AppColors.ink,
+        foregroundColor: AppColors.solidInk,
         minimumSize: const Size.fromHeight(52),
-        side: const BorderSide(color: AppColors.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        side: const BorderSide(color: Color(0xFF3C4043)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
     );
   }
@@ -451,7 +467,7 @@ class ErrorState extends StatelessWidget {
             height: 56,
             decoration: BoxDecoration(
               color: AppColors.dangerSoft,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(
               Icons.cloud_off_rounded,
@@ -590,22 +606,23 @@ class BrandedCover extends StatelessWidget {
   final double iconSize;
   final bool decorations;
 
-  /// Duas cores por categoria, com contraste garantido sobre o branco
-  /// translúcido usado no selo e nos círculos decorativos.
+  /// Duas cores por categoria: tons escuros com a matiz da categoria,
+  /// para as capas respirarem sobre o fundo preto da aplicação. O selo
+  /// central usa branco translúcido, legível sobre qualquer par.
   static const _palettes = <String, (Color, Color)>{
-    'restaurantes': (Color(0xFFFFB067), Color(0xFFFF7900)),
-    'mercados': (Color(0xFF5FC49A), Color(0xFF12836B)),
-    'farmacias': (Color(0xFF66C2B4), Color(0xFF137D74)),
-    'lojas': (Color(0xFF98A6F6), Color(0xFF4551C4)),
-    'padarias': (Color(0xFFFFC386), Color(0xFFB96F0B)),
-    'bebidas': (Color(0xFF7BCDF2), Color(0xFF1776A0)),
-    'talhos': (Color(0xFFF29E9E), Color(0xFFA93939)),
-    'peixarias': (Color(0xFF85B8F2), Color(0xFF2A5EA6)),
+    'restaurantes': (Color(0xFF4A1B14), Color(0xFF170A07)),
+    'mercados': (Color(0xFF123A2A), Color(0xFF06130E)),
+    'farmacias': (Color(0xFF0F3633), Color(0xFF051312)),
+    'lojas': (Color(0xFF1B2050), Color(0xFF090B1A)),
+    'padarias': (Color(0xFF45300F), Color(0xFF160F05)),
+    'bebidas': (Color(0xFF12324A), Color(0xFF05111A)),
+    'talhos': (Color(0xFF4A1A1A), Color(0xFF190808)),
+    'peixarias': (Color(0xFF16304F), Color(0xFF061019)),
   };
 
   static List<Color> gradientFor(String? slug) {
     final palette =
-        _palettes[slug ?? ''] ?? const (Color(0xFFFFB067), Color(0xFFFF7900));
+        _palettes[slug ?? ''] ?? const (Color(0xFF1F1F1F), Color(0xFF050505));
     return [palette.$1, palette.$2];
   }
 
@@ -707,17 +724,17 @@ class StatusBadge extends StatelessWidget {
       case 'delivered':
       case 'completed':
       case 'accepted':
-        return (Colors.white, AppColors.greenInk);
+        return (Colors.white, AppColors.solidSuccessInk);
       case 'cancelled':
       case 'rejected':
       case 'declined':
-        return (Colors.white, AppColors.dangerInk);
+        return (Colors.white, AppColors.solidDangerInk);
       case 'pending':
       case 'preparing':
       case 'available':
-        return (Colors.white, AppColors.amberInk);
+        return (Colors.white, AppColors.solidWarningInk);
       default:
-        return (Colors.white, AppColors.ink);
+        return (Colors.white, AppColors.solidInk);
     }
   }
 
@@ -799,7 +816,8 @@ class FilterChipPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = selectedColor ?? context.inkColor;
+    // Pílula seleccionada: fundo vermelho da marca, texto branco.
+    final active = selectedColor ?? AppColors.primary;
     return Semantics(
       button: true,
       selected: selected,
@@ -824,11 +842,7 @@ class FilterChipPill extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: selected
-                    ? (context.isDarkMode ? AppColors.darkBg : Colors.white)
-                    : dense
-                    ? context.mutedColor
-                    : context.inkColor,
+                color: selected ? Colors.white : context.mutedColor,
                 fontSize: dense ? 11 : 12,
                 fontWeight: dense ? FontWeight.w700 : FontWeight.w600,
               ),
@@ -903,7 +917,7 @@ class OrderCardHeader extends StatelessWidget {
           height: 46,
           decoration: BoxDecoration(
             color: context.primarySoftColor,
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(14),
           ),
           alignment: Alignment.center,
           child: Icon(icon, color: context.accentColor, size: 22),
@@ -962,7 +976,7 @@ class QuantityStepper extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: context.isDarkMode ? AppColors.darkElevated : AppColors.bg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: context.lineColor),
       ),
       child: Row(
@@ -1060,7 +1074,7 @@ class MetricTile extends StatelessWidget {
                 height: 34,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 18),
               ),
@@ -1118,39 +1132,45 @@ class SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [AppColors.cardShadow],
-      ),
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        autofocus: autofocus,
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: hintText,
-          filled: true,
-          fillColor: context.isDarkMode ? AppColors.darkElevated : AppColors.bg,
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            color: AppColors.primary,
-          ),
-          suffixIcon: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return IconButton(
-                tooltip: 'Limpar pesquisa',
-                onPressed: () {
-                  controller.clear();
-                  onChanged('');
-                  onClear?.call();
-                },
-                icon: const Icon(Icons.close_rounded, size: 18),
-              );
-            },
-          ),
+    // Cápsula de pesquisa: fundo `--s1`, contorno 1.5 px `--s2` e foco
+    // vermelho — mesmo padrão do campo de pesquisa do referencial.
+    OutlineInputBorder outline(Color color) => OutlineInputBorder(
+      borderRadius: const BorderRadius.all(Radius.circular(999)),
+      borderSide: BorderSide(color: color, width: 1.5),
+    );
+
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      autofocus: autofocus,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: hintText,
+        filled: true,
+        fillColor: AppColors.darkCard,
+        border: outline(AppColors.darkElevated),
+        enabledBorder: outline(AppColors.darkElevated),
+        focusedBorder: outline(AppColors.primary),
+        errorBorder: outline(AppColors.danger),
+        focusedErrorBorder: outline(AppColors.danger),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          color: AppColors.mutedLight,
+        ),
+        suffixIcon: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, _) {
+            if (value.text.isEmpty) return const SizedBox.shrink();
+            return IconButton(
+              tooltip: 'Limpar pesquisa',
+              onPressed: () {
+                controller.clear();
+                onChanged('');
+                onClear?.call();
+              },
+              icon: const Icon(Icons.close_rounded, size: 18),
+            );
+          },
         ),
       ),
     );

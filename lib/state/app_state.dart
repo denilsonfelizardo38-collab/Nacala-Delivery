@@ -5,13 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/api_client.dart';
+import '../core/notification_service.dart';
 import '../data/api_service.dart';
 import '../models/models.dart';
 
 enum SessionStatus { loading, signedOut, signedIn, guest }
-
-/// Preferência de tema guardada no dispositivo.
-enum ThemeSetting { system, light, dark }
 
 /// Estado global da aplicação: sessão autenticada, moradas e carrinho.
 ///
@@ -22,25 +20,30 @@ class AppState extends ChangeNotifier {
     SharedPreferences prefs, {
     ApiClient? client,
     NacalaApi? api,
+    NotificationService? notifications,
   }) {
     final effectiveClient = client ?? ApiClient();
     return AppState._(
       prefs,
       effectiveClient,
       api ?? NacalaApi(effectiveClient),
+      notifications,
     );
   }
 
-  AppState._(this._prefs, this._client, this._api);
+  AppState._(this._prefs, this._client, this._api, this.notifications);
 
   static const _tokenKey = 'nacala.token.v2';
   static const _userKey = 'nacala.user.v2';
   static const _cartKey = 'nacala.cart.v2';
-  static const _themeKey = 'nacala.theme.v1';
 
   final SharedPreferences _prefs;
   final ApiClient _client;
   final NacalaApi _api;
+
+  /// Notificações no telemóvel com som por evento. Opcional para não
+  /// depender do plugin em testes de widget/estado.
+  final NotificationService? notifications;
 
   NacalaApi get api => _api;
   ApiClient get client => _client;
@@ -50,7 +53,6 @@ class AppState extends ChangeNotifier {
   String? _token;
   String? _startupMessage;
   bool _busy = false;
-  late ThemeSetting _themeSetting = _restoreThemeSetting();
 
   List<Address> _addresses = const [];
   Set<String> _favoriteEstablishmentIds = {};
@@ -61,29 +63,12 @@ class AppState extends ChangeNotifier {
 
   SessionStatus get status => _status;
   UserAccount? get user => _user;
+  String? get userId => _user?.id;
   bool get isSignedIn => _status == SessionStatus.signedIn && _user != null;
   bool get isGuest => _status == SessionStatus.guest;
   bool get isBusy => _busy;
   String? get startupMessage => _startupMessage;
   List<Address> get addresses => List.unmodifiable(_addresses);
-
-  /// Preferência de tema (sistema, claro ou escuro) guardada no dispositivo.
-  ThemeSetting get themeSetting => _themeSetting;
-
-  ThemeSetting _restoreThemeSetting() {
-    final raw = _prefs.getString(_themeKey);
-    for (final setting in ThemeSetting.values) {
-      if (setting.name == raw) return setting;
-    }
-    return ThemeSetting.light;
-  }
-
-  void setThemeSetting(ThemeSetting setting) {
-    if (setting == _themeSetting) return;
-    _themeSetting = setting;
-    _prefs.setString(_themeKey, setting.name);
-    notifyListeners();
-  }
 
   /// Identificadores dos estabelecimentos favoritos do utilizador.
   Set<String> get favoriteEstablishmentIds =>
@@ -145,6 +130,7 @@ class AppState extends ChangeNotifier {
       _status = SessionStatus.signedIn;
       _startupMessage = null;
       await _persistSession();
+      notifications?.start(_api);
     } on TimeoutException {
       _startupMessage = 'A ligação ao servidor está lenta. Podes tentar novamente mais tarde.';
       if (_user == null) _status = SessionStatus.signedOut;
@@ -174,10 +160,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> register({
+  /// Regista um cliente e inicia sessão. Devolve o código de recuperação
+  /// de palavra-passe (uma única vez — não há envio por email/SMS).
+  Future<String?> register({
     required String name,
-    required String email,
+    String? email,
     required String phone,
+    String? whatsapp,
     required String password,
   }) async {
     _busy = true;
@@ -187,17 +176,75 @@ class AppState extends ChangeNotifier {
         name: name,
         email: email,
         phone: phone,
+        whatsapp: whatsapp,
         password: password,
       );
       await _applyAuth(result);
       await refreshAddresses();
       await refreshFavorites();
       _startupMessage = null;
+      return result.recoveryCode;
     } finally {
       _busy = false;
       notifyListeners();
     }
   }
+
+  /// Recupera o acesso com o código do registo, inicia sessão e devolve
+  /// o novo código (o anterior foi rotacionado no servidor).
+  Future<String?> recoverPassword({
+    required String identifier,
+    required String code,
+    required String password,
+  }) async {
+    _busy = true;
+    notifyListeners();
+    try {
+      final result = await _api.recoverPassword(
+        identifier: identifier,
+        code: code,
+        password: password,
+      );
+      await _applyAuth(result);
+      await refreshAddresses();
+      await refreshFavorites();
+      _startupMessage = null;
+      return result.recoveryCode;
+    } finally {
+      _busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Emite um novo código de recuperação para a conta autenticada.
+  Future<String> regenerateRecoveryCode() =>
+      _api.regenerateRecoveryCode();
+
+  // ----------------------------------------------------------- candidaturas
+
+  /// Envia candidatura de estabelecimento/entregador. Não inicia sessão:
+  /// depois do envio o candidato pode entrar com a conta criada para
+  /// acompanhar o estado (ou continuar como convidado).
+  Future<Application> submitApplication({
+    required String kind,
+    required String name,
+    required String phone,
+    required String password,
+    String? email,
+    String? whatsapp,
+    Map<String, dynamic> payload = const {},
+  }) => _api.submitApplication(
+    kind: kind,
+    name: name,
+    phone: phone,
+    password: password,
+    email: email,
+    whatsapp: whatsapp,
+    payload: payload,
+  );
+
+  /// Candidatura da conta autenticada (estado, correções pedidas).
+  Future<Application> myApplication() => _api.myApplication();
 
   Future<void> logout() async {
     try {
@@ -206,6 +253,8 @@ class AppState extends ChangeNotifier {
       // Mesmo sem rede, a sessão local é terminada.
     }
     await _clearSession();
+    // Sair da conta não fecha a app: volta-se à Home em modo convidado.
+    _status = SessionStatus.guest;
     notifyListeners();
   }
 
@@ -225,6 +274,8 @@ class AppState extends ChangeNotifier {
   /// Termina a sessão local (usado quando a API devolve 401).
   Future<void> forceSignOut() async {
     await _clearSession();
+    // Sessão inválida: a app continua aberta em modo convidado.
+    _status = SessionStatus.guest;
     notifyListeners();
   }
 
@@ -234,6 +285,8 @@ class AppState extends ChangeNotifier {
     _user = result.user;
     _status = SessionStatus.signedIn;
     await _persistSession();
+    // Com sessão iniciada, o telemóvel passa a receber notificações com som.
+    notifications?.start(_api);
     notifyListeners();
   }
 
@@ -248,6 +301,11 @@ class AppState extends ChangeNotifier {
         'name': _user!.name,
         'email': _user!.email,
         'phone': _user!.phone,
+        'whatsapp': _user!.whatsapp,
+        'avatar_url': _user!.avatarUrl,
+        // Sem isto, arrancar offline com conta pendente abria o painel
+        // bloqueado em vez do estado da candidatura.
+        'approval_status': _user!.approvalStatus,
       }),
     );
   }
@@ -259,6 +317,7 @@ class AppState extends ChangeNotifier {
     _addresses = const [];
     _favoriteEstablishmentIds = {};
     _status = SessionStatus.signedOut;
+    notifications?.stop();
     await _prefs.remove(_tokenKey);
     await _prefs.remove(_userKey);
   }
@@ -318,8 +377,14 @@ class AppState extends ChangeNotifier {
     required String name,
     required String phone,
     String? email,
+    String? whatsapp,
   }) async {
-    _user = await _api.updateProfile(name: name, phone: phone, email: email);
+    _user = await _api.updateProfile(
+      name: name,
+      phone: phone,
+      email: email,
+      whatsapp: whatsapp,
+    );
     await _persistSession();
     notifyListeners();
   }

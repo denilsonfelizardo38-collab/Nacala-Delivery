@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_theme.dart';
 
 import '../../core/api_client.dart';
 import '../../state/app_scope.dart';
@@ -44,6 +45,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await AppScope.of(context).login(_identifier.text.trim(), _password.text);
+      // O login pode ter sido aberto a partir da Home → seleção de tipo →
+      // login; a sessão já mudou o gate para o painel certo, por isso recua
+      // até ao início para não deixar a pilha de auth encalhada por cima.
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     } on ApiException catch (error) {
       if (mounted) {
         setState(() => _error = error.message);
@@ -77,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
             },
           ),
 
-          // Gradiente azul-marinho para integrar o formulário
+          // Sobreposição a preto para integrar o formulário
           // com a fotografia.
           const DecoratedBox(
             decoration: BoxDecoration(
@@ -85,10 +92,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Color(0x88001635),
-                  Color(0x66001635),
-                  Color(0xAA001A38),
-                  Color(0xF5001835),
+                  Color(0x88000000),
+                  Color(0x66000000),
+                  Color(0xAA000000),
+                  Color(0xF5000000),
                 ],
                 stops: [0.0, 0.30, 0.62, 1.0],
               ),
@@ -173,22 +180,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // --------------------------------------------------
-  // CABEÇALHO
+  // CABEÇALHO — padrão Já Bazou (`page-head`): botão circular
+  // de voltar (`.icon-btn`) + lockup da marca. O botão aparece
+  // quando o ecrã foi empurrado (`canPop`) ou quando o portão de
+  // arranque fornece [LoginScreen.onBack].
   // --------------------------------------------------
 
   Widget _buildTopBar(BuildContext context, {bool showBack = true}) {
+    final onBack =
+        widget.onBack ??
+        (Navigator.of(context).canPop()
+            ? () => Navigator.of(context).maybePop()
+            : null);
+
     return Row(
       children: [
-        if (showBack && widget.onBack != null) ...[
+        if (showBack && onBack != null) ...[
           Material(
-            color: Colors.white.withValues(alpha: 0.13),
+            color: AppColors.darkCard,
             shape: const CircleBorder(),
             child: IconButton(
               tooltip: 'Voltar',
-              onPressed: widget.onBack,
-              icon: const Icon(
+              onPressed: onBack,
+              icon: Icon(
                 Icons.arrow_back_rounded,
-                color: Colors.white,
+                color: context.inkColor,
                 size: 21,
               ),
             ),
@@ -201,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
           height: 48,
           decoration: BoxDecoration(
             color: AppColors.primary,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
                 color: AppColors.primary.withValues(alpha: 0.30),
@@ -349,8 +365,8 @@ class _LoginScreenState extends State<LoginScreen> {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppColors.bg,
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.75)),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.20),
@@ -375,7 +391,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: const Icon(
                 Icons.lock_open_rounded,
-                color: AppColors.primaryPressed,
+                color: AppColors.primarySecondary,
                 size: 23,
               ),
             ),
@@ -482,19 +498,13 @@ class _LoginScreenState extends State<LoginScreen> {
               },
             ),
 
-            // RECUPERAÇÃO DA PALAVRA-PASSE.
+            // RECUPERAÇÃO DA PALAVRA-PASSE (código de recuperação).
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: _submitting
                     ? null
-                    : () {
-                        showAppSnack(
-                          context,
-                          'A recuperação de palavra-passe não está '
-                          'disponível nesta versão.',
-                        );
-                      },
+                    : () => Navigator.of(context).pushNamed('/recover'),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primaryPressed,
                   minimumSize: const Size(44, 40),
@@ -502,6 +512,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   textStyle: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
+                    fontFamily: AppTheme.fontFamily,
                   ),
                 ),
                 child: const Text('Esqueceu a palavra-passe?'),
@@ -526,7 +537,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     alpha: 0.5,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   elevation: 3,
                   shadowColor: AppColors.primary.withValues(alpha: 0.25),
@@ -614,19 +625,19 @@ class _LoginScreenState extends State<LoginScreen> {
       fillColor: AppColors.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.danger),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: AppColors.danger, width: 1.4),
       ),
     );
@@ -654,6 +665,7 @@ class _LoginScreenState extends State<LoginScreen> {
             textStyle: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
+              fontFamily: AppTheme.fontFamily,
             ),
           ),
           child: const Text('Criar conta'),
@@ -731,7 +743,7 @@ class _BenefitIcon extends StatelessWidget {
           height: 39,
           decoration: BoxDecoration(
             color: AppColors.primary,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: Colors.white, size: 20),
         ),
@@ -765,7 +777,7 @@ class _ErrorBanner extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.dangerSoft,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.dangerBorder),
       ),
       child: Row(
